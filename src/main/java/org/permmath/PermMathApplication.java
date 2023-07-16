@@ -6,10 +6,10 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 
 @EnableConfigurationProperties
 @SpringBootApplication
-public class PermmathApplication {
+public class PermMathApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(PermmathApplication.class, args);
+        SpringApplication.run(PermMathApplication.class, args);
     }
 
 }
