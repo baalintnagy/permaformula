@@ -11,7 +11,7 @@ import lombok.Data;
 
 @Validated
 @Component
-@ConfigurationProperties(prefix = "permmath", ignoreUnknownFields = false)
+@ConfigurationProperties(prefix = "permmath")
 @Data
 //@AllArgsConstructor(onConstructor_ = { @ConstructorBinding })
 public class PermMathProperties {
