@@ -20,7 +20,6 @@ import javax.validation.constraints.NotBlank;
 
 import org.jsoup.Jsoup;
 import org.jsoup.helper.W3CDom;
-import org.jsoup.nodes.Document;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
@@ -44,19 +43,16 @@ public class PermMathRendererService {
         var styleRefLinks = Optional.ofNullable(styleRefs)
                 .map(Collection::stream)
                 .orElseGet(Stream::empty)
-                .map(sr -> String.format("<link href=\"%s\" crossorigin=\"anonymous\" />", sr))
-                .collect(joining("\n"));
+                .map(sr -> String.format("<link href=\"%s\" rel=\"stylesheet\" crossorigin=\"anonymous\" />", sr))
+                .collect(joining("\n    "));
 
         var html = readString(Paths.get(getSystemResource("wrapper.html").toURI()))
-                .replace("STYLE_REFS", styleRefLinks)
-                .replace("STYLE", defaultIfNull(style, EMPTY))
-                .replace("FORMULA", formula);
+                .replace("_*{STYLE_REFS}*_", styleRefLinks)
+                .replace("_*{STYLE}*_", defaultIfNull(style, EMPTY))
+                .replace("_*{FORMULA}*_", formula);
+
         var parsedHtml = Jsoup.parse(html);
-        parsedHtml.outputSettings().syntax(Document.OutputSettings.Syntax.xml);
         var document = new W3CDom().fromJsoup(parsedHtml);
-
-        // var document = XMLResource.load(new ByteArrayInputStream(html.getBytes())).getDocument();
-
         var renderer = new Java2DRenderer(document, 300);
 
         var imageWriter = FSImageWriter.newJpegWriter(1.0f);
