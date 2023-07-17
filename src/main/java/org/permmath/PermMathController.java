@@ -1,52 +1,57 @@
 package org.permmath;
 
-import static org.springframework.http.MediaType.IMAGE_PNG;
-import static org.springframework.http.MediaType.IMAGE_PNG_VALUE;
+import static org.springframework.http.MediaType.IMAGE_JPEG;
+import static org.springframework.http.MediaType.IMAGE_JPEG_VALUE;
 import static org.springframework.http.MediaType.TEXT_PLAIN_VALUE;
+import static org.springframework.http.ResponseEntity.ok;
 
-import java.io.IOException;
+import java.util.List;
 
 import javax.validation.constraints.NotBlank;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
+import org.springframework.lang.Nullable;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 @Validated
 @RestController
 public class PermMathController {
 
     @Autowired
-    private PermMathService permMathService;
+    private PermMathUrlService permMathUrlService;
+
+    @Autowired
+    private PermMathRendererService permMathRendererService;
 
     @GetMapping(path = "/url", produces = TEXT_PLAIN_VALUE)
     public String getUrl(
             @NotBlank @RequestParam String formula,
-            @NotBlank @RequestParam String style) {
-        return permMathService.getPermMathUrl(formula, style);
+            @Nullable @RequestParam(required = false) List<@NotBlank String> styleRefs,
+            @Nullable @RequestParam(required = false) String style) {
+        return permMathUrlService.getPermMathUrl(formula, styleRefs, style);
     }
 
-    @GetMapping(value = "/image", produces = IMAGE_PNG_VALUE)
+    @GetMapping(value = "/image", produces = { IMAGE_JPEG_VALUE, IMAGE_JPEG_VALUE })
     public ResponseEntity<InputStreamResource> getImage(
             @NotBlank @RequestParam String formula,
-            @NotBlank @RequestParam String style) throws IOException {
+            @Nullable @RequestParam(required = false) List<@NotBlank String> styleRefs,
+            @Nullable @RequestParam(required = false) String style) throws Exception {
 
-        log.info("formula requested: {} with style {}");
+        /*
+         * return ResponseEntity .ok() .contentType(IMAGE_PNG) .body(new
+         * InputStreamResource(new ClassPathResource("image.png").getInputStream()));
+         */
 
-        var imgFile = new ClassPathResource("image.png");
-
-        return ResponseEntity
-                .ok()
-                .contentType(IMAGE_PNG)
-                .body(new InputStreamResource(imgFile.getInputStream()));
+        return ok()
+                .contentType(IMAGE_JPEG)
+                .body(
+                        permMathRendererService.getImage(formula, styleRefs, style));
     }
 
 }
