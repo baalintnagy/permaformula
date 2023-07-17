@@ -4,22 +4,26 @@ import java.io.Serial;
 import java.io.Serializable;
 
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.ToString;
 
-@Data
 @AllArgsConstructor
+@Getter
+@EqualsAndHashCode
+@ToString
 public class ConstraintViolationData implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
-    private String message;
+    private final String message;
 
-    private String defaultMessage;
+    private final String defaultMessage;
 
-    private String propertyPath;
+    private final String propertyPath;
 
-    private Serializable invalidValue;
+    private final Serializable invalidValue;
 
 }
 

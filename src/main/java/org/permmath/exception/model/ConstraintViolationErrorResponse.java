@@ -5,17 +5,19 @@ import java.io.Serial;
 import java.util.List;
 import java.util.UUID;
 
-import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.ToString;
 
-@Data
+@Getter
 @EqualsAndHashCode(callSuper = false)
+@ToString(callSuper = true)
 public class ConstraintViolationErrorResponse extends ErrorResponse {
 
     @Serial
     private static final long serialVersionUID = 7058895985869026606L;
 
-    private List<ConstraintViolationData> constraintViolations;
+    private final List<ConstraintViolationData> constraintViolations;
 
     public ConstraintViolationErrorResponse(UUID id, long timestamp, String path, String exception,
                                             String messageKey,
