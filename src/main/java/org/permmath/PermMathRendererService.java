@@ -5,6 +5,7 @@ import static java.nio.file.Files.readString;
 import static java.util.stream.Collectors.joining;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 import static org.apache.commons.lang3.StringUtils.EMPTY;
+import static org.xhtmlrenderer.util.FSImageWriter.newJpegWriter;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -26,7 +27,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.xhtmlrenderer.swing.Java2DRenderer;
-import org.xhtmlrenderer.util.FSImageWriter;
 
 
 @Validated
@@ -51,15 +51,12 @@ public class PermMathRendererService {
                 .replace("_*{STYLE}*_", defaultIfNull(style, EMPTY))
                 .replace("_*{FORMULA}*_", formula);
 
-        var parsedHtml = Jsoup.parse(html);
-        var document = new W3CDom().fromJsoup(parsedHtml);
+        var document = new W3CDom().fromJsoup(Jsoup.parse(html));
         var renderer = new Java2DRenderer(document, 300);
 
-        var imageWriter = FSImageWriter.newJpegWriter(1.0f);
         ByteArrayOutputStream os = new ByteArrayOutputStream();
-        imageWriter.write(renderer.getImage(), os);
-        var is = new ByteArrayInputStream(os.toByteArray());
+        newJpegWriter(1.0f).write(renderer.getImage(), os);
 
-        return new InputStreamResource(is);
+        return new InputStreamResource(new ByteArrayInputStream(os.toByteArray()));
     }
 }
