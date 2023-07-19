@@ -11,14 +11,44 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/latest.js?config=AM_CHTML"></script>
     <style>
 
-        
+        body {
+        padding:0; 
+        margin:0; 
+        border:0;
+    }
+    .div-root {
+        padding: 20px; 
+        font-family: Arial, sans-serif; 
+        -webkit-font-smoothing: antialiased; 
+        -moz-osx-font-smoothing: grayscale; 
+        background-color: #303030; 
+        color: white;
+    }
+    .example-formula {
+        font-size=16px;
+    }
+    .num-sys-formula {
+        color: rgb(207, 123, 123); 
+        font-size=25px;
+    }
 
     </style>
 </head>
 
-<body style="padding:0; margin:0; border:0;">
+<body>
 
-    <div style="padding:10px; text-shadow: 0 .05rem .1rem rgb(0, 0, 0); background-color: #242424; color: rgb(255, 255, 255);" >     <h1>Some title</h1>     <p>Some paragraph</p>     <div>         `sum_(i=1)^n i^3=((n(n+1))/2)^2`     </div>     <br/>     <div style="color: red;">         `x=ubrace(sum_(i=0)^(|__log_bn__|) v(s_i)b^i)_(n in NN) + ubrace(sum_(i=1)^oo v(s_i)b^(-i))_(q in [0,1) sub RR)`     </div>     </div>   
+  <div class="div-root" >
+    <h1>Some Shitty Title</h1>
+    <p>Some paragraph</p>
+    <p class="example-formula">
+        `sum_(i=1)^n i^3=((n(n+1))/2)^2`
+    </p>
+    <p class="num-sys-formula">
+        <strong>
+            `x=ubrace(sum_(i=0)^(|__log_bn__|) v(s_i)b^i)_(n in NN) + ubrace(sum_(i=1)^oo v(s_i)b^(-i))_(q in [0,1) sub RR)`
+        </strong>
+    </p>
+    </div>
 
 </body>
 
