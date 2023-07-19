@@ -46,13 +46,17 @@ public class PermMathRendererService {
                 .map(sr -> String.format("<link href=\"%s\" rel=\"stylesheet\" crossorigin=\"anonymous\" />", sr))
                 .collect(joining("\n    "));
 
-        var html = readString(Paths.get(getSystemResource("wrapper.html").toURI()))
+        var html = readString(
+                    Paths.get(
+                            getSystemResource("wrapper.html")
+                        .toURI()))
                 .replace("_*{STYLE_REFS}*_", styleRefLinks)
                 .replace("_*{STYLE}*_", defaultIfNull(style, EMPTY))
                 .replace("_*{FORMULA}*_", formula);
 
         var document = new W3CDom().fromJsoup(Jsoup.parse(html));
-        var renderer = new Java2DRenderer(document, 300);
+        var renderer = new Java2DRenderer(document, 800);
+        renderer.getSharedContext().setDPI(2000.0f);
 
         ByteArrayOutputStream os = new ByteArrayOutputStream();
         newJpegWriter(1.0f).write(renderer.getImage(), os);
