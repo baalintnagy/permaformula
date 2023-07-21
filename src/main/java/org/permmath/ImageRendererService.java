@@ -21,6 +21,8 @@ import javax.validation.constraints.NotBlank;
 
 import org.jsoup.Jsoup;
 import org.jsoup.helper.W3CDom;
+import org.permmath.validation.ValidImageWidth;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
@@ -31,10 +33,14 @@ import org.xhtmlrenderer.swing.Java2DRenderer;
 
 @Validated
 @Service
-public class PermMathRendererService {
+public class ImageRendererService {
+
+    @Autowired
+    private PermMathProperties permMathProperties;
 
     public InputStreamResource getImage(
             @NotBlank @RequestParam String formula,
+            @Nullable @ValidImageWidth @RequestParam(required = false) Integer imageWidht,
             @Nullable List<@NotBlank String> styleRefs,
             @RequestParam String style) throws IOException, URISyntaxException {
 
@@ -55,8 +61,8 @@ public class PermMathRendererService {
                 .replace("_*{FORMULA}*_", formula);
 
         var document = new W3CDom().fromJsoup(Jsoup.parse(html));
-        var renderer = new Java2DRenderer(document, 800);
-        renderer.getSharedContext().setDPI(2000.0f);
+        var renderer = new Java2DRenderer(document, defaultIfNull(imageWidht, permMathProperties.getDefaultImageWidth()));
+        renderer.getSharedContext().setDPI(permMathProperties.getDefaultDpi());
 
         ByteArrayOutputStream os = new ByteArrayOutputStream();
         newJpegWriter(1.0f).write(renderer.getImage(), os);

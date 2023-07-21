@@ -18,4 +18,7 @@ public class PermMathProperties {
 
     @NotBlank
     private /* final */ String host;
+
+    private final int defaultImageWidth = 800;
+    private final float defaultDpi = 2000.0f;
 }

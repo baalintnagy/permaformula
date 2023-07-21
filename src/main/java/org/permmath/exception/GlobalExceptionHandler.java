@@ -2,13 +2,11 @@ package org.permmath.exception;
 
 import static java.lang.System.currentTimeMillis;
 import static java.util.UUID.randomUUID;
-import static org.permmath.exception.model.ExceptionHandlerConstants.REQUEST_PATH_UNAVAILABLE;
-import static org.permmath.exception.model.ExceptionHandlerConstants.UNEXPECTED_ERROR_MESSAGE_KEY;
-import static org.permmath.exception.model.ExceptionHandlerConstants.VALIDATION_ERROR_MESSAGE_KEY;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
 import static org.springframework.web.context.request.RequestContextHolder.getRequestAttributes;
 
+import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -39,6 +37,11 @@ import lombok.extern.slf4j.Slf4j;
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
+    public static final String REQUEST_PATH_UNAVAILABLE = "N/A";
+    public static final String UNEXPECTED_ERROR_MESSAGE_KEY = "{unexpected.error}";
+    public static final String VALIDATION_ERROR_MESSAGE_KEY = "{validation.error}";
+    public static final String DATABASE_MESSAGE_KEY = "{database.error}";
+
     @Autowired
     private ExceptionConfigurationProperties exceptionConfigurationProperties;
 
@@ -62,7 +65,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({
             ValidationException.class,
-            HttpMessageConversionException.class
+            HttpMessageConversionException.class,
+            URISyntaxException.class
     })
     @ResponseStatus(BAD_REQUEST)
     @ResponseBody
