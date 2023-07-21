@@ -13,6 +13,8 @@ import java.util.List;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 
+import org.permmath.rendering.ImageRendererService;
+import org.permmath.url.UrlService;
 import org.permmath.validation.ValidImageWidth;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.InputStreamResource;
@@ -39,9 +41,11 @@ public class PermMathController {
             @NotBlank @RequestParam String formula,
             @Nullable @ValidImageWidth @RequestParam(required = false) Integer imageWidht,
             @Nullable @RequestParam(required = false) List<@NotBlank String> styleRefs,
-            @Nullable @RequestParam(required = false) String style) {
-        return urlService.getImageUrl(formula, imageWidht, styleRefs, style);
+            @Nullable @RequestParam(required = false) String style,
+            @Nullable @RequestParam(required = false) Boolean compressUrlQuery) throws IOException {
+        return urlService.getImageUrl(formula, imageWidht, styleRefs, style, compressUrlQuery);
     }
+
 
     @GetMapping(value = "/image", produces = { IMAGE_JPEG_VALUE, IMAGE_JPEG_VALUE })
     public ResponseEntity<InputStreamResource> getImage(
@@ -55,9 +59,22 @@ public class PermMathController {
                 .body(imageRendererService.getImage(formula, imageWidth, styleRefs, style));
     }
 
+    @GetMapping(value = "/image-cq", produces = { IMAGE_JPEG_VALUE, IMAGE_JPEG_VALUE })
+    public ResponseEntity<InputStreamResource> getImageCQ(@NotBlank @RequestParam String ubcq) throws IOException, URISyntaxException {
+        var queryParams = urlService.decodeUbcq(ubcq);
+        return ok()
+                .contentType(IMAGE_JPEG)
+                .body(imageRendererService.getImage(
+                        queryParams.getForumla(),
+                        queryParams.getImageWidth(),
+                        queryParams.getStyleRefs(),
+                        queryParams.getStyle()));
+
+    }
+
     @GetMapping(path = "/decode", produces = TEXT_PLAIN_VALUE)
     public String getDecodedContent(@NotNull @RequestParam URL url) {
-        return urlService.decodePermathUrl(url);
+        return urlService.urlDecode(url);
     }
 
 }

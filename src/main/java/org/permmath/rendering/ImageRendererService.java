@@ -1,4 +1,4 @@
-package org.permmath;
+package org.permmath.rendering;
 
 import static java.lang.ClassLoader.getSystemResource;
 import static java.nio.file.Files.readString;
@@ -21,6 +21,7 @@ import javax.validation.constraints.NotBlank;
 
 import org.jsoup.Jsoup;
 import org.jsoup.helper.W3CDom;
+import org.permmath.PermMathProperties;
 import org.permmath.validation.ValidImageWidth;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.InputStreamResource;
