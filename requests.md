@@ -1,6 +1,6 @@
 # FORMULA:
 ```html
-	<div class="div-root" >
+	<div class="div-root">
     <h1>Some Shitty Title - External style</h1>
     <p>Some paragraph</p>
     <p class="example-formula">

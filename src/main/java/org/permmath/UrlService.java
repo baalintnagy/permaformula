@@ -3,7 +3,6 @@ package org.permmath;
 import static java.net.URLDecoder.decode;
 import static java.net.URLEncoder.encode;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.joining;
 import static org.springframework.util.CollectionUtils.isEmpty;
 
@@ -20,6 +19,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
+
+import lombok.NonNull;
 
 @Validated
 @Service
@@ -46,19 +47,17 @@ public class UrlService {
         return decode(url.getQuery(), UTF_8);
     }
 
-    private static String encodeStyleRefs(@Nullable List<@NotBlank String> styleRefs) {
+    private static String encodeStyleRefs(@Nullable List<@NonNull String> styleRefs) {
         if (isEmpty(styleRefs)) {
             return null;
         }
         return styleRefs.stream()
                 .map(sr -> encodeParam("styleRefs", sr))
-                .filter(Objects::nonNull) // not really necessary
+                .filter(Objects::nonNull) // should not be necessary
                 .collect(joining("&"));
     }
 
-    private static <T extends Object> String encodeParam(@NotBlank String paramName, @Nullable T paramValue) {
-        requireNonNull(paramName, "paramName");
-
+    private static <T extends Object> String encodeParam(@NonNull String paramName, @Nullable T paramValue) {
         if (paramValue == null) {
             return null;
         }
@@ -67,6 +66,13 @@ public class UrlService {
         if (stringifiedParamValue.isBlank()) {
             return null;
         }
-        return String.format("%s=%s", paramName, encode(stringifiedParamValue, UTF_8));
+        return String.format("%s=%s",
+                paramName,
+                encode(
+                    sanitize(stringifiedParamValue), UTF_8));
+    }
+
+    private static String sanitize(@NonNull String input) {
+        return input.replaceAll("\\s+", " ");
     }
 }
