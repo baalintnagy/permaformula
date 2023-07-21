@@ -66,17 +66,17 @@ public class UrlService {
                 urlEncodeParamValue("ubcq", stringCompressionService.compress(imageJson)));
     }
 
+    public ImageDescriptor decodeUbcq(@NotBlank String ubcq) throws IOException {
+        String json = stringCompressionService.decompress(urlDecode(ubcq));
+        return objectMapper.readValue(json, ImageDescriptor.class);
+    }
+
     public String urlDecode(@NotNull URL url) {
         return urlDecode(url.getQuery());
     }
 
-    public String urlDecode(@NotNull String url) {
+    private static String urlDecode(@NotNull String url) {
         return decode(url, UTF_8);
-    }
-
-    public ImageDescriptor decodeUbcq(@NotBlank String ubcq) throws IOException {
-        String json = stringCompressionService.decompress(urlDecode(ubcq));
-        return objectMapper.readValue(json, ImageDescriptor.class);
     }
 
     private static String urlEncodeStyleRefs(@Nullable List<@NonNull String> styleRefs) {
