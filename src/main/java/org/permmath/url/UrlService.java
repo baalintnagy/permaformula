@@ -5,12 +5,15 @@ import static java.net.URLEncoder.encode;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.stream.Collectors.joining;
 import static org.apache.commons.lang3.BooleanUtils.isNotTrue;
+import static org.apache.commons.lang3.StringUtils.isBlank;
 import static org.springframework.util.CollectionUtils.isEmpty;
 
 import java.io.IOException;
 import java.net.URL;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 import javax.validation.constraints.NotBlank;
@@ -60,7 +63,15 @@ public class UrlService {
         }
 
         var imageJson = objectMapper.writeValueAsString(
-                new ImageDescriptor(formula, imageWidth, styleRefs, style));
+                new ImageDescriptor(
+                        sanitizeMandatoryParamValue(formula),
+                        imageWidth,
+                        Optional.ofNullable(styleRefs)
+                                .map(Collection::stream)
+                                .orElseGet(Stream::empty)
+                                .map(UrlService::sanitizeMandatoryParamValue)
+                                .toList(),
+                        sanitizeParamValue(style)));
         return String.format("%s/image-cq?%s",
                 permMathProperties.getHost(),
                 urlEncodeParamValue("ubcq", imageJson));
@@ -100,11 +111,17 @@ public class UrlService {
         }
         return String.format("%s=%s",
                 paramName,
-                encode(
-                    sanitizeParamValue(stringifiedParamValue), UTF_8));
+                encode(sanitizeMandatoryParamValue(stringifiedParamValue), UTF_8));
     }
 
-    private static String sanitizeParamValue(@NonNull String input) {
+    private static String sanitizeParamValue(@Nullable String input) {
+        if (isBlank(input)) {
+            return null;
+        }
+        return sanitizeMandatoryParamValue(input);
+    }
+
+    private static String sanitizeMandatoryParamValue(@NonNull String input) {
         return input.replaceAll("\\s+", " ");
     }
 }
