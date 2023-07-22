@@ -63,11 +63,11 @@ public class UrlService {
                 new ImageDescriptor(formula, imageWidth, styleRefs, style));
         return String.format("%s/image-cq?%s",
                 permMathProperties.getHost(),
-                urlEncodeParamValue("ubcq", stringCompressionService.compress(imageJson)));
+                urlEncodeParamValue("ubcq", imageJson));
     }
 
     public ImageDescriptor decodeUbcq(@NotBlank String ubcq) throws IOException {
-        String json = stringCompressionService.decompress(urlDecode(ubcq));
+        String json = urlDecode(ubcq);
         return objectMapper.readValue(json, ImageDescriptor.class);
     }
 
