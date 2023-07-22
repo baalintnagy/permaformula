@@ -11,6 +11,9 @@
             `x=ubrace(sum_(i=0)^(|__log_bn__|) v(s_i)b^i)_(n in NN) + ubrace(sum_(i=1)^oo v(s_i)b^(-i))_(q in [0,1) sub RR)`
         </strong>
     </p>
+    <p class="fourier-formula">    
+        `F(omega) = int_{-oo}^oo} f(t) e^{-i omega t} dt`
+    </p>
     </div>
 ```
 
@@ -34,6 +37,10 @@
     }
     .num-sys-formula {
         color: rgb(207, 123, 123); 
+        font-size:25px;
+    }
+    .fourier-formula {
+        color: rgb(59, 201, 212); 
         font-size:25px;
     }
 ```
