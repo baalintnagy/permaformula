@@ -13,6 +13,7 @@ import java.util.List;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 
+import org.apache.commons.lang3.StringUtils;
 import org.permmath.rendering.ImageRendererService;
 import org.permmath.url.ImageDescriptor;
 import org.permmath.url.UrlService;
@@ -76,9 +77,9 @@ public class PermMathController {
     }
 
     @GetMapping(path = "/decode-cq", produces = { TEXT_PLAIN_VALUE, APPLICATION_JSON_VALUE })
-    public String getDecodedContentCQ(@NotNull @RequestParam String param) {
-        // TODO
-        return null;
+    public ImageDescriptor getDecodedContentCQ(@NotNull @RequestParam String param) throws IOException {
+        String[] split = StringUtils.split(param, "/image-cq=");
+        return urlService.decodeUbcq(split[1]);
     }
 
 }
