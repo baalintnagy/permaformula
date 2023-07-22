@@ -1,5 +1,6 @@
 package org.permmath;
 
+import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 import static org.springframework.http.MediaType.IMAGE_JPEG;
 import static org.springframework.http.MediaType.IMAGE_JPEG_VALUE;
 import static org.springframework.http.MediaType.TEXT_PLAIN_VALUE;
@@ -36,7 +37,7 @@ public class PermMathController {
     @Autowired
     private ImageRendererService imageRendererService;
 
-    @GetMapping(path = "/url", produces = TEXT_PLAIN_VALUE)
+    @GetMapping(path = "/url", produces = { TEXT_PLAIN_VALUE, APPLICATION_JSON_VALUE })
     public String getUrl(
             @NotBlank @RequestParam String formula,
             @Nullable @ValidImageWidth @RequestParam(required = false) Integer imageWidht,
@@ -47,7 +48,7 @@ public class PermMathController {
     }
 
 
-    @GetMapping(value = "/image", produces = { IMAGE_JPEG_VALUE, IMAGE_JPEG_VALUE })
+    @GetMapping(value = "/image", produces = { IMAGE_JPEG_VALUE, IMAGE_JPEG_VALUE, APPLICATION_JSON_VALUE })
     public ResponseEntity<InputStreamResource> getImage(
             @NotBlank @RequestParam String formula,
             @Nullable @ValidImageWidth @RequestParam(required = false) Integer imageWidth,
@@ -59,7 +60,7 @@ public class PermMathController {
                 .body(imageRendererService.getImage(formula, imageWidth, styleRefs, style));
     }
 
-    @GetMapping(value = "/image-cq", produces = { IMAGE_JPEG_VALUE, IMAGE_JPEG_VALUE })
+    @GetMapping(value = "/image-cq", produces = { IMAGE_JPEG_VALUE, IMAGE_JPEG_VALUE, APPLICATION_JSON_VALUE })
     public ResponseEntity<InputStreamResource> getImageCQ(@NotBlank @RequestParam String ubcq) throws IOException, URISyntaxException {
         var queryParams = urlService.decodeUbcq(ubcq);
         return ok()
@@ -72,9 +73,15 @@ public class PermMathController {
 
     }
 
-    @GetMapping(path = "/decode", produces = TEXT_PLAIN_VALUE)
+    @GetMapping(path = "/decode", produces = { TEXT_PLAIN_VALUE, APPLICATION_JSON_VALUE })
     public String getDecodedContent(@NotNull @RequestParam URL url) {
         return urlService.urlDecode(url);
+    }
+
+    @GetMapping(path = "/decode-cq", produces = { TEXT_PLAIN_VALUE, APPLICATION_JSON_VALUE })
+    public String getDecodedContentCQ(@NotNull @RequestParam String param) {
+        // TODO
+        return null;
     }
 
 }

@@ -32,6 +32,8 @@ public class ImageDescriptor {
 
     @ValidImageWidth
     private Integer imageWidth;
+
     private List<@NotBlank String> styleRefs;
+
     private String style;
 }

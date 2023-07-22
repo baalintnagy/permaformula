@@ -12,6 +12,9 @@ import java.util.zip.GZIPOutputStream;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Validated
 @Service
 public class StringCompressionService {
@@ -40,11 +43,11 @@ public class StringCompressionService {
             var s = new StringCompressionService();
             String c = s.compress(
                     "aabaacaadaahaaaakattajjaahahavvaavabnacacacabbacvakattajjaahahavvaavabnacacacaaabaacakattajjaahahavvaavabnacaadaahakattajjaahahavvaavabnacaaaakattajjaahahavvaavabnacacacabbacvacacaaabaacaadaahaaaakattajjaahahavvaavabnacacacabbacvacacaaabaacaadaahaaaakattajjaahahavvaavabnacacacabbaakattajjaahahavvaavabnaccvacacaaabaacaadaahaaaakattajjaahahavvaavabnacacacabbacvacaca");
-            System.out.println(c);
+            log.info("Compressed: {}", c);
             String d = s.decompress(c);
-            System.out.println(d);
+            log.info("Decompressed: {}", d);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Error: {}", e);
         }
     }
 
