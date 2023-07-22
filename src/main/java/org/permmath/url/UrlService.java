@@ -74,11 +74,11 @@ public class UrlService {
                         sanitizeParamValue(style)));
         return String.format("%s/image-cq?%s",
                 permMathProperties.getHost(),
-                urlEncodeParamValue("ubcq", imageJson));
+                urlEncodeParamValue("ubcq", stringCompressionService.compress(imageJson)));
     }
 
     public ImageDescriptor decodeUbcq(@NotBlank String ubcq) throws IOException {
-        String json = urlDecode(ubcq);
+        String json = urlDecode(stringCompressionService.decompress(ubcq));
         return objectMapper.readValue(json, ImageDescriptor.class);
     }
 
