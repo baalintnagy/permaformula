@@ -7,7 +7,6 @@ import static org.springframework.http.MediaType.TEXT_PLAIN_VALUE;
 import static org.springframework.http.ResponseEntity.ok;
 
 import java.io.IOException;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.List;
 
@@ -53,7 +52,7 @@ public class PermMathController {
             @NotBlank @RequestParam String formula,
             @Nullable @ValidImageWidth @RequestParam(required = false) Integer imageWidth,
             @Nullable @RequestParam(required = false) List<@NotBlank String> styleRefs,
-            @Nullable @RequestParam(required = false) String style) throws IOException, URISyntaxException {
+            @Nullable @RequestParam(required = false) String style) throws IOException {
 
         return ok()
                 .contentType(IMAGE_JPEG)
@@ -61,7 +60,7 @@ public class PermMathController {
     }
 
     @GetMapping(value = "/image-cq", produces = { IMAGE_JPEG_VALUE, IMAGE_JPEG_VALUE, APPLICATION_JSON_VALUE })
-    public ResponseEntity<InputStreamResource> getImageCQ(@NotBlank @RequestParam String ubcq) throws IOException, URISyntaxException {
+    public ResponseEntity<InputStreamResource> getImageCQ(@NotBlank @RequestParam String ubcq) throws IOException {
         var queryParams = urlService.decodeUbcq(ubcq);
         return ok()
                 .contentType(IMAGE_JPEG)

@@ -31,6 +31,8 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.xhtmlrenderer.swing.Java2DRenderer;
 
+import jakarta.annotation.PostConstruct;
+
 
 @Validated
 @Service
@@ -39,11 +41,21 @@ public class ImageRendererService {
     @Autowired
     private PermMathProperties permMathProperties;
 
+    private String wrapperHtmlTemplate;
+
+    @PostConstruct
+    void init() throws IOException, URISyntaxException {
+        wrapperHtmlTemplate = readString(
+                Paths.get(
+                        getSystemResource("wrapper.html")
+                                .toURI()));
+    }
+
     public InputStreamResource getImage(
             @NotBlank @RequestParam String formula,
             @Nullable @ValidImageWidth @RequestParam(required = false) Integer imageWidht,
             @Nullable List<@NotBlank String> styleRefs,
-            @RequestParam String style) throws IOException, URISyntaxException {
+            @RequestParam String style) throws IOException {
 
         // String.replace is deliberately used instead of templating engine.
 
@@ -53,10 +65,7 @@ public class ImageRendererService {
                 .map(sr -> String.format("<link href=\"%s\" rel=\"stylesheet\" crossorigin=\"anonymous\" />", sr))
                 .collect(joining("\n    "));
 
-        var html = readString(
-                    Paths.get(
-                            getSystemResource("wrapper.html")
-                        .toURI()))
+        var html = wrapperHtmlTemplate
                 .replace("_*{STYLE_REFS}*_", styleRefLinks)
                 .replace("_*{STYLE}*_", defaultIfNull(style, EMPTY))
                 .replace("_*{FORMULA}*_", formula);
