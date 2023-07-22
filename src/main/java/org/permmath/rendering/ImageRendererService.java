@@ -13,22 +13,20 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Paths;
 import java.util.Collection;
-import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
-import javax.validation.constraints.NotBlank;
+import javax.validation.Valid;
+import javax.validation.constraints.NotNull;
 
 import org.jsoup.Jsoup;
 import org.jsoup.helper.W3CDom;
 import org.permmath.PermMathProperties;
-import org.permmath.validation.ValidImageWidth;
+import org.permmath.url.ImageDescriptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.InputStreamResource;
-import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.xhtmlrenderer.swing.Java2DRenderer;
 
 import jakarta.annotation.PostConstruct;
@@ -41,6 +39,9 @@ public class ImageRendererService {
     @Autowired
     private PermMathProperties permMathProperties;
 
+    @Autowired
+    private AsciiMathExecutor asciiMathExecutor;
+
     private String wrapperHtmlTemplate;
 
     @PostConstruct
@@ -51,15 +52,11 @@ public class ImageRendererService {
                                 .toURI()));
     }
 
-    public InputStreamResource getImage(
-            @NotBlank @RequestParam String formula,
-            @Nullable @ValidImageWidth @RequestParam(required = false) Integer imageWidht,
-            @Nullable List<@NotBlank String> styleRefs,
-            @RequestParam String style) throws IOException {
+    public InputStreamResource getImage(@Valid @NotNull ImageDescriptor imageDescriptor) throws IOException {
 
         // String.replace is deliberately used instead of templating engine.
 
-        var styleRefLinks = Optional.ofNullable(styleRefs)
+        var styleRefLinks = Optional.ofNullable(imageDescriptor.getStyleRefs())
                 .map(Collection::stream)
                 .orElseGet(Stream::empty)
                 .map(sr -> String.format("<link href=\"%s\" rel=\"stylesheet\" crossorigin=\"anonymous\" />", sr))
@@ -67,11 +64,14 @@ public class ImageRendererService {
 
         var html = wrapperHtmlTemplate
                 .replace("_*{STYLE_REFS}*_", styleRefLinks)
-                .replace("_*{STYLE}*_", defaultIfNull(style, EMPTY))
-                .replace("_*{FORMULA}*_", formula);
+                .replace("_*{STYLE}*_", defaultIfNull(imageDescriptor.getStyle(), EMPTY))
+                .replace("_*{FORMULA}*_", imageDescriptor.getForumla());
 
-        var document = new W3CDom().fromJsoup(Jsoup.parse(html));
-        var renderer = new Java2DRenderer(document, defaultIfNull(imageWidht, permMathProperties.getDefaultImageWidth()));
+        var processedHtml = asciiMathExecutor.applyAsciiMathJs(html);
+
+        var document = new W3CDom().fromJsoup(Jsoup.parse(processedHtml));
+        var renderer = new Java2DRenderer(document,
+                defaultIfNull(imageDescriptor.getImageWidth(), permMathProperties.getDefaultImageWidth()));
         renderer.getSharedContext().setDPI(permMathProperties.getDefaultDpi());
 
         ByteArrayOutputStream os = new ByteArrayOutputStream();

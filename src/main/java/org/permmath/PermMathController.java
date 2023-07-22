@@ -14,6 +14,7 @@ import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 
 import org.permmath.rendering.ImageRendererService;
+import org.permmath.url.ImageDescriptor;
 import org.permmath.url.UrlService;
 import org.permmath.validation.ValidImageWidth;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,19 +57,16 @@ public class PermMathController {
 
         return ok()
                 .contentType(IMAGE_JPEG)
-                .body(imageRendererService.getImage(formula, imageWidth, styleRefs, style));
+                .body(imageRendererService.getImage(
+                        new ImageDescriptor(formula, imageWidth, styleRefs, style)));
     }
 
     @GetMapping(value = "/image-cq", produces = { IMAGE_JPEG_VALUE, IMAGE_JPEG_VALUE, APPLICATION_JSON_VALUE })
     public ResponseEntity<InputStreamResource> getImageCQ(@NotBlank @RequestParam String ubcq) throws IOException {
-        var queryParams = urlService.decodeUbcq(ubcq);
         return ok()
                 .contentType(IMAGE_JPEG)
                 .body(imageRendererService.getImage(
-                        queryParams.getForumla(),
-                        queryParams.getImageWidth(),
-                        queryParams.getStyleRefs(),
-                        queryParams.getStyle()));
+                        urlService.decodeUbcq(ubcq)));
 
     }
 
