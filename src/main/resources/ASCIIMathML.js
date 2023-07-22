@@ -36,7 +36,6 @@ THE SOFTWARE.
 */
 var asciimath = {};
 
-(function(){
 var mathcolor = "blue";        // change it to "" (to inherit) or another color
 var mathfontsize = "1em";      // change to e.g. 1.2em for larger math
 var mathfontfamily = "serif";  // change to "" to inherit (works in IE)
@@ -45,7 +44,7 @@ var automathrecognize = false; // writing "amath" on page makes this true
 var checkForMathML = true;     // check if browser can display MathML
 var notifyIfNoMathML = true;   // display note at top if no MathML capability
 var alertIfNoMathML = false;   // show alert box if no MathML capability
-var translateOnLoad = true;    // set to false to do call translators from js
+var translateOnLoad = false;    // set to false to do call translators from js
 var translateASCIIMath = true; // false to preserve `..`
 var displaystyle = true;      // puts limits above and below large operators
 var showasciiformulaonhover = true; // helps students learn ASCIIMath
@@ -57,14 +56,8 @@ var fixphi = true;  		//false to return to legacy phi/varphi mapping
 
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 
-var isIE = (navigator.appName.slice(0,9)=="Microsoft");
+var isIE = false;
 var noMathML = false, translated = false;
-
-if (isIE) { // add MathPlayer info to IE webpages
-  document.write("<object id=\"mathplayer\"\
-  classid=\"clsid:32F66A20-7614-11D4-BD11-00104BD3F987\"></object>");
-  document.write("<?import namespace=\"m\" implementation=\"#mathplayer\"?>");
-}
 
 // Add a stylesheet, replacing any previous custom stylesheet (adapted from TW)
 function setStylesheet(s) {
@@ -88,8 +81,6 @@ function setStylesheet(s) {
 		}
 	}
 }
-
-setStylesheet("#AMMLcloseDiv \{font-size:0.8em; padding-top:1em; color:#014\}\n#AMMLwarningBox \{position:absolute; width:100%; top:0; left:0; z-index:200; text-align:center; font-size:1em; font-weight:bold; padding:0.5em 0 0.5em 0; color:#ffc; background:#c30\}");
 
 function init(){
 	var msg, warnings = new Array();
@@ -1162,35 +1153,6 @@ function generic(){
       translate();
   }
 };
-//setup onload function
-if(typeof window.addEventListener != 'undefined'){
-  //.. gecko, safari, konqueror and standard
-  window.addEventListener('load', generic, false);
-}
-else if(typeof document.addEventListener != 'undefined'){
-  //.. opera 7
-  document.addEventListener('load', generic, false);
-}
-else if(typeof window.attachEvent != 'undefined'){
-  //.. win/ie
-  window.attachEvent('onload', generic);
-}else{
-  //.. mac/ie5 and anything else that gets this far
-  //if there's an existing onload function
-  if(typeof window.onload == 'function'){
-    //store it
-    var existing = onload;
-    //add new onload handler
-    window.onload = function(){
-      //call existing onload function
-      existing();
-      //call generic onload function
-      generic();
-    };
-  }else{
-    window.onload = generic;
-  }
-}
 
 //expose some functions to outside
 asciimath.newcommand = newcommand;
@@ -1198,4 +1160,4 @@ asciimath.newsymbol = newsymbol;
 asciimath.AMprocesssNode = AMprocessNode;
 asciimath.parseMath = parseMath;
 asciimath.translate = translate;
-})();
+

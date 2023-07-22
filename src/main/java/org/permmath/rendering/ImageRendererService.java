@@ -67,9 +67,9 @@ public class ImageRendererService {
                 .replace("_*{STYLE}*_", defaultIfNull(imageDescriptor.getStyle(), EMPTY))
                 .replace("_*{FORMULA}*_", imageDescriptor.getForumla());
 
-        var processedHtml = asciiMathExecutor.applyAsciiMathJs(html);
+        var document = new W3CDom().fromJsoup(Jsoup.parse(html));
+        asciiMathExecutor.processAsciiMath(document);
 
-        var document = new W3CDom().fromJsoup(Jsoup.parse(processedHtml));
         var renderer = new Java2DRenderer(document,
                 defaultIfNull(imageDescriptor.getImageWidth(), permMathProperties.getDefaultImageWidth()));
         renderer.getSharedContext().setDPI(permMathProperties.getDefaultDpi());
