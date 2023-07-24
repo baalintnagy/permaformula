@@ -69,7 +69,7 @@ public class ImageRendererService {
                 .replace("_*{FORMULA}*_", imageDescriptor.getForumla());
 
         var document = new W3CDom().fromJsoup(Jsoup.parse(html));
-        asciiMathExecutor.processAsciiMath(document);
+        // asciiMathExecutor.processAsciiMath(document);
 
         var renderer = new Java2DRenderer(document,
                 defaultIfNull(imageDescriptor.getImageWidth(), permMathProperties.getDefaultImageWidth()));

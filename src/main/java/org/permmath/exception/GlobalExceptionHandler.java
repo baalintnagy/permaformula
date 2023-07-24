@@ -66,6 +66,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             ValidationException.class,
             HttpMessageConversionException.class,
+            IllegalArgumentException.class,
             URISyntaxException.class
     })
     @ResponseStatus(BAD_REQUEST)
