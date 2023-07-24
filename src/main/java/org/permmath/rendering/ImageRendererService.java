@@ -55,6 +55,7 @@ public class ImageRendererService {
     public InputStreamResource getImage(@Valid @NotNull ImageDescriptor imageDescriptor) throws IOException {
 
         // String.replace is deliberately used instead of templating engine.
+        // (Security sucks at the moment!)
 
         var styleRefLinks = Optional.ofNullable(imageDescriptor.getStyleRefs())
                 .map(Collection::stream)

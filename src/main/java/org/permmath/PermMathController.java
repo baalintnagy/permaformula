@@ -78,7 +78,7 @@ public class PermMathController {
 
     @GetMapping(path = "/decode-cq", produces = { TEXT_PLAIN_VALUE, APPLICATION_JSON_VALUE })
     public ImageDescriptor getDecodedContentCQ(@NotNull @RequestParam String param) throws IOException {
-        String[] split = StringUtils.split(param, "/image-cq=");
+        String[] split = StringUtils.splitByWholeSeparator(param, "/image-cq?ubcq=");
         return urlService.decodeUbcq(split[1]);
     }
 
