@@ -27,6 +27,10 @@ window.exportStyledSvg = async function () {
     const computed = getComputedStyle(original);
     let css = '';
     for (const property of computed) {
+      // WebView can report default CSS geometry even when SVG presentation
+      // attributes position the glyph. Inlining it would override those attributes.
+      if (original.namespaceURI === svgNS && original.hasAttribute(property) &&
+          ['transform', 'x', 'y', 'cx', 'cy', 'r', 'rx', 'ry', 'width', 'height'].includes(property)) continue;
       let value = computed.getPropertyValue(property);
       const urls = [...value.matchAll(/url\(["']?([^"')]+)["']?\)/g)];
       for (const match of urls) {

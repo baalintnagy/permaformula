@@ -104,15 +104,24 @@ class BrowserRenderingTests {
                 var background = new java.awt.Color(image.getRGB(5, 5));
                 assertTrue(background.getRed() < 80 && background.getGreen() < 80 && background.getBlue() < 80);
                 int redMath = 0, cyanMath = 0;
+                int rightmostRed = 0, rightmostCyan = 0;
                 for (int y = 0; y < image.getHeight(); y++) {
                     for (int x = 0; x < image.getWidth(); x++) {
                         var color = new java.awt.Color(image.getRGB(x, y));
                         if (color.getRed() > 150 && color.getRed() > color.getGreen() * 1.3
-                                && color.getRed() > color.getBlue() * 1.3) redMath++;
-                        if (color.getGreen() > 150 && color.getBlue() > 150 && color.getRed() < 120) cyanMath++;
+                                && color.getRed() > color.getBlue() * 1.3) {
+                            redMath++;
+                            rightmostRed = Math.max(rightmostRed, x);
+                        }
+                        if (color.getGreen() > 150 && color.getBlue() > 150 && color.getRed() < 120) {
+                            cyanMath++;
+                            rightmostCyan = Math.max(rightmostCyan, x);
+                        }
                     }
                 }
                 assertTrue(redMath > 10 && cyanMath > 10, "Formula colors must survive SVG image embedding");
+                assertTrue(rightmostRed > 300 && rightmostCyan > 250,
+                        "Formula glyphs must retain their horizontal positioning, rather than overlap at the origin");
             }
         }
     }

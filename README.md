@@ -82,13 +82,13 @@ For example, to render an image of the formula "a^2 + b^2 = c^2", first URL-enco
 ### Rendering
 
 Both backends render styled HTML with locally bundled MathJax 3.2.2 (SVG output).
-The default is Chromium; select JavaFX with `permmath.rendering.engine=javafx`
-(or `PERMMATH_RENDERING_ENGINE=javafx`). All image endpoints return SVG. Styled HTML is embedded using SVG foreignObject; `/img` returns pure formula SVG.
+The default is JavaFX; select Chromium with `permmath.rendering.engine=chromium`
+(or `PERMMATH_RENDERING_ENGINE=chromium`). All image endpoints return SVG. Styled HTML is embedded using SVG foreignObject; `/img` returns pure formula SVG.
 `imageWidth` is the layout width in pixels; image height follows the content.
 The legacy `default-dpi` setting is retained for configuration compatibility but
 browser rendering uses CSS pixels rather than that value.
 
-Install the dedicated Chromium build on Windows:
+To use Chromium, install the dedicated build on Windows:
 
 ```powershell
 $env:JAVA_HOME = 'C:\Java\jdk25'
