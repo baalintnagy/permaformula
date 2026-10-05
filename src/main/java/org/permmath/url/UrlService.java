@@ -77,15 +77,9 @@ public class UrlService {
                 urlEncodeParamValue("ubcq", stringCompressionService.compress(imageJson)));
     }
 
-    // for image-cq
+    // Request parameters have already been URL-decoded by Spring.
     public ImageDescriptor decodeUbcq(@NotBlank String ubcq) throws IOException {
-        String json = urlDecode(stringCompressionService.decompress(ubcq));
-        return objectMapper.readValue(json, ImageDescriptor.class);
-    }
-
-    // for decode-cq
-    public ImageDescriptor decodeUbcq2(@NotBlank String ubcq2) throws IOException {
-        String json = stringCompressionService.decompress(urlDecode(ubcq2));
+        String json = stringCompressionService.decompress(ubcq);
         return objectMapper.readValue(json, ImageDescriptor.class);
     }
 

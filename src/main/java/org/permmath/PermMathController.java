@@ -13,7 +13,6 @@ import java.util.List;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 
-import org.apache.commons.lang3.StringUtils;
 import org.permmath.rendering.ImageRendererService;
 import org.permmath.url.ImageDescriptor;
 import org.permmath.url.UrlService;
@@ -41,11 +40,11 @@ public class PermMathController {
     @GetMapping(path = "/url", produces = { TEXT_PLAIN_VALUE, APPLICATION_JSON_VALUE })
     public String getUrl(
             @NotBlank @RequestParam String formula,
-            @Nullable @ValidImageWidth @RequestParam(required = false) Integer imageWidht,
+            @Nullable @ValidImageWidth @RequestParam(required = false) Integer imageWidth,
             @Nullable @RequestParam(required = false) List<@NotBlank String> styleRefs,
             @Nullable @RequestParam(required = false) String style,
             @Nullable @RequestParam(required = false) Boolean compressUrlQuery) throws IOException {
-        return urlService.getImageUrl(formula, imageWidht, styleRefs, style, compressUrlQuery);
+        return urlService.getImageUrl(formula, imageWidth, styleRefs, style, compressUrlQuery);
     }
 
 
@@ -76,10 +75,9 @@ public class PermMathController {
         return urlService.urlDecode(url);
     }
 
-    @GetMapping(path = "/decode-cq", produces = { TEXT_PLAIN_VALUE, APPLICATION_JSON_VALUE })
-    public ImageDescriptor getDecodedContentCQ(@NotNull @RequestParam String ubcq) throws IOException {
-        String[] split = StringUtils.splitByWholeSeparator(ubcq, "/image-cq?ubcq=");
-        return urlService.decodeUbcq2(split[1]);
+    @GetMapping(path = "/decode-cq", produces = { APPLICATION_JSON_VALUE })
+    public ImageDescriptor getDecodedContentCQ(@NotBlank @RequestParam String ubcq) throws IOException {
+        return urlService.decodeUbcq(ubcq);
     }
 
 }
