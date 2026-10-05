@@ -12,7 +12,7 @@
         </strong>
     </p>
     <p class="fourier-formula">    
-        `F(omega) = int_{-oo}^oo} f(t) e^{-i omega t} dt`
+        `F(omega) = int_{-oo}^{oo} f(t) e^{-i omega t} dt`
     </p>
     </div>
 ```
