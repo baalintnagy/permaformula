@@ -20,25 +20,23 @@ import lombok.extern.slf4j.Slf4j;
 public class StringCompressionService {
 
     public String compress(String str) throws IOException {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        GZIPOutputStream gzip = new GZIPOutputStream(out);
-        gzip.write(str.getBytes(UTF_8));
-        gzip.close();
+        var out = new ByteArrayOutputStream();
+        try (var gzip = new GZIPOutputStream(out)) {
+            gzip.write(str.getBytes(UTF_8));
+        }
         return Base64.getEncoder()
                 .encodeToString(out.toByteArray());
     }
 
     public String decompress(String str) throws IOException {
-        byte[] compressed = Base64.getDecoder().decode(str);
-        ByteArrayInputStream bis = new ByteArrayInputStream(compressed);
-        GZIPInputStream gis = new GZIPInputStream(bis);
-        var result = new String(gis.readAllBytes(), UTF_8);
-        gis.close();
-        bis.close();
-        return result;
+        var compressed = Base64.getDecoder().decode(str);
+        try (var input = new ByteArrayInputStream(compressed);
+             var gzip = new GZIPInputStream(input)) {
+            return new String(gzip.readAllBytes(), UTF_8);
+        }
     }
 
-    public static void main(String[] args) {
+    static void main() {
         try {
             var s = new StringCompressionService();
             String c = s.compress(

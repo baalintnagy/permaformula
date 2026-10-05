@@ -51,7 +51,7 @@ public class UrlService {
             @Nullable String style,
             @Nullable Boolean compressUrlQuery) throws IOException {
 
-        String imageUrlQuery = Stream.of(
+        var imageUrlQuery = Stream.of(
                 urlEncodeParamValue("formula", formula),
                 urlEncodeParamValue("imageWidth", imageWidth),
                 urlEncodeStyleRefs(styleRefs),
@@ -59,7 +59,7 @@ public class UrlService {
             .filter(Objects::nonNull)
             .collect(joining("&"));
         if (isNotTrue(compressUrlQuery)) {
-            return String.format("%s/image?%s", permMathProperties.host(), imageUrlQuery);
+            return "%s/image?%s".formatted(permMathProperties.host(), imageUrlQuery);
         }
 
         var imageJson = objectMapper.writeValueAsString(
@@ -67,19 +67,19 @@ public class UrlService {
                         sanitizeMandatoryParamValue(formula),
                         imageWidth,
                         Optional.ofNullable(styleRefs)
-                                .map(Collection::stream)
-                                .orElseGet(Stream::empty)
+                                .stream()
+                                .flatMap(Collection::stream)
                                 .map(UrlService::sanitizeMandatoryParamValue)
                                 .toList(),
                         sanitizeParamValue(style)));
-        return String.format("%s/image-cq?%s",
+        return "%s/image-cq?%s".formatted(
                 permMathProperties.host(),
                 urlEncodeParamValue("ubcq", stringCompressionService.compress(imageJson)));
     }
 
     // Request parameters have already been URL-decoded by Spring.
     public ImageDescriptor decodeUbcq(@NotBlank String ubcq) throws IOException {
-        String json = stringCompressionService.decompress(ubcq);
+        var json = stringCompressionService.decompress(ubcq);
         return objectMapper.readValue(json, ImageDescriptor.class);
     }
 
@@ -101,7 +101,7 @@ public class UrlService {
                 .collect(joining("&"));
     }
 
-    private static <T extends Object> String urlEncodeParamValue(@NonNull String paramName, @Nullable T paramValue) {
+    private static String urlEncodeParamValue(@NonNull String paramName, @Nullable Object paramValue) {
         if (paramValue == null) {
             return null;
         }
@@ -110,7 +110,7 @@ public class UrlService {
         if (stringifiedParamValue.isBlank()) {
             return null;
         }
-        return String.format("%s=%s",
+        return "%s=%s".formatted(
                 paramName,
                 encode(sanitizeMandatoryParamValue(stringifiedParamValue), UTF_8));
     }

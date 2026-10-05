@@ -45,16 +45,14 @@ public class AsciiMathExecutor {
     }
 
     private static String getCDN() throws IOException, InterruptedException {
-        return HttpClient.newHttpClient()
-                .send(
-                    HttpRequest.newBuilder()
-                        .uri(URI.create(CDN_URL))
-                        .build(), HttpResponse.BodyHandlers.ofString())
-                .body();
+        try (var client = HttpClient.newHttpClient()) {
+            var request = HttpRequest.newBuilder(URI.create(CDN_URL)).build();
+            return client.send(request, HttpResponse.BodyHandlers.ofString()).body();
+        }
     }
 
     public void processAsciiMath(@NotNull Document doc) throws IOException {
-        try (Context context = Context.enter()) {
+        try (var context = Context.enter()) {
             var scope = context.initStandardObjects();
             var wrappedDocument = Context.javaToJS(doc, scope);
             ScriptableObject.putProperty(scope, "document", wrappedDocument);

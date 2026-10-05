@@ -14,7 +14,6 @@ import java.net.URISyntaxException;
 import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.Optional;
-import java.util.stream.Stream;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -58,9 +57,9 @@ public class ImageRendererService {
         // (Security sucks at the moment!)
 
         var styleRefLinks = Optional.ofNullable(imageDescriptor.styleRefs())
-                .map(Collection::stream)
-                .orElseGet(Stream::empty)
-                .map(sr -> String.format("<link href=\"%s\" rel=\"stylesheet\" crossorigin=\"anonymous\" />", sr))
+                .stream()
+                .flatMap(Collection::stream)
+                .map(sr -> "<link href=\"%s\" rel=\"stylesheet\" crossorigin=\"anonymous\" />".formatted(sr))
                 .collect(joining("\n    "));
 
         var html = wrapperHtmlTemplate
@@ -75,7 +74,7 @@ public class ImageRendererService {
                 defaultIfNull(imageDescriptor.imageWidth(), permMathProperties.defaultImageWidth()));
         renderer.getSharedContext().setDPI(permMathProperties.defaultDpi());
 
-        ByteArrayOutputStream os = new ByteArrayOutputStream();
+        var os = new ByteArrayOutputStream();
         newJpegWriter(1.0f).write(renderer.getImage(), os);
 
         return new InputStreamResource(new ByteArrayInputStream(os.toByteArray()));
