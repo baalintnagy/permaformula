@@ -8,9 +8,4 @@ springdoc:
 
 permmath:
     host: "http://localhost:8086"
-    exception:
-        allow-message: true
-        allow-localized-message: true
-        allow-exception-class: true
-        allow-stacktrace: true
 

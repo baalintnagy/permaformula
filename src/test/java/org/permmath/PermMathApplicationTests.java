@@ -3,12 +3,13 @@ package org.permmath;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -33,7 +34,14 @@ class PermMathApplicationTests {
     @ValueSource(ints = { 219, 4001 })
     void invalidImageWidthsAreRejected(int width) throws Exception {
         mvc.perform(get("/url").param("formula", "x").param("imageWidth", Integer.toString(width)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.instance").value("/url"))
+                .andExpect(jsonPath("$.violations[0].property").exists())
+                .andExpect(jsonPath("$.id").isString())
+                .andExpect(jsonPath("$.timestamp").isNumber())
+                .andExpect(jsonPath("$.stacktrace").doesNotExist());
     }
 
     @ParameterizedTest
@@ -64,6 +72,38 @@ class PermMathApplicationTests {
                 .andExpect(jsonPath("$.url").value("/v3/api-docs"));
         mvc.perform(get("/swagger-ui/index.html"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void invalidCompressedInputReturnsBusinessRuleProblem() throws Exception {
+        mvc.perform(get("/decode-cq").param("ubcq", "%%%"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.errorType").value("BUSINESS_RULE_VIOLATION"))
+                .andExpect(jsonPath("$.instance").value("/decode-cq"))
+                .andExpect(jsonPath("$.id").isString())
+                .andExpect(jsonPath("$.timestamp").isNumber());
+    }
+
+    @Test
+    void missingInputReturnsEnrichedMvcProblem() throws Exception {
+        mvc.perform(get("/url"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.instance").value("/url"))
+                .andExpect(jsonPath("$.id").isString())
+                .andExpect(jsonPath("$.timestamp").isNumber());
+    }
+
+    @Test
+    void invalidWidthTypeReturnsMvcProblem() throws Exception {
+        mvc.perform(get("/url").param("formula", "x").param("imageWidth", "wide"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.instance").value("/url"));
     }
 
 }

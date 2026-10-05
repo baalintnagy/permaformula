@@ -44,6 +44,20 @@ Response: An image representing the formula stored in the provided permalink
 
 ## Usage
 
+### Error responses
+
+Exception handling is provided by
+[`local-exception-handler`](https://github.com/baalintnagy/local-exception-handler)
+(`io.github.baalintnagy:local-exception-handler:0.9.1b`, from Maven Central).
+Handled errors return `application/problem+json` with standard Problem Detail
+fields (`type`, `title`, `status`, `detail`, `instance`), plus an `id` and
+`timestamp`. Constraint errors include `violations`; illegal arguments include
+`errorType: BUSINESS_RULE_VIOLATION`.
+
+This replaces the previous custom error JSON format and `permmath.exception`
+configuration. The service uses Spring Boot 4 / Spring Framework 7, as required
+by the exception-handler library.
+
 Simply send a GET request to the relevant endpoint with your desired parameters.
 
 For example, to render an image of the formula "a^2 + b^2 = c^2", first URL-encode the formula (resulting in "a%5E2+%2B+b%5E2+%3D+c%5E2"), then send a GET request to:

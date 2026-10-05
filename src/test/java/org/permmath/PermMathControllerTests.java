@@ -29,7 +29,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 class PermMathControllerTests {
 
@@ -43,7 +43,7 @@ class PermMathControllerTests {
         ReflectionTestUtils.setField(properties, "host", "http://localhost:8086");
         urlService = new UrlService();
         ReflectionTestUtils.setField(urlService, "permMathProperties", properties);
-        ReflectionTestUtils.setField(urlService, "objectMapper", new ObjectMapper());
+        ReflectionTestUtils.setField(urlService, "objectMapper", JsonMapper.builder().build());
         ReflectionTestUtils.setField(urlService, "stringCompressionService", new StringCompressionService());
         PermMathController controller = new PermMathController();
         ReflectionTestUtils.setField(controller, "urlService", urlService);
