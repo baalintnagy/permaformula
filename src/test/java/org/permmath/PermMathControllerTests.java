@@ -39,8 +39,7 @@ class PermMathControllerTests {
 
     @BeforeEach
     void setUp() {
-        PermMathProperties properties = new PermMathProperties();
-        ReflectionTestUtils.setField(properties, "host", "http://localhost:8086");
+        PermMathProperties properties = new PermMathProperties("http://localhost:8086", 800, 2000.0f);
         urlService = new UrlService();
         ReflectionTestUtils.setField(urlService, "permMathProperties", properties);
         ReflectionTestUtils.setField(urlService, "objectMapper", JsonMapper.builder().build());

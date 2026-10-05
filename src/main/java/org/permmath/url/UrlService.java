@@ -59,7 +59,7 @@ public class UrlService {
             .filter(Objects::nonNull)
             .collect(joining("&"));
         if (isNotTrue(compressUrlQuery)) {
-            return String.format("%s/image?%s", permMathProperties.getHost(), imageUrlQuery);
+            return String.format("%s/image?%s", permMathProperties.host(), imageUrlQuery);
         }
 
         var imageJson = objectMapper.writeValueAsString(
@@ -73,7 +73,7 @@ public class UrlService {
                                 .toList(),
                         sanitizeParamValue(style)));
         return String.format("%s/image-cq?%s",
-                permMathProperties.getHost(),
+                permMathProperties.host(),
                 urlEncodeParamValue("ubcq", stringCompressionService.compress(imageJson)));
     }
 

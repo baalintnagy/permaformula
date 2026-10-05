@@ -57,7 +57,7 @@ public class ImageRendererService {
         // String.replace is deliberately used instead of templating engine.
         // (Security sucks at the moment!)
 
-        var styleRefLinks = Optional.ofNullable(imageDescriptor.getStyleRefs())
+        var styleRefLinks = Optional.ofNullable(imageDescriptor.styleRefs())
                 .map(Collection::stream)
                 .orElseGet(Stream::empty)
                 .map(sr -> String.format("<link href=\"%s\" rel=\"stylesheet\" crossorigin=\"anonymous\" />", sr))
@@ -65,15 +65,15 @@ public class ImageRendererService {
 
         var html = wrapperHtmlTemplate
                 .replace("_*{STYLE_REFS}*_", styleRefLinks)
-                .replace("_*{STYLE}*_", defaultIfNull(imageDescriptor.getStyle(), EMPTY))
-                .replace("_*{FORMULA}*_", imageDescriptor.getForumla());
+                .replace("_*{STYLE}*_", defaultIfNull(imageDescriptor.style(), EMPTY))
+                .replace("_*{FORMULA}*_", imageDescriptor.forumla());
 
         var document = new W3CDom().fromJsoup(Jsoup.parse(html));
         // asciiMathExecutor.processAsciiMath(document);
 
         var renderer = new Java2DRenderer(document,
-                defaultIfNull(imageDescriptor.getImageWidth(), permMathProperties.getDefaultImageWidth()));
-        renderer.getSharedContext().setDPI(permMathProperties.getDefaultDpi());
+                defaultIfNull(imageDescriptor.imageWidth(), permMathProperties.defaultImageWidth()));
+        renderer.getSharedContext().setDPI(permMathProperties.defaultDpi());
 
         ByteArrayOutputStream os = new ByteArrayOutputStream();
         newJpegWriter(1.0f).write(renderer.getImage(), os);

@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Import;
 import org.boava.exception.LocalExceptionHandler;
 
-@EnableConfigurationProperties
+@EnableConfigurationProperties(PermMathProperties.class)
 @SpringBootApplication
 @Import(LocalExceptionHandler.class)
 public class PermMathApplication {
