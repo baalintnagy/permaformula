@@ -14,6 +14,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 import org.permmath.rendering.ImageRendererService;
+import org.permmath.rendering.FormulaSvgRenderer;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import org.permmath.url.ImageDescriptor;
 import org.permmath.url.UrlService;
 import org.permmath.validation.ValidImageWidth;
@@ -36,6 +39,20 @@ public class PermMathController {
 
     @Autowired
     private ImageRendererService imageRendererService;
+
+    @Autowired
+    private FormulaSvgRenderer formulaSvgRenderer;
+
+    @Operation(summary = "Render a single ASCIIMath formula as SVG",
+            description = "Pass plain ASCIIMath without HTML or backtick delimiters. "
+                    + "Returns a standalone SVG with embedded glyph paths. No browser is launched.")
+    @GetMapping(path = "/img", produces = "image/svg+xml")
+    public ResponseEntity<String> getFormulaSvg(
+            @Parameter(description = "Plain ASCIIMath expression", example = "sum_(i=1)^n i^3=((n(n+1))/2)^2")
+            @NotBlank @RequestParam String formula) throws IOException {
+        return ok().contentType(org.springframework.http.MediaType.parseMediaType("image/svg+xml"))
+                .body(formulaSvgRenderer.render(formula));
+    }
 
     @GetMapping(path = "/url", produces = { TEXT_PLAIN_VALUE, APPLICATION_JSON_VALUE })
     public String getUrl(

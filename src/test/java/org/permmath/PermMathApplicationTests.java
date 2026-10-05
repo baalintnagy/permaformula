@@ -56,6 +56,7 @@ class PermMathApplicationTests {
         mvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.openapi").value("3.0.1"))
+                .andExpect(jsonPath("$.paths['/img'].get.responses['200'].content['image/svg+xml']").exists())
                 .andExpect(jsonPath("$.paths['/decode-cq']").exists());
     }
 
@@ -98,6 +99,28 @@ class PermMathApplicationTests {
                 .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.instance").value("/url"));
+    }
+
+    @Test
+    void formulaEndpointReturnsSvgWithoutStartingABrowser() throws Exception {
+        mvc.perform(get("/img").param("formula", "sqrt(x^2 + y^2)"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("image/svg+xml"))
+                .andExpect(content().string(org.hamcrest.Matchers.startsWith("<svg")));
+    }
+
+    @Test
+    void blankFormulaEndpointInputReturnsProblem() throws Exception {
+        mvc.perform(get("/img").param("formula", " "))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"));
+    }
+
+    @Test
+    void missingFormulaEndpointInputReturnsProblem() throws Exception {
+        mvc.perform(get("/img"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"));
     }
 
 }

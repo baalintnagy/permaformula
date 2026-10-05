@@ -1,0 +1,14 @@
+{
+  "name": "permmath-svg-bundle",
+  "private": true,
+  "scripts": {
+    "build": "esbuild renderer.js --bundle --format=iife --global-name=PermMathSvg --platform=browser --define:global=globalThis --outfile=../../src/main/resources/svg/renderer.js"
+  },
+  "overrides": {
+    "@xmldom/xmldom": "0.9.12"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "mathjax-full": "3.2.2"
+  }
+}

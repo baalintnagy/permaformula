@@ -1,6 +1,7 @@
 HELP.md
 target/
 .runtime/
+node_modules/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
