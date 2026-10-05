@@ -45,7 +45,7 @@ public class PermMathController {
             description = "Pass a compressed image descriptor in ubcq. Its forumla field must contain plain ASCIIMath without HTML or backtick delimiters. "
                     + "Returns a standalone SVG with embedded glyph paths. No browser is launched.")
     @GetMapping(path = "/img", produces = "image/svg+xml")
-    public ResponseEntity<String> getFormulaSvg(
+    public ResponseEntity<String> getImg(
             @Parameter(description = "GZIP/Base64 image descriptor, URL-encoded as a query parameter")
             @NotBlank @RequestParam String ubcq) throws IOException {
         var descriptor = urlService.decodeUbcq(ubcq);
@@ -94,7 +94,7 @@ public class PermMathController {
             description = "Base64-decodes and GZIP-decompresses ubcq, then returns the JSON descriptor without rendering. "
                     + "The response contains forumla (historical spelling), and any imageWidth, styleRefs and style options.")
     @GetMapping(path = "/decode", produces = { APPLICATION_JSON_VALUE })
-    public ImageDescriptor getDecodedContent(
+    public ImageDescriptor getDecode(
             @Parameter(description = "Compressed descriptor from the ubcq parameter of a /url permalink. Supply the payload, not the full permalink.")
             @NotBlank @RequestParam String ubcq) throws IOException {
         return urlService.decodeUbcq(ubcq);
