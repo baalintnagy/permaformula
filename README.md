@@ -66,6 +66,44 @@ For example, to render an image of the formula "a^2 + b^2 = c^2", first URL-enco
 
 ## Getting Started for Developers
 
+### Rendering
+
+Both backends render styled HTML with locally bundled MathJax 3.2.2 (SVG output).
+The default is Chromium; select JavaFX with `permmath.rendering.engine=javafx`
+(or `PERMMATH_RENDERING_ENGINE=javafx`). Existing image endpoints return JPEG.
+`imageWidth` is the layout width in pixels; image height follows the content.
+The legacy `default-dpi` setting is retained for configuration compatibility but
+browser rendering uses CSS pixels rather than that value.
+
+Install the dedicated Chromium build on Windows:
+
+```powershell
+$env:JAVA_HOME = 'C:\Java\jdk25'
+./scripts/install-rendering.ps1
+```
+
+The installer uses Playwright 1.58.0's matching Chromium build and stores it under
+`.runtime/browsers` in this project. Rendering resolves that version's executable
+inside the configured `permmath.rendering.browser-directory`; it does not select
+an installed Chrome or Edge browser. The runtime directory is excluded from Git
+and Docker build context. Chromium uses a fresh browser context for each request.
+
+```powershell
+mvn verify -Drendering.tests=true
+java --enable-native-access=ALL-UNNAMED -jar target/permmath-service-1.0.jar
+```
+
+Browser tests require the local download and a graphical environment for JavaFX.
+They write comparison images to `target/rendering`. Normal unit tests do not
+launch a browser. JavaFX WebView uses an invisible native window and the FX
+application thread. Its packaged classpath deployment currently emits JavaFX's
+unnamed-module warning. Linux needs a display or Xvfb; the Dockerfile installs
+Linux Chromium and uses Xvfb so either backend can be selected.
+
+Rendering waits for MathJax, fonts, and images, with a configurable timeout
+(`permmath.rendering.timeout`, default `30s`). User HTML and external stylesheets
+are currently accepted, as in the original design.
+
 ### Prerequisites
 
 - JDK 25 (set `JAVA_HOME` to its installation directory)

@@ -8,4 +8,8 @@ springdoc:
 
 permmath:
     host: "http://localhost:8086"
+    rendering:
+        engine: chromium
+        browser-directory: .runtime/browsers
+        timeout: 30s
 

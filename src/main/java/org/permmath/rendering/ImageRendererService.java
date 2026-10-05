@@ -1,82 +1,90 @@
 package org.permmath.rendering;
 
-import static java.lang.ClassLoader.getSystemResource;
-import static java.nio.file.Files.readString;
-import static java.util.stream.Collectors.joining;
-import static java.util.Objects.requireNonNullElse;
-import static org.apache.commons.lang3.StringUtils.EMPTY;
-import static org.xhtmlrenderer.util.FSImageWriter.newJpegWriter;
-
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.net.URISyntaxException;
-import java.nio.file.Paths;
-import java.util.Collection;
-import java.util.Optional;
-
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotNull;
-
-import org.jsoup.Jsoup;
-import org.jsoup.helper.W3CDom;
+import java.nio.charset.StandardCharsets;
+import java.util.Objects;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import org.permmath.PermMathProperties;
 import org.permmath.url.ImageDescriptor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
-import org.xhtmlrenderer.swing.Java2DRenderer;
-
-import jakarta.annotation.PostConstruct;
-
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import jakarta.annotation.PreDestroy;
 
 @Validated
 @Service
-public class ImageRendererService {
+public class ImageRendererService implements AutoCloseable {
+    private final PermMathProperties properties;
+    private final RenderingProperties rendering;
+    private final String template;
+    private final ExecutorService worker = Executors.newSingleThreadExecutor(
+            Thread.ofPlatform().name("math-renderer").daemon(true).factory());
+    private RenderAssets assets;
+    private ChromiumRenderer chromium;
 
-    @Autowired
-    private PermMathProperties permMathProperties;
-
-    @Autowired
-    private AsciiMathExecutor asciiMathExecutor;
-
-    private String wrapperHtmlTemplate;
-
-    @PostConstruct
-    void init() throws IOException, URISyntaxException {
-        wrapperHtmlTemplate = readString(
-                Paths.get(
-                        getSystemResource("wrapper.html")
-                                .toURI()));
+    public ImageRendererService(PermMathProperties properties, RenderingProperties rendering) throws IOException {
+        this.properties = properties;
+        this.rendering = rendering;
+        try (var input = getClass().getResourceAsStream("/wrapper.html")) {
+            template = new String(Objects.requireNonNull(input).readAllBytes(), StandardCharsets.UTF_8);
+        }
     }
 
-    public InputStreamResource getImage(@Valid @NotNull ImageDescriptor imageDescriptor) throws IOException {
+    public InputStreamResource getImage(@Valid @NotNull ImageDescriptor descriptor) throws IOException {
+        var task = worker.submit(() -> {
+            if (assets == null) assets = new RenderAssets();
+            var links = descriptor.styleRefs() == null ? "" : descriptor.styleRefs().stream()
+                    .map(ref -> "<link rel=\"stylesheet\" href=\"%s\">".formatted(escapeAttribute(ref)))
+                    .collect(java.util.stream.Collectors.joining("\n"));
+            var html = template.replace("_*{STYLE_REFS}*_", links)
+                    .replace("_*{STYLE}*_", Objects.requireNonNullElse(descriptor.style(), ""))
+                    .replace("_*{FORMULA}*_", descriptor.forumla());
+            var url = assets.add(html);
+            int width = Objects.requireNonNullElse(descriptor.imageWidth(), properties.defaultImageWidth());
+            try {
+                return switch (rendering.engine()) {
+                    case JAVAFX -> JavaFxRenderer.render(url, width, rendering.timeout());
+                    case CHROMIUM -> {
+                        if (chromium == null) chromium = new ChromiumRenderer(rendering);
+                        yield chromium.render(url, width);
+                    }
+                };
+            } finally { assets.remove(url); }
+        });
+        try {
+            return new InputStreamResource(new ByteArrayInputStream(
+                    task.get(rendering.timeout().toMillis() + 5000, TimeUnit.MILLISECONDS)));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            task.cancel(true);
+            throw new IOException("Rendering interrupted", e);
+        } catch (java.util.concurrent.ExecutionException e) {
+            if (e.getCause() instanceof IllegalArgumentException invalid) throw invalid;
+            throw new IOException("Rendering failed using " + rendering.engine(), e.getCause());
+        } catch (java.util.concurrent.TimeoutException e) {
+            task.cancel(true);
+            throw new IOException("Rendering timed out", e);
+        }
+    }
 
-        // String.replace is deliberately used instead of templating engine.
-        // (Security sucks at the moment!)
+    private static String escapeAttribute(String value) {
+        return value.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;");
+    }
 
-        var styleRefLinks = Optional.ofNullable(imageDescriptor.styleRefs())
-                .stream()
-                .flatMap(Collection::stream)
-                .map(sr -> "<link href=\"%s\" rel=\"stylesheet\" crossorigin=\"anonymous\" />".formatted(sr))
-                .collect(joining("\n    "));
-
-        var html = wrapperHtmlTemplate
-                .replace("_*{STYLE_REFS}*_", styleRefLinks)
-                .replace("_*{STYLE}*_", requireNonNullElse(imageDescriptor.style(), EMPTY))
-                .replace("_*{FORMULA}*_", imageDescriptor.forumla());
-
-        var document = new W3CDom().fromJsoup(Jsoup.parse(html));
-        // asciiMathExecutor.processAsciiMath(document);
-
-        var renderer = new Java2DRenderer(document,
-                requireNonNullElse(imageDescriptor.imageWidth(), permMathProperties.defaultImageWidth()));
-        renderer.getSharedContext().setDPI(permMathProperties.defaultDpi());
-
-        var os = new ByteArrayOutputStream();
-        newJpegWriter(1.0f).write(renderer.getImage(), os);
-
-        return new InputStreamResource(new ByteArrayInputStream(os.toByteArray()));
+    @PreDestroy
+    @Override public void close() {
+        try {
+            worker.submit(() -> {
+                if (chromium != null) chromium.close();
+                if (assets != null) assets.close();
+            }).get(5, TimeUnit.SECONDS);
+        } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+          catch (Exception e) { /* Shutdown must still release the worker. */ }
+        finally { worker.shutdownNow(); }
     }
 }

@@ -12,16 +12,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.permmath.rendering.AsciiMathExecutor;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 class PermMathApplicationTests {
-
-    // Context startup should not download the experimental MathJax script.
-    @MockitoBean
-    private AsciiMathExecutor asciiMathExecutor;
 
     @Autowired
     private MockMvc mvc;
