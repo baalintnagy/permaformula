@@ -69,6 +69,39 @@ Generate a permalink with /url, then request the returned link to render it.
 
 ## Getting Started for Developers
 
+### Generated image caching
+
+Both `/image` and `/img` cache successful SVG output in memory using Caffeine
+(version managed by Spring Boot). Concurrent requests for the same image share
+one generation. Errors are not cached. Entries disappear on service restart.
+
+```yaml
+permmath:
+    image-cache:
+        maximum-size: 1GB
+        expire-after-write: 60d
+```
+
+The memory budget uses an estimate of SVG string storage, keys and entry overhead;
+it is not a hard limit on total JVM memory or in-flight rendering. Caffeine evicts
+entries to stay within the budget. Images larger than the budget are returned but
+not retained. Expiry is measured from generation, so repeated reads do not extend it.
+External CSS and image resources are captured during generation; changes to those
+resources become visible after eviction, expiry or restart.
+
+Keys are SHA-256 hashes of a versioned rendering identity and the effective
+descriptor, independent of the compressed URL spelling. HTML keys include the
+resolved width; JavaFX and Chromium share the same keys. Formula-only keys ignore unused layout options.
+Stylesheet order is preserved. Bump the rendering identity version in
+`GeneratedImageService` when a template, MathJax bundle, browser version or export
+change affects output before introducing persistent storage.
+
+`GeneratedImageStore` separates output storage from rendering and HTTP responses.
+It currently has a Caffeine implementation; a later implementation can add durable
+storage under the same stable keys, with memory as a front cache. No disk/database
+storage is enabled yet. Hit, miss, load and eviction counters are available through
+`CaffeineImageStore.stats()`; there is no public cache-management endpoint.
+
 ### Rendering
 
 Both backends render styled HTML with locally bundled MathJax 3.2.2 (SVG output).

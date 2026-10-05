@@ -11,15 +11,13 @@ import java.util.List;
 
 import jakarta.validation.constraints.NotBlank;
 
-import org.permmath.rendering.ImageRendererService;
-import org.permmath.rendering.FormulaSvgRenderer;
+import org.permmath.rendering.GeneratedImageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import org.permmath.url.ImageDescriptor;
 import org.permmath.url.UrlService;
 import org.permmath.validation.ValidImageWidth;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.jspecify.annotations.Nullable;
 import org.springframework.validation.annotation.Validated;
@@ -36,10 +34,7 @@ public class PermMathController {
     private UrlService urlService;
 
     @Autowired
-    private ImageRendererService imageRendererService;
-
-    @Autowired
-    private FormulaSvgRenderer formulaSvgRenderer;
+    private GeneratedImageService generatedImageService;
 
     @Operation(summary = "Render a single ASCIIMath formula as SVG",
             description = "Pass a compressed image descriptor in ubcq. Its forumla field must contain plain ASCIIMath without HTML or backtick delimiters. "
@@ -49,9 +44,8 @@ public class PermMathController {
             @Parameter(description = "GZIP/Base64 image descriptor, URL-encoded as a query parameter")
             @NotBlank @RequestParam String ubcq) throws IOException {
         var descriptor = urlService.decodeUbcq(ubcq);
-        if (descriptor.forumla().isBlank()) throw new IllegalArgumentException("Formula must not be blank");
-        return ok().contentType(org.springframework.http.MediaType.parseMediaType("image/svg+xml"))
-                .body(formulaSvgRenderer.render(descriptor.forumla()));
+        return ok().contentType(org.springframework.http.MediaType.parseMediaType("image/svg+xml;charset=UTF-8"))
+                .body(generatedImageService.getImg(descriptor));
     }
 
     @Operation(summary = "Create a compressed image permalink",
@@ -80,12 +74,12 @@ public class PermMathController {
                     + "using the configured JavaFX or Chromium engine. Returns SVG with styled HTML inside foreignObject "
                     + "and math glyphs as vector paths. Intended for browsers; use /img for standalone formula SVG.")
     @GetMapping(value = "/image", produces = "image/svg+xml")
-    public ResponseEntity<InputStreamResource> getImage(
+    public ResponseEntity<String> getImage(
             @Parameter(description = "Compressed descriptor from the ubcq parameter of a /url permalink. Paste the decoded parameter value into Swagger; it handles URL encoding.")
             @NotBlank @RequestParam String ubcq) throws IOException {
         return ok()
-                .contentType(org.springframework.http.MediaType.parseMediaType("image/svg+xml"))
-                .body(imageRendererService.getImage(
+                .contentType(org.springframework.http.MediaType.parseMediaType("image/svg+xml;charset=UTF-8"))
+                .body(generatedImageService.getImage(
                         urlService.decodeUbcq(ubcq)));
 
     }

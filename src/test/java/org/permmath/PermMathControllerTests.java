@@ -12,7 +12,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.io.ByteArrayInputStream;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -20,10 +19,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.permmath.compression.StringCompressionService;
-import org.permmath.rendering.ImageRendererService;
+import org.permmath.rendering.GeneratedImageService;
 import org.permmath.url.ImageDescriptor;
 import org.permmath.url.UrlService;
-import org.springframework.core.io.InputStreamResource;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -35,7 +33,7 @@ class PermMathControllerTests {
 
     private MockMvc mvc;
     private UrlService urlService;
-    private ImageRendererService renderer;
+    private GeneratedImageService renderer;
 
     @BeforeEach
     void setUp() {
@@ -46,8 +44,8 @@ class PermMathControllerTests {
         ReflectionTestUtils.setField(urlService, "stringCompressionService", new StringCompressionService());
         PermMathController controller = new PermMathController();
         ReflectionTestUtils.setField(controller, "urlService", urlService);
-        renderer = mock(ImageRendererService.class);
-        ReflectionTestUtils.setField(controller, "imageRendererService", renderer);
+        renderer = mock(GeneratedImageService.class);
+        ReflectionTestUtils.setField(controller, "generatedImageService", renderer);
         mvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
@@ -81,9 +79,8 @@ class PermMathControllerTests {
         List<String> refs = List.of("https://example.com/a.css?q=a+b%20c&v=1",
                 "https://example.com/b.css");
         String style = "p { width: 50%; }";
-        byte[] image = { 1, 2, 3 };
-        when(renderer.getImage(any())).thenReturn(
-                new InputStreamResource(new ByteArrayInputStream(image)));
+        String image = "<svg>α</svg>";
+        when(renderer.getImage(any())).thenReturn(image);
 
         String link = mvc.perform(get("/url").param("formula", formula)
                 .param("imageWidth", "640").param("styleRefs", refs.toArray(String[]::new))
@@ -93,14 +90,14 @@ class PermMathControllerTests {
         mvc.perform(followLink(link))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith("image/svg+xml"))
-                .andExpect(content().bytes(image));
+                .andExpect(content().string(image))
+                .andExpect(content().bytes(image.getBytes(StandardCharsets.UTF_8)));
         verify(renderer).getImage(new ImageDescriptor(formula, 640, refs, style));
     }
 
     @Test
     void generatedLinksOmitAbsentOptionsAndNormalizeWhitespace() throws Exception {
-        when(renderer.getImage(any())).thenReturn(
-                new InputStreamResource(new ByteArrayInputStream(new byte[] { 1 })));
+        when(renderer.getImage(any())).thenReturn("<svg/>");
         String link = urlService.getImageUrl("x\n\t +   y", null, List.of(), " \n ");
 
         mvc.perform(followLink(link)).andExpect(status().isOk());

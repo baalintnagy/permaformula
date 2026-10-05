@@ -8,6 +8,9 @@ springdoc:
 
 permmath:
     host: "http://localhost:8086"
+    image-cache:
+        maximum-size: 1GB
+        expire-after-write: 60d
     rendering:
         engine: javafx
         browser-directory: .runtime/browsers
