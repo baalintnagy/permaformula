@@ -55,7 +55,7 @@ class PermMathControllerTests {
     void urlAcceptsCorrectlySpelledImageWidth() throws Exception {
         mvc.perform(get("/url").param("formula", "x").param("imageWidth", "640"))
                 .andExpect(status().isOk())
-                .andExpect(content().string("http://localhost:8086/image?formula=x&imageWidth=640"));
+                .andExpect(content().string(urlService.getImageUrl("x", 640, null, null)));
     }
 
     @Test
@@ -63,10 +63,10 @@ class PermMathControllerTests {
         String formula = "x + y = 50%";
         String style = "width: 50%; color: red;";
         String imageUrl = urlService.getImageUrl(formula, 640,
-                List.of("https://example.com/style.css?q=a+b%20c"), style, true);
+                List.of("https://example.com/style.css?q=a+b%20c"), style);
         String query = URI.create(imageUrl).getRawQuery();
 
-        mvc.perform(get(URI.create("/decode-cq?" + query)))
+        mvc.perform(get(URI.create("/decode?" + query)))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith("application/json"))
                 .andExpect(jsonPath("$.forumla").value(formula))
@@ -75,9 +75,8 @@ class PermMathControllerTests {
                 .andExpect(jsonPath("$.styleRefs[0]").value("https://example.com/style.css?q=a+b%20c"));
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = { false, true })
-    void generatedLinksPassTheSameContentToRenderer(boolean compressed) throws Exception {
+    @Test
+    void generatedLinksPassTheSameContentToRenderer() throws Exception {
         String formula = "<p>`α + β = 50% & x # y?`</p>";
         List<String> refs = List.of("https://example.com/a.css?q=a+b%20c&v=1",
                 "https://example.com/b.css");
@@ -88,7 +87,7 @@ class PermMathControllerTests {
 
         String link = mvc.perform(get("/url").param("formula", formula)
                 .param("imageWidth", "640").param("styleRefs", refs.toArray(String[]::new))
-                .param("style", style).param("compressUrlQuery", Boolean.toString(compressed)))
+                .param("style", style))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
 
         mvc.perform(followLink(link))
@@ -98,27 +97,28 @@ class PermMathControllerTests {
         verify(renderer).getImage(new ImageDescriptor(formula, 640, refs, style));
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = { false, true })
-    void generatedLinksOmitAbsentOptionsAndNormalizeWhitespace(boolean compressed) throws Exception {
+    @Test
+    void generatedLinksOmitAbsentOptionsAndNormalizeWhitespace() throws Exception {
         when(renderer.getImage(any())).thenReturn(
                 new InputStreamResource(new ByteArrayInputStream(new byte[] { 1 })));
-        String link = urlService.getImageUrl("x\n\t +   y", null, List.of(), " \n ", compressed);
+        String link = urlService.getImageUrl("x\n\t +   y", null, List.of(), " \n ");
 
         mvc.perform(followLink(link)).andExpect(status().isOk());
-        // Optional fields should have the same meaning on both URL paths.
         verify(renderer).getImage(new ImageDescriptor("x + y", null, null, null));
     }
 
     @Test
-    void compressionIsOptIn() throws Exception {
+    void compressionIsAlwaysUsedAndDeterministic() throws Exception {
         mvc.perform(get("/url").param("formula", "x"))
                 .andExpect(status().isOk())
-                .andExpect(content().string("http://localhost:8086/image?formula=x"));
+                .andExpect(content().string(org.hamcrest.Matchers.startsWith("http://localhost:8086/image?ubcq=")))
+                .andExpect(content().string(urlService.getImageUrl("x", null, null, null)));
+        mvc.perform(get("/url").param("formula", "x").param("compressUrlQuery", "false"))
+                .andExpect(content().string(urlService.getImageUrl("x", null, null, null)));
     }
 
     @ParameterizedTest
-    @ValueSource(strings = { "/url", "/image", "/image-cq", "/decode", "/decode-cq" })
+    @ValueSource(strings = { "/url", "/image", "/decode", "/img" })
     void missingRequiredInputReturnsBadRequest(String endpoint) throws Exception {
         mvc.perform(get(endpoint)).andExpect(status().isBadRequest());
     }

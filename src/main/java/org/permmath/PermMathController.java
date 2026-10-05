@@ -7,11 +7,9 @@ import static org.springframework.http.MediaType.TEXT_PLAIN_VALUE;
 import static org.springframework.http.ResponseEntity.ok;
 
 import java.io.IOException;
-import java.net.URL;
 import java.util.List;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 
 import org.permmath.rendering.ImageRendererService;
 import org.permmath.rendering.FormulaSvgRenderer;
@@ -44,14 +42,16 @@ public class PermMathController {
     private FormulaSvgRenderer formulaSvgRenderer;
 
     @Operation(summary = "Render a single ASCIIMath formula as SVG",
-            description = "Pass plain ASCIIMath without HTML or backtick delimiters. "
+            description = "Pass a compressed image descriptor in ubcq. Its forumla field must contain plain ASCIIMath without HTML or backtick delimiters. "
                     + "Returns a standalone SVG with embedded glyph paths. No browser is launched.")
     @GetMapping(path = "/img", produces = "image/svg+xml")
     public ResponseEntity<String> getFormulaSvg(
-            @Parameter(description = "Plain ASCIIMath expression", example = "sum_(i=1)^n i^3=((n(n+1))/2)^2")
-            @NotBlank @RequestParam String formula) throws IOException {
+            @Parameter(description = "GZIP/Base64 image descriptor, URL-encoded as a query parameter")
+            @NotBlank @RequestParam String ubcq) throws IOException {
+        var descriptor = urlService.decodeUbcq(ubcq);
+        if (descriptor.forumla().isBlank()) throw new IllegalArgumentException("Formula must not be blank");
         return ok().contentType(org.springframework.http.MediaType.parseMediaType("image/svg+xml"))
-                .body(formulaSvgRenderer.render(formula));
+                .body(formulaSvgRenderer.render(descriptor.forumla()));
     }
 
     @GetMapping(path = "/url", produces = { TEXT_PLAIN_VALUE, APPLICATION_JSON_VALUE })
@@ -59,27 +59,13 @@ public class PermMathController {
             @NotBlank @RequestParam String formula,
             @Nullable @ValidImageWidth @RequestParam(required = false) Integer imageWidth,
             @Nullable @RequestParam(required = false) List<@NotBlank String> styleRefs,
-            @Nullable @RequestParam(required = false) String style,
-            @Nullable @RequestParam(required = false) Boolean compressUrlQuery) throws IOException {
-        return urlService.getImageUrl(formula, imageWidth, styleRefs, style, compressUrlQuery);
+            @Nullable @RequestParam(required = false) String style) throws IOException {
+        return urlService.getImageUrl(formula, imageWidth, styleRefs, style);
     }
 
 
     @GetMapping(value = "/image", produces = "image/svg+xml")
-    public ResponseEntity<InputStreamResource> getImage(
-            @NotBlank @RequestParam String formula,
-            @Nullable @ValidImageWidth @RequestParam(required = false) Integer imageWidth,
-            @Nullable @RequestParam(required = false) List<@NotBlank String> styleRefs,
-            @Nullable @RequestParam(required = false) String style) throws IOException {
-
-        return ok()
-                .contentType(org.springframework.http.MediaType.parseMediaType("image/svg+xml"))
-                .body(imageRendererService.getImage(
-                        new ImageDescriptor(formula, imageWidth, styleRefs, style)));
-    }
-
-    @GetMapping(value = "/image-cq", produces = "image/svg+xml")
-    public ResponseEntity<InputStreamResource> getImageCQ(@NotBlank @RequestParam String ubcq) throws IOException {
+    public ResponseEntity<InputStreamResource> getImage(@NotBlank @RequestParam String ubcq) throws IOException {
         return ok()
                 .contentType(org.springframework.http.MediaType.parseMediaType("image/svg+xml"))
                 .body(imageRendererService.getImage(
@@ -88,12 +74,7 @@ public class PermMathController {
     }
 
     @GetMapping(path = "/decode", produces = { APPLICATION_JSON_VALUE })
-    public String getDecodedContent(@NotNull @RequestParam URL url) {
-        return urlService.urlDecode(url);
-    }
-
-    @GetMapping(path = "/decode-cq", produces = { APPLICATION_JSON_VALUE })
-    public ImageDescriptor getDecodedContentCQ(@NotBlank @RequestParam String ubcq) throws IOException {
+    public ImageDescriptor getDecodedContent(@NotBlank @RequestParam String ubcq) throws IOException {
         return urlService.decodeUbcq(ubcq);
     }
 

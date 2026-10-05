@@ -1,6 +1,6 @@
 # MathRenderAPI
 
-MathRenderAPI is a RESTful web service that generates images for mathematical formulas, provided as URL-encoded ASCIIMath input and optional URL-encoded CSS for styling. It also offers a permalink feature, allowing formulas to be shared and referenced easily.
+MathRenderAPI generates SVG images from compressed formula and styled HTML descriptors. Its permalink generator accepts ASCIIMath or HTML and optional CSS, then stores the descriptor in a compressed URL payload.
 
 ## Features
 - Generate images from ASCIIMath-encoded formulas
@@ -12,48 +12,40 @@ MathRenderAPI is a RESTful web service that generates images for mathematical fo
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /img?formula=...` | Render a single plain ASCIIMath expression as standalone SVG, without a browser. |
-| `GET /image?formula=...` | Render styled HTML containing backtick-delimited ASCIIMath as SVG. Optional `imageWidth`, `style`, and repeated `styleRefs` parameters. |
-| `GET /url?formula=...` | Return an image permalink. Accepts the same options as `/image`; `compressUrlQuery=true` produces a compressed permalink. |
-| `GET /image-cq?ubcq=...` | Render a compressed image descriptor as SVG. |
-| `GET /decode?url=...` | URL-decode an uncompressed permalink's query string. |
-| `GET /decode-cq?ubcq=...` | Decode a compressed payload into its JSON descriptor. |
+| `GET /url?formula=...` | Generate a compressed permalink. Optional `imageWidth`, `style`, and repeated `styleRefs` parameters. |
+| `GET /image?ubcq=...` | Render compressed styled HTML with backtick-delimited ASCIIMath as SVG. |
+| `GET /img?ubcq=...` | Render the compressed descriptor's plain ASCIIMath formula as standalone SVG, without a browser. |
+| `GET /decode?ubcq=...` | Decode a compressed payload into its JSON descriptor. |
+
+All rendering requests use `ubcq`: a GZIP-compressed UTF-8 JSON image descriptor,
+Base64-encoded and URL-encoded. `/url` always generates this format, including
+for short formulas. The `compressUrlQuery` option and uncompressed input modes
+have been removed. `/image` and `/decode` require `ubcq`; the former
+`/image-cq` and `/decode-cq` route names are no longer available.
 
 ### Formula-only SVG: `/img`
 
-The required `formula` parameter is a **plain ASCIIMath expression**, without
-HTML or backtick delimiters. For example:
-
-```text
-http://localhost:8086/img?formula=a%5E2%20%2B%20b%5E2%20%3D%20c%5E2
-```
-
-Or let curl encode the formula:
+Generate a payload using `/url`, then use the returned query string with `/img`
+instead of `/image`. Supply plain ASCIIMath without HTML or backtick delimiters:
 
 ```sh
-curl --get --data-urlencode 'formula=sum_(i=1)^n i^3=((n(n+1))/2)^2' \
-  http://localhost:8086/img --output formula.svg
+link=$(curl --get --data-urlencode 'formula=sqrt(x^2 + y^2)' http://localhost:8086/url)
+curl "http://localhost:8086/img?${link#*\?}" --output formula.svg
 ```
 
-Response: `200 OK`, `Content-Type: image/svg+xml`, containing a standalone SVG
-with embedded glyph paths. It scales without rasterization and requires no
-external MathJax script or font files when displayed. It can be used directly
-as an HTML image source:
+The substitution above uses Bash. The `ubcq` query parameter is identical for both
+rendering endpoints. `/img` uses only the descriptor's `forumla` field; width and
+style options apply to `/image`. The expression determines its natural dimensions.
+The historical `forumla` JSON spelling is retained for compressed payload compatibility.
 
-```html
-<img src="http://localhost:8086/img?formula=sqrt(x%5E2%20%2B%20y%5E2)" alt="Square root of x squared plus y squared">
-```
-
-Missing or blank formulas return `400 Bad Request` with `application/problem+json`.
-Always URL-encode the formula, especially a literal `+` (encode it as `%2B`).
-`/img` does not accept HTML layout, external stylesheets, or the HTML layout width
-options. The expression determines the SVG's natural dimensions.
+Response: `200 OK`, `Content-Type: image/svg+xml`. The standalone formula SVG
+contains embedded glyph paths and can be used as an HTML image source. Missing
+payloads, invalid compression, or blank formulas return `400 Bad Request`.
 
 This endpoint runs bundled MathJax 3.2.2 with its lightweight DOM adapter in
 GraalJS inside the JVM. It launches neither Chromium nor JavaFX and needs no
-Node.js installation at runtime. The JavaScript build instructions are in
-[`tools/svg/README.md`](tools/svg/README.md). The HTML/SVG endpoints still use
-the configured browser renderer.
+Node.js installation at runtime. Build instructions are in
+[`tools/svg/README.md`](tools/svg/README.md).
 
 ## Usage
 
@@ -73,9 +65,7 @@ by the exception-handler library.
 
 Simply send a GET request to the relevant endpoint with your desired parameters.
 
-For example, to render an image of the formula "a^2 + b^2 = c^2", first URL-encode the formula (resulting in "a%5E2+%2B+b%5E2+%3D+c%5E2"), then send a GET request to:
-
-`http://your-domain-name.com/img?formula=a%5E2+%2B+b%5E2+%3D+c%5E2`
+Generate a permalink with /url, then request the returned link to render it.
 
 ## Getting Started for Developers
 
@@ -117,8 +107,8 @@ Rendering waits for MathJax, fonts, and images, with a configurable timeout
 (`permmath.rendering.timeout`, default `30s`). User HTML and external stylesheets
 are currently accepted, as in the original design.
 
-The `/image` and `/image-cq` response type is now `image/svg+xml` instead of
-`image/jpeg`; existing `/url` permalinks resolve to SVG without changing their
+The `/image` response type is `image/svg+xml` instead of
+`image/jpeg`; existing compressed permalinks resolve to SVG without changing their
 payload. HTML SVG exports use `foreignObject` with computed styles embedded,
 and keep MathJax formulas as vector paths. They are intended for browsers;
 SVG tools that do not support `foreignObject` should use `/img` for individual
