@@ -1,8 +1,8 @@
 package org.permmath;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
-import static org.springframework.http.MediaType.IMAGE_JPEG;
-import static org.springframework.http.MediaType.IMAGE_JPEG_VALUE;
+
+
 import static org.springframework.http.MediaType.TEXT_PLAIN_VALUE;
 import static org.springframework.http.ResponseEntity.ok;
 
@@ -65,7 +65,7 @@ public class PermMathController {
     }
 
 
-    @GetMapping(value = "/image", produces = { IMAGE_JPEG_VALUE, IMAGE_JPEG_VALUE, APPLICATION_JSON_VALUE })
+    @GetMapping(value = "/image", produces = "image/svg+xml")
     public ResponseEntity<InputStreamResource> getImage(
             @NotBlank @RequestParam String formula,
             @Nullable @ValidImageWidth @RequestParam(required = false) Integer imageWidth,
@@ -73,15 +73,15 @@ public class PermMathController {
             @Nullable @RequestParam(required = false) String style) throws IOException {
 
         return ok()
-                .contentType(IMAGE_JPEG)
+                .contentType(org.springframework.http.MediaType.parseMediaType("image/svg+xml"))
                 .body(imageRendererService.getImage(
                         new ImageDescriptor(formula, imageWidth, styleRefs, style)));
     }
 
-    @GetMapping(value = "/image-cq", produces = { IMAGE_JPEG_VALUE, IMAGE_JPEG_VALUE, APPLICATION_JSON_VALUE })
+    @GetMapping(value = "/image-cq", produces = "image/svg+xml")
     public ResponseEntity<InputStreamResource> getImageCQ(@NotBlank @RequestParam String ubcq) throws IOException {
         return ok()
-                .contentType(IMAGE_JPEG)
+                .contentType(org.springframework.http.MediaType.parseMediaType("image/svg+xml"))
                 .body(imageRendererService.getImage(
                         urlService.decodeUbcq(ubcq)));
 

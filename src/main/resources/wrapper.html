@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 _*{STYLE_REFS}*_
 <style>_*{STYLE}*_</style>
+<script src="/export-svg.js"></script>
 <script>
 window.renderState = 'loading';
 window.MathJax = {
@@ -25,8 +26,9 @@ window.MathJax = {
             });
           }))
         ]);
-      }).then(function () {
+      }).then(async function () {
         if (document.querySelector('mjx-merror')) throw new Error('Invalid math expression');
+        window.renderSvg = await window.exportStyledSvg();
         window.renderState = 'ready';
       }).catch(function (error) {
         window.renderError = String(error);

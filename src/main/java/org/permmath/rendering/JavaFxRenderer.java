@@ -3,17 +3,17 @@ package org.permmath.rendering;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.concurrent.Worker;
-import javafx.embed.swing.SwingFXUtils;
+import java.nio.charset.StandardCharsets;
 import javafx.scene.Scene;
 import javafx.scene.web.WebView;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.util.Duration;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
+
+
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import javax.imageio.ImageIO;
+
 
 final class JavaFxRenderer {
     private static boolean started;
@@ -66,29 +66,7 @@ final class JavaFxRenderer {
                 result.completeExceptionally(new IllegalArgumentException(
                         "Typesetting failed: " + view.getEngine().executeScript("window.renderError")));
             } else if ("ready".equals(state)) {
-                int height = ((Number) view.getEngine().executeScript(
-                        "Math.ceil(document.body.getBoundingClientRect().height + "
-                        + "parseFloat(getComputedStyle(document.body).marginTop) + "
-                        + "parseFloat(getComputedStyle(document.body).marginBottom))")).intValue();
-                view.setPrefSize(width, Math.max(1, height));
-                view.resize(width, Math.max(1, height));
-                scene.getRoot().applyCss();
-                scene.getRoot().layout();
-                view.snapshot(snapshot -> {
-                    try {
-                        var argb = SwingFXUtils.fromFXImage(snapshot.getImage(), null);
-                        var rgb = new BufferedImage(argb.getWidth(), argb.getHeight(), BufferedImage.TYPE_INT_RGB);
-                        var graphics = rgb.createGraphics();
-                        graphics.setColor(java.awt.Color.WHITE);
-                        graphics.fillRect(0, 0, rgb.getWidth(), rgb.getHeight());
-                        graphics.drawImage(argb, 0, 0, null);
-                        graphics.dispose();
-                        var output = new ByteArrayOutputStream();
-                        ImageIO.write(rgb, "jpeg", output);
-                        result.complete(output.toByteArray());
-                    } catch (Exception e) { result.completeExceptionally(e); }
-                    return null;
-                }, null, null);
+                result.complete(((String) view.getEngine().executeScript("window.renderSvg")).getBytes(StandardCharsets.UTF_8));
             } else {
                 var pause = new PauseTransition(Duration.millis(25));
                 pause.setOnFinished(_ -> awaitReady(view, scene, width, result));

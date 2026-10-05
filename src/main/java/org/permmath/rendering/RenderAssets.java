@@ -22,7 +22,7 @@ final class RenderAssets implements AutoCloseable {
                 var html = documents.get(path);
                 bytes = html == null ? null : html.getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
-            } else if (path.startsWith("/mathjax/") && !path.contains("..")) {
+            } else if ((path.startsWith("/mathjax/") || path.equals("/export-svg.js")) && !path.contains("..")) {
                 try (var input = RenderAssets.class.getResourceAsStream(path)) {
                     bytes = input == null ? null : input.readAllBytes();
                 }

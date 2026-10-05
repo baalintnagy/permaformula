@@ -13,9 +13,9 @@ MathRenderAPI is a RESTful web service that generates images for mathematical fo
 | Endpoint | Purpose |
 |---|---|
 | `GET /img?formula=...` | Render a single plain ASCIIMath expression as standalone SVG, without a browser. |
-| `GET /image?formula=...` | Render styled HTML containing backtick-delimited ASCIIMath as JPEG. Optional `imageWidth`, `style`, and repeated `styleRefs` parameters. |
+| `GET /image?formula=...` | Render styled HTML containing backtick-delimited ASCIIMath as SVG. Optional `imageWidth`, `style`, and repeated `styleRefs` parameters. |
 | `GET /url?formula=...` | Return an image permalink. Accepts the same options as `/image`; `compressUrlQuery=true` produces a compressed permalink. |
-| `GET /image-cq?ubcq=...` | Render a compressed image descriptor as JPEG. |
+| `GET /image-cq?ubcq=...` | Render a compressed image descriptor as SVG. |
 | `GET /decode?url=...` | URL-decode an uncompressed permalink's query string. |
 | `GET /decode-cq?ubcq=...` | Decode a compressed payload into its JSON descriptor. |
 
@@ -46,13 +46,13 @@ as an HTML image source:
 
 Missing or blank formulas return `400 Bad Request` with `application/problem+json`.
 Always URL-encode the formula, especially a literal `+` (encode it as `%2B`).
-`/img` does not accept HTML layout, external stylesheets, or the JPEG width
+`/img` does not accept HTML layout, external stylesheets, or the HTML layout width
 options. The expression determines the SVG's natural dimensions.
 
 This endpoint runs bundled MathJax 3.2.2 with its lightweight DOM adapter in
 GraalJS inside the JVM. It launches neither Chromium nor JavaFX and needs no
 Node.js installation at runtime. The JavaScript build instructions are in
-[`tools/svg/README.md`](tools/svg/README.md). The HTML/JPEG endpoints still use
+[`tools/svg/README.md`](tools/svg/README.md). The HTML/SVG endpoints still use
 the configured browser renderer.
 
 ## Usage
@@ -83,7 +83,7 @@ For example, to render an image of the formula "a^2 + b^2 = c^2", first URL-enco
 
 Both backends render styled HTML with locally bundled MathJax 3.2.2 (SVG output).
 The default is Chromium; select JavaFX with `permmath.rendering.engine=javafx`
-(or `PERMMATH_RENDERING_ENGINE=javafx`). Existing image endpoints return JPEG.
+(or `PERMMATH_RENDERING_ENGINE=javafx`). All image endpoints return SVG. Styled HTML is embedded using SVG foreignObject; `/img` returns pure formula SVG.
 `imageWidth` is the layout width in pixels; image height follows the content.
 The legacy `default-dpi` setting is retained for configuration compatibility but
 browser rendering uses CSS pixels rather than that value.
@@ -116,6 +116,15 @@ Linux Chromium and uses Xvfb so either backend can be selected.
 Rendering waits for MathJax, fonts, and images, with a configurable timeout
 (`permmath.rendering.timeout`, default `30s`). User HTML and external stylesheets
 are currently accepted, as in the original design.
+
+The `/image` and `/image-cq` response type is now `image/svg+xml` instead of
+`image/jpeg`; existing `/url` permalinks resolve to SVG without changing their
+payload. HTML SVG exports use `foreignObject` with computed styles embedded,
+and keep MathJax formulas as vector paths. They are intended for browsers;
+SVG tools that do not support `foreignObject` should use `/img` for individual
+formulas. Ordinary HTML text still uses the viewer's fonts. Referenced images
+and CSS background images are embedded as data URLs and must permit fetching
+from the render document's origin (CORS); a fetch failure fails the export.
 
 ### Prerequisites
 

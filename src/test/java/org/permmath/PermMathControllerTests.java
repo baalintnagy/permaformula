@@ -93,7 +93,7 @@ class PermMathControllerTests {
 
         mvc.perform(followLink(link))
                 .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith("image/jpeg"))
+                .andExpect(content().contentTypeCompatibleWith("image/svg+xml"))
                 .andExpect(content().bytes(image));
         verify(renderer).getImage(new ImageDescriptor(formula, 640, refs, style));
     }

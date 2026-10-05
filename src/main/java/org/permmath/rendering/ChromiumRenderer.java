@@ -1,7 +1,7 @@
 package org.permmath.rendering;
 
 import com.microsoft.playwright.*;
-import com.microsoft.playwright.options.ScreenshotType;
+import java.nio.charset.StandardCharsets;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -43,12 +43,7 @@ final class ChromiumRenderer implements AutoCloseable {
             if ("error".equals(page.evaluate("window.renderState"))) {
                 throw new IllegalArgumentException("Typesetting failed: " + page.evaluate("window.renderError"));
             }
-            int height = ((Number) page.evaluate("Math.ceil(document.body.getBoundingClientRect().height + "
-                    + "parseFloat(getComputedStyle(document.body).marginTop) + "
-                    + "parseFloat(getComputedStyle(document.body).marginBottom))")).intValue();
-            page.setViewportSize(width, Math.max(1, height));
-            return page.screenshot(new Page.ScreenshotOptions().setFullPage(true)
-                    .setType(ScreenshotType.JPEG).setQuality(100));
+            return ((String) page.evaluate("window.renderSvg")).getBytes(StandardCharsets.UTF_8);
         }
     }
 
