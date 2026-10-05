@@ -3,7 +3,7 @@ package org.permmath.rendering;
 import static java.lang.ClassLoader.getSystemResource;
 import static java.nio.file.Files.readString;
 import static java.util.stream.Collectors.joining;
-import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
+import static java.util.Objects.requireNonNullElse;
 import static org.apache.commons.lang3.StringUtils.EMPTY;
 import static org.xhtmlrenderer.util.FSImageWriter.newJpegWriter;
 
@@ -64,14 +64,14 @@ public class ImageRendererService {
 
         var html = wrapperHtmlTemplate
                 .replace("_*{STYLE_REFS}*_", styleRefLinks)
-                .replace("_*{STYLE}*_", defaultIfNull(imageDescriptor.style(), EMPTY))
+                .replace("_*{STYLE}*_", requireNonNullElse(imageDescriptor.style(), EMPTY))
                 .replace("_*{FORMULA}*_", imageDescriptor.forumla());
 
         var document = new W3CDom().fromJsoup(Jsoup.parse(html));
         // asciiMathExecutor.processAsciiMath(document);
 
         var renderer = new Java2DRenderer(document,
-                defaultIfNull(imageDescriptor.imageWidth(), permMathProperties.defaultImageWidth()));
+                requireNonNullElse(imageDescriptor.imageWidth(), permMathProperties.defaultImageWidth()));
         renderer.getSharedContext().setDPI(permMathProperties.defaultDpi());
 
         var os = new ByteArrayOutputStream();

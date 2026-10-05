@@ -12,12 +12,14 @@ import java.util.zip.GZIPOutputStream;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-@Slf4j
 @Validated
 @Service
 public class StringCompressionService {
+
+    private static final Logger log = LoggerFactory.getLogger(StringCompressionService.class);
 
     public String compress(String str) throws IOException {
         var out = new ByteArrayOutputStream();

@@ -23,13 +23,13 @@ import org.permmath.PermMathProperties;
 import org.permmath.compression.StringCompressionService;
 import org.permmath.validation.ValidImageWidth;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
 import tools.jackson.databind.ObjectMapper;
 
-import lombok.NonNull;
+import org.jspecify.annotations.NonNull;
 
 @Validated
 @Service
@@ -102,6 +102,7 @@ public class UrlService {
     }
 
     private static String urlEncodeParamValue(@NonNull String paramName, @Nullable Object paramValue) {
+        Objects.requireNonNull(paramName, "paramName");
         if (paramValue == null) {
             return null;
         }
@@ -123,6 +124,7 @@ public class UrlService {
     }
 
     private static String sanitizeMandatoryParamValue(@NonNull String input) {
+        Objects.requireNonNull(input, "input");
         return input.replaceAll("\\s+", " ");
     }
 }
