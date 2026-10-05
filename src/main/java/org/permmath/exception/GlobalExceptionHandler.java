@@ -13,9 +13,9 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 
-import javax.validation.ConstraintViolation;
-import javax.validation.ConstraintViolationException;
-import javax.validation.ValidationException;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.ValidationException;
 
 import org.permmath.exception.configuration.ExceptionConfigurationProperties;
 import org.permmath.exception.model.ConstraintViolationData;

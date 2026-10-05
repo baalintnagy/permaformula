@@ -54,7 +54,7 @@ For example, to render an image of the formula "a^2 + b^2 = c^2", first URL-enco
 
 ### Prerequisites
 
-- Java 11 or newer
+- JDK 25 (set `JAVA_HOME` to its installation directory)
 - Maven
 
 ### Installation

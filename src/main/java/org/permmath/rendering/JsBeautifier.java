@@ -1,6 +1,6 @@
 package org.permmath.rendering;
 
-import javax.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotBlank;
 
 import org.springframework.stereotype.Component;
 import org.springframework.validation.annotation.Validated;

@@ -1,6 +1,11 @@
 server:
     port: 8086
 
+springdoc:
+    api-docs:
+        # Keep the definition compatible with clients supporting OpenAPI 3.0.
+        version: OPENAPI_3_0
+
 permmath:
     host: "http://localhost:8086"
     exception:

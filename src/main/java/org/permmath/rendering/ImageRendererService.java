@@ -16,8 +16,8 @@ import java.util.Collection;
 import java.util.Optional;
 import java.util.stream.Stream;
 
-import javax.validation.Valid;
-import javax.validation.constraints.NotNull;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 
 import org.jsoup.Jsoup;
 import org.jsoup.helper.W3CDom;
