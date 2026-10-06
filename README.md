@@ -181,7 +181,7 @@ matching `event=renderer_ready transport=tcp`, then launch the API with
 on stdout after the gRPC listener starts. After changing the renderer, stop the
 existing launch group and launch it again so the marker is emitted by the new process.
 
-Both HTML and formula rendering use gRPC with request IDs and deadlines. Occupied renderer capacity returns HTTP 503; a deadline returns 504. Each job uses fresh execution state. Content/output are bounded at 16 MiB. `RenderGateway` separates API generation from the transport, and `RenderJobExecutor` separates rendering from gRPC. A future RabbitMQ consumer can reuse the contract/core; new async endpoints and pending indicator images remain future work.
+Both HTML and formula rendering use gRPC with request IDs and deadlines. The renderer uses a bounded Java work queue; full admission returns HTTP 503 with Retry-After, and an expired deadline or queue wait returns 504. Each job uses fresh execution state. Content/output are bounded at 16 MiB. `RenderGateway` separates API generation from the transport, and `RenderJobExecutor` separates rendering from gRPC. A future RabbitMQ consumer can reuse the contract/core; new async endpoints and pending indicator images remain future work.
 
 API work also uses immediate admission with no queue:
 
@@ -234,17 +234,34 @@ rewriting. Compose pins and trusts only nginx's private IP; nginx overwrites
 NAT address share an allowance. Limits are per API instance and reset on restart;
 multiple API replicas need a shared Bucket4j backend for a fleet-wide quota.
 
-TODO: Add a bounded work queue with a configurable capacity and maximum wait time.
-Queued work must consume the same request deadline, support cancellation, and reject
-requests promptly when full. Keep cache hits independent of the generation queue.
+The renderer supervisor uses Java's `ThreadPoolExecutor`, `ArrayBlockingQueue`
+and `AbortPolicy`: one worker by default, 16 waiting jobs and a 15-second maximum
+queue wait. Configure `RENDERER_QUEUE_CAPACITY`, `RENDERER_QUEUE_WAIT_SECONDS` and
+`RENDERER_QUEUE_MAX_RETAINED_BYTES` (default 67,108,864 bytes / 64 MiB). Capacity
+zero disables waiting. The payload budget is capped at 25% of supervisor maximum
+heap and conservatively charges admitted protobuf payloads, including running
+jobs, at three times serialized size plus 1 KiB overhead each. It is a retention
+estimate, not a bound on all JVM/transport/browser allocations.
 
-The renderer still admits one job by default; overlapping generations may therefore
-receive its own HTTP 503. These settings do not increase renderer concurrency.
+Only actual cache-miss loaders reach the renderer. Cache hits and shared in-flight
+results do not add jobs. Per-client generation slots remain occupied while waiting,
+preventing one default client from filling the queue. Expired/cancelled queued
+jobs are removed and cannot render later. A running worker retains admission until
+it actually exits; interruption still kills its disposable child JVM. Queue expiry
+or queued cancellation does not restart the renderer or interrupt another job.
+
+The API's two generation slots remain unchanged and include renderer waiting.
+Thus one default API normally reaches at most one running and one queued render;
+16 is the renderer-wide waiting ceiling, useful across trusted API instances or
+deliberate admission tuning. Raising API generation concurrency also raises HTML/CSS
+preparation pressure and requires a heap review. Replicas still need shared client
+quotas. Queuing absorbs short bursts and does not increase rendering throughput.
 
 One monotonic deadline starts in the servlet filter and follows work across its
 threads. Preparation, fetches, shared-image waits and gRPC use the remaining
 budget; expired work returns HTTP 504. The stylesheet network deadline remains at
-most 15 seconds and the renderer deadline at most its configured timeout.
+most 15 seconds. The default renderer RPC budget is 45 seconds (queue plus execution),
+while child execution remains capped at 30 seconds and the API deadline at 60 seconds.
 Cache hits skip generation and fetching; decoding and identity preparation still
 need preparation admission. A timed-out duplicate waiter does not cancel the shared
 generation. Failed or timed-out generations are not cached.
@@ -257,7 +274,7 @@ and delivery limits remain separate controls alongside the implemented client
 limits, Compose egress rules and parser/layout complexity budgets.
 
 Rendering waits for MathJax, fonts, and images, with a configurable timeout
-(`permmath.rendering.timeout`, default `30s`). User HTML is sanitized with a presentation element/attribute allowlist. External and inline CSS are parsed with ph-css and filtered by a presentation property/function allowlist. CSS variables, responsive media rules, supports rules, cascade layers and nested styles are retained. External stylesheets retain their application order; inline CSS follows them. Submitted images, SVG, links, scripts, forms and embedded documents are removed.
+(`permmath.rendering.timeout`, default `45s`, including queue waiting; child execution defaults to 30 seconds). User HTML is sanitized with a presentation element/attribute allowlist. External and inline CSS are parsed with ph-css and filtered by a presentation property/function allowlist. CSS variables, responsive media rules, supports rules, cascade layers and nested styles are retained. External stylesheets retain their application order; inline CSS follows them. Submitted images, SVG, links, scripts, forms and embedded documents are removed.
 
 The `/image` response type is `image/svg+xml` instead of
 `image/jpeg`; existing compressed permalinks resolve to SVG without changing their

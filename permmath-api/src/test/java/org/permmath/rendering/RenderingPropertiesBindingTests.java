@@ -12,6 +12,7 @@ class RenderingPropertiesBindingTests {
         runner.run(context -> {
             var settings = context.getBean(RenderingProperties.class);
             assertFalse(settings.plaintext());
+            assertEquals(java.time.Duration.ofSeconds(45), settings.timeout());
             assertNull(settings.socket());
         });
         runner.withPropertyValues("permmath.rendering.socket=/run/permmath/render.sock")

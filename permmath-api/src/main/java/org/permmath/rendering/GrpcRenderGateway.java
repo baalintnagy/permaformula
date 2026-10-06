@@ -101,7 +101,7 @@ public final class GrpcRenderGateway implements RenderGateway, AutoCloseable {
                 case DEADLINE_EXCEEDED ->
                     throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "Renderer deadline exceeded", failure);
                 case RESOURCE_EXHAUSTED, UNAVAILABLE ->
-                    throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Renderer is busy or unavailable", failure);
+                    throw new WorkOverloadedException("Renderer is busy or unavailable", failure);
                 default ->
                     throw new IOException("Renderer request failed", failure);
             }

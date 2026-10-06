@@ -28,6 +28,7 @@ public final class SupervisedRenderer implements RenderJobExecutor {
     @Override
     public RenderResponse execute(RenderRequest request, Duration budget) throws RenderException {
         RenderLimits.validate(request);
+        budget = budget.compareTo(settings.timeout()) > 0 ? settings.timeout() : budget;
         if (!permits.tryAcquire()) {
             throw new RenderException(RenderException.Kind.OVERLOADED, "Renderer is busy");
         }

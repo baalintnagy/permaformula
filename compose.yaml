@@ -63,6 +63,10 @@ services:
     init: true
     restart: on-failure
     network_mode: none
+    environment:
+      RENDERER_QUEUE_CAPACITY: "${RENDERER_QUEUE_CAPACITY:-16}"
+      RENDERER_QUEUE_MAX_RETAINED_BYTES: "${RENDERER_QUEUE_MAX_RETAINED_BYTES:-67108864}"
+      RENDERER_QUEUE_WAIT_SECONDS: "${RENDERER_QUEUE_WAIT_SECONDS:-15}"
     user: "10002:10002"
     read_only: true
     cap_drop: [ALL]

@@ -143,7 +143,40 @@ Run `./scripts/test-ingress-limits.ps1` after `docker compose build ingress` to
 exercise the production image with short test-only limits and native nginx
 upstreams. The script creates and removes its own containers/network.
 
-`RENDERER_CONCURRENCY` defaults to 1. There is no rendering queue: occupied capacity returns gRPC RESOURCE_EXHAUSTED, exposed as HTTP 503. Both render paths have a 30-second maximum (`RENDERER_TIMEOUT_SECONDS`), further restricted by the API RPC deadline (`PERMMATH_RENDERING_TIMEOUT`, default 30s). The supervisor terminates job descendants on cancellation, timeout or failure. Fatal jobs cause service exit and Compose restarts the container, clearing its PID namespace, including orphan native processes. A supervisor is required when running outside Compose.
+`RENDERER_CONCURRENCY` defaults to 1. The supervisor uses fixed Java workers and a
+bounded FIFO waiting queue, with immediate rejection when admission is full:
+
+| Environment variable | Default | Meaning |
+| --- | --- | --- |
+| `RENDERER_QUEUE_CAPACITY` | 16 | Waiting jobs; 0 disables waiting, maximum 1024 |
+| `RENDERER_QUEUE_WAIT_SECONDS` | 15 | Maximum wait, positive and at most 60 seconds |
+| `RENDERER_QUEUE_MAX_RETAINED_BYTES` | 67108864 | Conservative retained-input budget, capped at 25% of supervisor heap |
+
+The byte budget charges running and waiting requests at three times protobuf
+serialized size plus 1 KiB per job; count and memory admission happen before input
+validation. This does not bound all JVM/transport/output allocations. Startup logs
+report configured and effective budgets. Full admission returns gRPC
+RESOURCE_EXHAUSTED / HTTP 503 with Retry-After: 1 and no-store. Queue expiry returns
+HTTP 504. Cancelled/expired queued jobs are removed and cannot execute later;
+they do not restart the container or interrupt active jobs. Running cancellation
+retains worker/count/byte admission until actual exit.
+
+Both render paths have a 30-second execution maximum (`RENDERER_TIMEOUT_SECONDS`,
+positive and at most five minutes). The renderer service caps total RPC processing
+at execution maximum plus queue wait; the API's `PERMMATH_RENDERING_TIMEOUT`
+defaults to 45s and is further restricted by the remaining 60s API deadline.
+Changing queue/execution limits requires reviewing the API RPC budget too; no stage
+renews an existing deadline. The supervisor terminates job descendants on running
+cancellation, timeout or failure. Fatal running jobs cause service exit and Compose
+restarts the container, clearing its PID namespace, including orphan native
+processes. A supervisor is required when running outside Compose.
+
+The API still admits only two unique generations, including renderer waiting,
+and one per client. A default single API therefore normally occupies at most one
+running and one waiting renderer job. The renderer's 16 waiting slots are a shared
+ceiling, not an increase in API preprocessing concurrency. Cached/shared results
+bypass the queue. Review heap, preprocessing/fetch pressure and replica-wide
+client quotas before increasing API admission; a queue adds no rendering capacity.
 
 The API defaults to four preparation operations, two unique image generations and
 two stylesheet batches, with no queue and HTTP 503 on occupied capacity. Configure
@@ -165,8 +198,8 @@ includes `Retry-After` and `Cache-Control: no-store`. Client state is capped at
 idle (`PERMMATH_RATE_LIMIT_EXPIRE_AFTER_ACCESS`), only after full bucket refill and
 with no active requests/workers. Capacity exhaustion rejects new identities rather
 than resetting existing quotas. Limits are in memory per API instance; replicas
-need a shared Bucket4j backend, and clients behind NAT share quotas. No work queue
-has been added.
+need a shared Bucket4j backend, and clients behind NAT share quotas. The generation
+slot includes renderer queue waiting, so queued work cannot evade this client cap.
 
 Content and SVG payloads are limited to 16 MiB; the gRPC envelope allows 64 KiB extra. Each job has a 1 GiB JVM heap; the supervisor has 256 MiB. Browser/native allocations are additionally bounded by the container. API decompression and endpoint inputs have separate byte/JSON limits; API admission separately bounds concurrent parsing and preparation. See `sec.md`.
 
@@ -214,6 +247,20 @@ The script checks HTTP 429 headers, continued cached SVG access after render-tok
 exhaustion and that changing incoming forwarding headers cannot grant another
 allowance. The egress and rate-limit projects use the same test port/subnet; shut
 down one before starting the other.
+
+For concurrent renderer queue smoke coverage, use a fresh normal-quota deployment:
+
+```powershell
+docker compose --env-file docker/egress/smoke.env -p permmath-queue-smoke up --build -d
+./scripts/test-render-queue.ps1
+docker compose --env-file docker/egress/smoke.env -p permmath-queue-smoke down --volumes
+```
+
+The script starts two independent Docker client identities concurrently, requests
+distinct uncached formulas through the image listener, and requires both SVGs.
+This respects the one-generation-per-client quota. It removes only its own probe
+containers. Maven regressions separately cover queue saturation, retained bytes,
+expiry/cancellation, process termination and active-job isolation.
 
 For delivery-origin verification, use a fresh project with the normal quotas:
 

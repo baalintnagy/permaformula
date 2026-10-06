@@ -57,7 +57,10 @@ class GrpcRenderGatewayTests {
             assertEquals("<p>π</p>", new String(gateway.renderHtml("<p>π</p>", 240), java.nio.charset.StandardCharsets.UTF_8));
             assertEquals("sqrt(x)", new String(gateway.renderFormula("sqrt(x)"), java.nio.charset.StandardCharsets.UTF_8));
             assertThrows(IOException.class, () -> gateway.renderFormula("wrong"));
-            assertEquals(503, assertThrows(ResponseStatusException.class, () -> gateway.renderFormula("busy")).getStatusCode().value());
+            var overloaded = assertThrows(ResponseStatusException.class, () -> gateway.renderFormula("busy"));
+            assertEquals(503, overloaded.getStatusCode().value());
+            assertEquals("1", overloaded.getHeaders().getFirst("Retry-After"));
+            assertEquals("no-store", overloaded.getHeaders().getCacheControl());
         } finally {
             server.shutdownNow();
         }

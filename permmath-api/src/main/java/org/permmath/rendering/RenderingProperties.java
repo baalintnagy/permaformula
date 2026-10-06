@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 @ConfigurationProperties("permmath.rendering")
 public record RenderingProperties(
         @DefaultValue("localhost:9090") String target,
-        @DefaultValue("30s") Duration timeout,
+        @DefaultValue("45s") Duration timeout,
         Path socket,
         @DefaultValue("false") boolean plaintext,
         Path tlsCa,

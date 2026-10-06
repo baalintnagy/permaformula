@@ -21,16 +21,22 @@ public final class RendererServiceMain {
     public static void main(String[] args) throws Exception {
         var env = System.getenv();
         var timeout = Duration.ofSeconds(Long.parseLong(env.getOrDefault("RENDERER_TIMEOUT_SECONDS", "30")));
-        if (timeout.isZero() || timeout.isNegative()) {
-            throw new IllegalArgumentException("Renderer timeout must be positive");
+        if (timeout.isZero() || timeout.isNegative() || timeout.compareTo(Duration.ofMinutes(5)) > 0) {
+            throw new IllegalArgumentException("Renderer timeout must be positive and at most five minutes");
         }
         var settings = new BrowserSettings(Path.of(env.getOrDefault("PLAYWRIGHT_BROWSERS_PATH", ".runtime/browsers")),
                 timeout, Boolean.parseBoolean(env.getOrDefault("RENDERER_CHROMIUM_SANDBOX", "true")));
-        var jobs = new SupervisedRenderer(settings, Integer.parseInt(env.getOrDefault("RENDERER_CONCURRENCY", "1")));
+        int concurrency = Integer.parseInt(env.getOrDefault("RENDERER_CONCURRENCY", "1"));
+        var queueSettings = RenderQueueSettings.fromEnvironment(env);
+        var jobs = new RenderWorkQueue(concurrency, queueSettings, new SupervisedRenderer(settings, concurrency));
+        System.err.println("event=renderer_queue_configured capacity=" + queueSettings.capacity()
+                + " configured_bytes=" + queueSettings.maxRetainedBytes() + " effective_bytes=" + jobs.effectiveRetainedBytes()
+                + " wait_seconds=" + queueSettings.maxWait().toSeconds());
         var calls = Executors.newVirtualThreadPerTaskExecutor();
         var restarts = Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().daemon(true).factory());
-        var rpc = new GrpcRendererService(jobs, timeout, failure -> {
+        var rpc = new GrpcRendererService(jobs, timeout.plus(queueSettings.maxWait()), failure -> {
             System.err.println("event=renderer_job_failed kind=" + failure.kind());
+            jobs.close(); // Stop accepting/starting work while the PID namespace is being restarted.
             // Docker restart tears down the PID namespace, including orphan native processes.
             restarts.schedule(() -> System.exit(1), 200, TimeUnit.MILLISECONDS);
         });
@@ -66,7 +72,9 @@ public final class RendererServiceMain {
         var health = new HealthStatusManager();
         health.setStatus(RendererGrpc.SERVICE_NAME, ServingStatus.SERVING);
         var server = builder.executor(calls).maxInboundMessageSize(RenderLimits.MAX_MESSAGE_BYTES)
-                .maxConcurrentCallsPerConnection(8).addService(rpc).addService(health.getHealthService()).build().start();
+                // Leave room to return overload and serve health instead of queuing in HTTP/2 first.
+                .maxConcurrentCallsPerConnection(Math.max(8, jobs.maxOutstanding() + 1))
+                .addService(rpc).addService(health.getHealthService()).build().start();
         if (socket != null) {
             Files.setPosixFilePermissions(socket, PosixFilePermissions.fromString("rw-rw----"));
         }
@@ -75,6 +83,7 @@ public final class RendererServiceMain {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             health.enterTerminalState();
             server.shutdownNow();
+            jobs.close();
             calls.shutdownNow();
             restarts.shutdownNow();
             if (finalBoss != null) {

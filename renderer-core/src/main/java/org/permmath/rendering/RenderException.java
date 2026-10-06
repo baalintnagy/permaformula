@@ -6,7 +6,7 @@ public class RenderException extends Exception {
 
     public enum Kind {
 
-        INVALID, OVERLOADED, DEADLINE, CANCELLED, FAILED
+        INVALID, OVERLOADED, QUEUE_DEADLINE, QUEUE_CANCELLED, DEADLINE, CANCELLED, FAILED
     }
 
     private final Kind kind;

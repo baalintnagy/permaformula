@@ -7,8 +7,6 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 /** No queue; slots are held until the actual thread exits, including after cancellation. */
 final class BoundedWork {
@@ -26,7 +24,7 @@ final class BoundedWork {
         long deadline = WorkDeadline.deadline(timeout);
         WorkDeadline.remainingNanos(timeout);
         if (!slots.tryAcquire()) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, name + " capacity is occupied");
+            throw new WorkOverloadedException(name + " capacity is occupied", null);
         }
         var ran = new java.util.concurrent.atomic.AtomicBoolean();
         var task = new FutureTask<T>(() -> {

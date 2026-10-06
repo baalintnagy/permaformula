@@ -30,5 +30,5 @@ permmath:
         timeout: 60s
     rendering:
         target: localhost:9090
-        timeout: 30s
+        timeout: 45s
 

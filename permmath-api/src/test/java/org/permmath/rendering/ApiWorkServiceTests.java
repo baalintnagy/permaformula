@@ -26,8 +26,9 @@ class ApiWorkServiceTests {
             }));
             try {
                 assertTrue(entered.await(2, TimeUnit.SECONDS));
-                assertEquals(503, assertThrows(ResponseStatusException.class,
-                        () -> work.generate(() -> "unexpected")).getStatusCode().value());
+                var overloaded = assertThrows(ResponseStatusException.class, () -> work.generate(() -> "unexpected"));
+                assertEquals(503, overloaded.getStatusCode().value());
+                assertEquals("1", overloaded.getHeaders().getFirst("Retry-After"));
                 assertEquals("prepare", work.prepare(() -> "prepare"));
                 assertEquals("fetch", work.fetch(() -> "fetch"));
             } finally { release.countDown(); }

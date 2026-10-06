@@ -233,11 +233,25 @@ all generated-bundle checks passed.
 
 ### 13. Deadlines, queues and work cancellation — API admission and deadlines implemented
 
-The unbounded single-thread rendering queue is removed. SupervisedRenderer uses immediate bounded admission (one job by default), returning overload as gRPC RESOURCE_EXHAUSTED / HTTP 503. RPC deadlines are bounded by the service's 30-second maximum. Cancellation interrupts the supervisor, which kills the child and known descendants. Both formula and HTML execution are covered. Fatal jobs restart the container to clear orphan native processes. Process termination/recovery and RPC cancellation have regression tests.
+The unbounded single-thread rendering queue was removed. The renderer now has a
+bounded Java FIFO queue before supervised child execution: one active worker,
+16 waiting jobs and 15 seconds maximum wait by default. Retained input is charged
+at three times serialized protobuf size plus 1 KiB per admitted job, including
+running requests. The 64 MiB budget is additionally capped at 25% of supervisor
+maximum heap; it does not account for every JVM/transport/output allocation.
+Count/byte admission occurs before validation. Full admission returns gRPC
+RESOURCE_EXHAUSTED / HTTP 503 with Retry-After and no-store; queue wait expiry
+returns 504. API RPC budget defaults to 45 seconds, child execution remains at
+most 30 seconds, and queue waiting consumes the original 60-second API deadline.
+Expired/cancelled waiting jobs are removed and cannot execute later or restart
+the container. Running cancellation interrupts the supervisor, which kills the
+child and known descendants, retaining admission until actual worker exit.
+Fatal running jobs restart the container to clear orphan native processes.
+Both formula and HTML execution are covered.
 
 The API now has configurable immediate admission: four input-preparation operations,
 two unique image generations and two stylesheet batches by default, per instance.
-There is no work queue; occupied capacity returns HTTP 503. Preparation covers
+API admission remains immediate; occupied capacity returns HTTP 503. Preparation covers
 decompression/JSON decoding, URL creation and identity serialization; generation
 covers HTML/CSS preparation, rendering and final SVG validation. Fetch admission
 covers imports and is skipped for documents without stylesheet references.
@@ -355,7 +369,7 @@ through nginx cannot bypass request/render quotas. HTTP 429 includes positive
 are allocated outside nginx's fixed trusted IP range. Normal and test Compose
 configurations and `git diff --check` passed. Temporary test containers/networks
 were removed. Production peer identity, NAT policy and replica-wide quotas still
-require deployment-specific verification. The work queue remains a TODO.
+require deployment-specific verification. Renderer queuing was implemented subsequently (13).
 
 ## Image-origin delivery verification
 
@@ -376,12 +390,12 @@ browser. Direct private-API probes reject forged markers and matrix-parameter
 paths; the existing rate-limit smoke test also passes after cross-origin redirects,
 including cached SVG availability. Compose validation and `git diff --check` pass;
 temporary fixtures and the test deployment were removed. This verifies local two-origin behavior; production domain/cookie/TLS
-isolation still requires deployment-specific checks. The work queue remains a TODO.
+isolation still requires deployment-specific checks. Renderer queuing was implemented subsequently (13).
 
 ## Recommended next work
 
 1. Maintain decompression and endpoint validation regressions (11); individual payload limits are implemented.
-2. Maintain the implemented DOM/CSS/math and dimension budgets (12); non-cooperative API work may need process isolation (13). TODO: Add a bounded work queue with configurable capacity/wait limits, cancellation, the existing end-to-end deadline, and cache-hit bypass of queued generation. Keep immediate rejection when the queue is full.
+2. Maintain the implemented DOM/CSS/math and dimension budgets (12) and bounded renderer queue/cancellation/deadline regressions (13); non-cooperative API work may still need process isolation. Review memory and shared client quotas before scaling admission or replicas.
 3. Verify isolated renderer and implemented API/proxy network controls on production hosts (3–6); maintain proxy ACL/package regressions.
 4. Verify the implemented delivery-origin boundary with production domains/cookies/TLS and maintain operational patch/privacy policies (8, 16); define external-style freshness semantics and shared rate-limit state if replicas are deployed (13–14).
 
@@ -397,7 +411,8 @@ completion is bounded to 15 seconds; body-read and client-response-write idle
 limits are 30 seconds, and idle keepalive closes after 15 seconds. Limits are
 configurable via PERMMATH_INGRESS_* settings documented in docker/README.md;
 non-positive/non-integer settings fail startup. Existing large permalink headers
-and the API's 60-second processing deadline remain supported. No work queue was added.
+and the API's 60-second processing deadline remain supported. This ingress change
+did not add queuing; the later renderer queue is described under 13.
 
 Residual: nginx limit_conn starts accounting only after complete headers. Partial
 headers expire, but fast connection floods and concurrent large header allocations
@@ -413,3 +428,30 @@ limits, spoofed forwarded headers, Retry-After/image CORS, header/body/keepalive
 and slow-response-reader deadlines, recovery and invalid configuration rejection.
 Compose validation and git diff whitespace checks passed. Test-only containers
 and networks were removed; no production deployment was performed.
+
+## Renderer queue verification
+
+Browser-enabled Maven verification passed: 202 tests, 200 passed and two opt-in
+UI/delivery tests skipped. Twelve new regressions cover fixed-worker FIFO execution,
+count and retained-byte saturation, admission recovery, queue/request deadline expiry,
+queued cancellation without later execution, non-cooperative running slot retention,
+shutdown, configuration/heap headroom, real child-JVM cancellation/termination,
+and RPC expiry/cancellation without restarting or interrupting active jobs.
+Existing per-client, cache sharing, overload, parser and browser suites also passed.
+
+Fresh Linux API/renderer images passed Docker verification and an isolated Compose
+smoke deployment. Two independent client identities requested distinct uncached
+formulas simultaneously: both returned SVG, with one waiting behind the other.
+Delivery smoke coverage preserved public URLs, image-origin redirects, CORS/security
+headers, private-API marker enforcement and credential/cookie isolation. Compose
+validation and git diff whitespace checks passed. Test clients, fixtures and the
+separate Compose deployment were removed.
+
+The API keeps its existing two unique-generation slots, including renderer waiting;
+client generation slots remain occupied during the RPC. This protects API preparation
+memory rather than automatically raising admission to fill all 16 queue slots.
+Capacity/byte/wait limits are configurable; raising API admission or adding replicas
+requires reviewing preprocessing memory and shared client quotas. The input-retention
+budget is conservative accounting, not a proof of total heap consumption. HTTP client
+disconnects do not guarantee immediate servlet cancellation; the propagated API/RPC
+deadlines still bound waiting. Non-cooperative API parsing remains a separate issue.

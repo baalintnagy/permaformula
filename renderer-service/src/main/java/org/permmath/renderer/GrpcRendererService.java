@@ -35,7 +35,7 @@ public final class GrpcRendererService extends RendererGrpc.RendererImplBase {
                 budget = Math.min(budget, context.getDeadline().timeRemaining(TimeUnit.NANOSECONDS));
             }
             if (context.isCancelled() || budget <= 0) {
-                throw new RenderException(RenderException.Kind.CANCELLED, "Rendering cancelled");
+                throw new RenderException(RenderException.Kind.QUEUE_CANCELLED, "Rendering cancelled before admission");
             }
             var response = jobs.execute(request, Duration.ofNanos(budget));
             observer.onNext(response);
@@ -46,9 +46,9 @@ public final class GrpcRendererService extends RendererGrpc.RendererImplBase {
                     Status.INVALID_ARGUMENT;
                 case OVERLOADED ->
                     Status.RESOURCE_EXHAUSTED;
-                case DEADLINE ->
+                case DEADLINE, QUEUE_DEADLINE ->
                     Status.DEADLINE_EXCEEDED;
-                case CANCELLED ->
+                case CANCELLED, QUEUE_CANCELLED ->
                     Status.CANCELLED;
                 case FAILED ->
                     Status.INTERNAL;
