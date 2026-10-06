@@ -5,7 +5,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
-import java.util.regex.Pattern;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.Test;
@@ -16,15 +15,14 @@ import org.permmath.url.ImageDescriptor;
 class BrowserRenderingTests {
     @Test
     void rendersOriginalStyledHtmlExample() throws Exception {
-        String example = Files.readString(Path.of("requests.md"));
-        var html = Pattern.compile("```html\\s*(.*?)```", Pattern.DOTALL).matcher(example);
-        var css = Pattern.compile("```css\\s*(.*?)```", Pattern.DOTALL).matcher(example);
-        assertTrue(html.find());
-        assertTrue(css.find());
+        var method = org.permmath.PermMathController.class.getMethod("getImage", String.class);
+        var payload = method.getParameters()[0].getAnnotation(io.swagger.v3.oas.annotations.Parameter.class).example();
+        var json = new org.permmath.compression.StringCompressionService().decompress(payload);
+        var example = tools.jackson.databind.json.JsonMapper.builder().build().readValue(json, ImageDescriptor.class);
         var settings = new RenderingProperties(Path.of(".runtime/browsers"), Duration.ofSeconds(30));
         try (var renderer = new ImageRendererService(
                 new PermMathProperties("http://localhost:8086", 800, 2000), settings)) {
-            var image = renderer.getImage(new ImageDescriptor(html.group(1), 1000, List.of(), css.group(1)));
+            var image = renderer.getImage(new ImageDescriptor(example.forumla(), 1000, example.styleRefs(), example.style()));
             var directory = Path.of("target/rendering");
             Files.createDirectories(directory);
             var destination = directory.resolve("chromium.svg");
@@ -36,6 +34,10 @@ class BrowserRenderingTests {
             assertTrue(decoded.getElementsByTagNameNS("http://www.w3.org/2000/svg", "foreignObject").getLength() > 0);
             assertTrue(decoded.getElementsByTagNameNS("http://www.w3.org/2000/svg", "path").getLength() > 0);
             assertTrue(Files.readString(destination).contains("background-color:rgb(48, 48, 48)"));
+            assertTrue(Files.readString(destination).contains("color:rgb(248, 249, 250)"),
+                    "Title must use the external Bootstrap light color");
+            assertTrue(Files.readString(destination).contains("color:rgb(108, 117, 125)"),
+                    "Paragraph must use the external Bootstrap secondary color");
             verifySvgImagePreview(destination);
         }
     }

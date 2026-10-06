@@ -18,7 +18,7 @@ class SwaggerUiTests {
     private int port;
 
     @Test
-    void urlExecutesWithSwaggerDefaults() {
+    void urlAndImageExecuteWithSwaggerDefaults() {
         try (var playwright = Playwright.create(new Playwright.CreateOptions().setEnv(Map.of(
                 "PLAYWRIGHT_BROWSERS_PATH", Path.of(".runtime/browsers").toAbsolutePath().toString(),
                 "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1")));
@@ -35,6 +35,14 @@ class SwaggerUiTests {
             assertTrue(response.text().startsWith("http://localhost:8086/image?ubcq="));
             operation.locator(".responses-inner .response-col_status").filter(
                     new com.microsoft.playwright.Locator.FilterOptions().setHasText("200")).first().waitFor();
+            var imageOperation = page.locator("#operations-perm-math-controller-getImage");
+            imageOperation.locator(".opblock-summary").click();
+            imageOperation.getByText("Try it out", new com.microsoft.playwright.Locator.GetByTextOptions().setExact(true)).click();
+            var imageResponse = page.waitForResponse(r -> r.url().contains("/image?") && r.status() == 200,
+                    () -> imageOperation.getByText("Execute", new com.microsoft.playwright.Locator.GetByTextOptions().setExact(true)).click());
+            assertTrue(imageResponse.text().startsWith("<svg"));
+            assertTrue(imageResponse.text().contains("A title for the formula"));
+            assertTrue(imageResponse.text().contains("color:rgb(248, 249, 250)"));
         }
     }
 }

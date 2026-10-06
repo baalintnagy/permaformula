@@ -62,6 +62,26 @@ class PermMathApplicationTests {
     }
 
     @Test
+    void imageSwaggerExampleMatchesUrlAnnotations() throws Exception {
+        String json = mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
+        var parameters = mapper.readTree(json).at("/paths/~1image/get/parameters");
+        var parameter = parameters.get(0);
+        org.junit.jupiter.api.Assertions.assertEquals("ubcq", parameter.get("name").asString());
+        var decoded = new org.permmath.compression.StringCompressionService()
+                .decompress(parameter.get("example").asString());
+        var descriptor = mapper.readValue(decoded, org.permmath.url.ImageDescriptor.class);
+        var urlMethod = PermMathController.class.getMethod("getUrl", String.class, Integer.class, java.util.List.class, String.class);
+        var inputs = urlMethod.getParameters();
+        org.junit.jupiter.api.Assertions.assertEquals(inputs[0].getAnnotation(io.swagger.v3.oas.annotations.Parameter.class).example(), descriptor.forumla());
+        org.junit.jupiter.api.Assertions.assertEquals(inputs[3].getAnnotation(io.swagger.v3.oas.annotations.Parameter.class).example(), descriptor.style());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                mapper.readTree(inputs[2].getAnnotation(io.swagger.v3.oas.annotations.Parameter.class).example()),
+                mapper.valueToTree(descriptor.styleRefs()));
+    }
+
+    @Test
     void swaggerUiLoadsTheApiDefinition() throws Exception {
         mvc.perform(get("/v3/api-docs/swagger-config"))
                 .andExpect(status().isOk())

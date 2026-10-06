@@ -1,8 +1,10 @@
+
 # FORMULA:
 ```html
+
 	<div class="div-root">
-    <h1>Some Shitty Title - External style</h1>
-    <p>Some paragraph</p>
+    <h1 class="display-5 text-light">A title for the formulas</h1>
+    <p class="lead text-secondary">A paragraph for the formulas</p>
     <p class="example-formula">
         `sum_(i=1)^n i^3=((n(n+1))/2)^2`
     </p>
@@ -15,10 +17,12 @@
         `F(omega) = int_{-oo}^{oo} f(t) e^{-i omega t} dt`
     </p>
     </div>
-```
 
+```
+---
 # STYLE:
 ```css
+
     body {
         padding:0; 
         margin:0; 
@@ -44,10 +48,9 @@
         font-size:25px;
     }
 ```
-
-	
+---
 # STYLE-REFS:
+```text
+https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css
 ```
-```
-			
-		
+
