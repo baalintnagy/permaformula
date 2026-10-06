@@ -20,6 +20,12 @@ The original raw-markup execution path is no longer present. MathJax-generated D
 
 The original closing-style-tag injection path is addressed. CSS parsing/layout resource consumption is a separate open issue under 12.
 
+AntiSamy 1.7.8 was evaluated as a replacement for custom CSS filtering on 2026-10-06.
+Default and permissive diagnostic policies lost required variables, calculations,
+responsive conditions and modern rules; Chromium confirmed corrupted grid and gradient
+values. It was not added to production dependencies. The reproducible standalone
+[evaluation](tools/antisamy-trial/README.md) records the compatibility limits.
+
 ### 3. SSRF against internal services — substantially mitigated; deployment boundary pending
 
 Chromium has a deny-by-default request policy: the approved document and a narrow set of trusted local scripts are permitted. CSS is fetched outside Chromium by `StylesheetFetcher`, preserving `styleRefs` and supported imports.
