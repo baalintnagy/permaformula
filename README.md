@@ -240,7 +240,11 @@ Docker Compose isolates the renderer in a separate container with no network acc
 
 ### Docker deployment
 
-The Dockerfile builds separate API and renderer images. Compose applies private socket communication, renderer network isolation, read-only filesystems, resource limits and Chromium sandbox controls. See [container deployment](docker/README.md) for configuration and verification.
+The Dockerfile builds separate API and renderer images. Compose adds Squid for
+mandatory public-HTTPS stylesheet egress and nginx for ingress, placing the API on
+an isolated internal network. It also applies private socket communication, renderer
+network isolation, read-only filesystems, resource limits and Chromium sandbox
+controls. See [container deployment](docker/README.md) for configuration and verification.
 
 ### Prerequisites
 

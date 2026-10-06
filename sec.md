@@ -4,7 +4,7 @@ Reviewed the current Maven modules, rendering policies, gRPC service and Docker 
 
 This is a source review with focused local rendering probes, not a penetration test, a full dependency vulnerability scan or verification of production infrastructure. Deployment controls outside this repository remain unverified. Previous browser-enabled Maven verification: 111 tests, 110 passed and one opt-in Swagger UI test skipped, including output-policy and response-header regressions. Existing coverage includes gRPC transport/cancellation, correlation and supervised process termination/recovery. Styled SVG is also checked visually and in Chromium both as an image and as a document with the delivery CSP.
 
-The submitted HTML/CSS execution paths have been substantially hardened, and external styles remain supported through controlled fetching. Generated SVG now passes an independent API-side presentation policy before caching or delivery. Decompression and endpoint payload limits are now implemented (11). The most urgent remaining issues are **parsing/layout complexity and non-cooperative API work (12–13)**.
+The submitted HTML/CSS execution paths have been substantially hardened, and external styles remain supported through controlled fetching. Generated SVG passes an independent API-side presentation policy before caching or delivery. Decompression/endpoint payload limits (11), parser/render budgets (12) and Compose's independent stylesheet egress boundary (3) are implemented. Next priorities are **per-client request/cache-miss controls and production verification**; non-cooperative API work still needs consideration (13).
 
 ## Findings
 
@@ -26,7 +26,7 @@ responsive conditions and modern rules; Chromium confirmed corrupted grid and gr
 values. It was not added to production dependencies. The reproducible standalone
 [evaluation](tools/antisamy-trial/README.md) records the compatibility limits.
 
-### 3. SSRF against internal services — substantially mitigated; deployment boundary pending
+### 3. SSRF against internal services — application and Compose egress boundaries implemented
 
 Chromium has a deny-by-default request policy: the approved document and a narrow set of trusted local scripts are permitted. CSS is fetched outside Chromium by `StylesheetFetcher`, preserving `styleRefs` and supported imports.
 
@@ -34,7 +34,31 @@ The fetcher requires HTTPS on port 443, rejects credentials/fragments and inappr
 
 Current bounds: eight top-level references, 16 resources including imports, import depth three, three redirects per resource, 1 MiB per response and 4 MiB combined decoded CSS measured after UTF-8 re-encoding. Requests share a 15-second network deadline with five-second connection/socket/response timeouts.
 
-Compose disables renderer networking; external CSS remains fetched in the API. Remaining: no independent API egress restriction is defined. Arbitrary public HTTPS hosts are allowed, so the API can still be abused as a bounded public-site fetcher. Fetch concurrency is now bounded; apply per-client rate limits; add a domain allowlist if product requirements permit it. Use network rules to reject internal/metadata destinations independently of application checks. Blocking DNS resolution and CSS processing are not proven to obey the network cancellation deadline; see 13. [OWASP SSRF guidance](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html).
+Compose now forces downloads through Squid using Apache HttpClient's native
+`DefaultProxyRoutePlanner`. Squid resolves destination hosts and checks all answers
+with its native destination ACL before opening a public port-443 CONNECT tunnel.
+Any private, loopback, link-local/metadata, reserved or IPv6 transition answer
+rejects the request, including mixed DNS results. Java retains URL/redirect checks,
+TLS verification and streamed CSS budgets; proxied mode resolves only the trusted
+proxy in the API. There is no direct fallback on proxy failure. Standalone direct
+development mode retains Java's validated DNS snapshot resolver.
+
+The API is attached only to an isolated internal Docker bridge without a default
+route, host bridge address or published port. nginx serves HTTP ingress; Squid is
+the sole outbound HTTP proxy, on a separate external network. Both run nonroot,
+without extra capabilities, with read-only filesystems and resource bounds. The
+renderer retains `network_mode: none`. The proxy is required in Compose; missing
+configuration fails startup. Docker's isolated gateway mode is required because a
+plain internal network still allows access to host services on its bridge address.
+[Docker gateway modes](https://docs.docker.com/engine/network/port-publishing/#gateway-modes),
+[Squid destination ACLs](https://www.squid-cache.org/Doc/config/acl/).
+
+Arbitrary public HTTPS hosts remain allowed, so this is still a bounded public-site
+fetcher. Per-client rate limits and an optional domain allowlist remain improvements.
+Standalone/Eclipse direct mode and deployments outside Compose require equivalent
+independent controls. Native proxy/kernel vulnerabilities and production host/network
+policies remain operational concerns. Java CSS processing may still ignore
+interruption; see 13. DNS-race resistance is not established by static DNS tests.
 
 ### 4. Alternative browser network channels — application guards and isolated renderer network boundary implemented
 
@@ -202,7 +226,8 @@ are released only after the operation exits, so non-cooperative DNS/parsers cann
 create unlimited lingering tasks through repeated timeouts. They can still retain
 slots and consume CPU within the API JVM; stronger termination guarantees require
 process isolation. Per-client request rates, proxy connection
-limits, response delivery and independent API egress restrictions remain open.
+limits and response delivery remain open. Compose's independent API egress
+restrictions are implemented under 3.
 
 ### 14. Cache abuse and persistence — partially mitigated
 
@@ -224,7 +249,19 @@ Dependencies have declared versions, and browser installation uses the selected 
 
 ## Local container verification
 
-The two-image build passes Maven verification on Docker Desktop's Linux engine. Both formula and externally fetched Bootstrap-styled HTML returned SVG through the Unix gRPC transport. Inspection confirmed renderer UID 10002, API UID 10001 with supplementary socket group, network mode none with only loopback, socket mode 0660, read-only root and configured resource/security controls. A private raw gRPC probe stalled Chromium deliberately: with a three-second service limit it returned DEADLINE_EXCEEDED in about 3.6 seconds, the renderer restart count increased, and a subsequent uncached formula request succeeded. This verifies the local setup; production host controls remain unverified.
+The original API/renderer build passes Maven verification on Docker Desktop's Linux engine. Both formula and externally fetched Bootstrap-styled HTML returned SVG through the Unix gRPC transport. Inspection confirmed renderer UID 10002, API UID 10001 with supplementary socket group, network mode none with only loopback, socket mode 0660, read-only root and configured resource/security controls. A private raw gRPC probe stalled Chromium deliberately: with a three-second service limit it returned DEADLINE_EXCEEDED in about 3.6 seconds, the renderer restart count increased, and a subsequent uncached formula request succeeded. This verifies the local setup; production host controls remain unverified.
+
+The subsequent four-service deployment passed the reproducible
+`scripts/test-egress.ps1` smoke tests on Docker Engine 28.5.1 with Squid 7.6:
+isolated API network membership, absent external default route, direct internet
+denial, public HTTPS CONNECT success, forbidden address/port rejection and mixed
+public/private DNS rejection. Formula and externally fetched Bootstrap-styled HTML
+returned SVG through nginx with presentation styles and delivery CSP intact.
+Browser-enabled Maven verification ran 152 tests: 151 passed and one opt-in
+Swagger UI test skipped. The final proxy-routing adjustment also passed all three
+focused proxy tests and the rebuilt deployment smoke tests. These checks cover
+local behavior; production infrastructure and a complete native-proxy security
+audit remain outside this verification.
 
 ## Payload-limit and cache-headroom verification
 
@@ -232,7 +269,7 @@ After the initial payload-limit and cache changes, `mvn -o -Drendering.tests=tru
 
 The subsequent increase to 256 KiB formulas, 4 MiB HTML, 1 MiB inline CSS, 8 MiB JSON and 16 MiB renderer/SVG payloads passed `mvn -o verify`: 112 passed, 12 opt-in browser/Swagger tests skipped. Compression allowances and JSON string constraints were aligned, and UTF-8 rejection tests use the new boundaries.
 
-## Recommended next work
+## API admission and deadline verification
 
 API admission/deadline verification passed with browser testing enabled:
 134 tests, 133 passed and one opt-in Swagger UI test skipped. Tests cover overload
@@ -247,7 +284,7 @@ Eclipse launch groups to proceed to API startup.
 
 1. Maintain decompression and endpoint validation regressions (11); individual payload limits are implemented.
 2. Maintain the implemented DOM/CSS/math and dimension budgets (12); non-cooperative API work may need process isolation (13). TODO: Add a bounded work queue with configurable capacity/wait limits, cancellation, the existing end-to-end deadline, and cache-hit bypass of queued generation. Keep immediate rejection when the queue is full.
-3. Verify isolated renderer controls on production hosts and add independent API-fetcher egress controls (3–6).
+3. Verify isolated renderer and implemented API/proxy network controls on production hosts (3–6); maintain proxy ACL/package regressions.
 4. Add delivery-origin isolation, cache-miss controls and operational patch/privacy policies (8, 14, 16).
 
 The target architecture remains an API, a controlled stylesheet fetcher and a restricted rendering worker. It preserves external styling while putting limits and independent validation around untrusted content.

@@ -2,16 +2,49 @@
 
 Run `docker compose up --build -d` from the repository root with Docker's Linux engine running. The API is exposed on `127.0.0.1:5000`. Set `PORT` for a different host port and `PERMMATH_HOST` to the public origin used in permalinks. Public deployment needs a TLS reverse proxy and ingress/admission controls.
 
-## Two services
+## Four services
 
 The Maven build verifies all four modules. Docker builds separate targets:
 
 - `runtime`: Spring API, UID/GID 10001, no Chromium or GraalJS. Fetches and sanitizes external CSS, prepares HTML, caches SVG and serves HTTP.
 - `renderer`: gRPC service, UID/GID 10002, Chromium and GraalJS. Runs both HTML and formula jobs in disposable JVMs. Contains no API application or credentials.
+- `stylesheet-egress`: Squid 7 from Alpine packages, running as `squid`. Its native ACLs allow CONNECT to public port 443 and reject internal, metadata, reserved and transition addresses, including any blocked answer in a mixed DNS result. No port is published, no TLS interception or content cache is used, and access logging is disabled.
+- `ingress`: nginx from Alpine packages, running as `nginx`. Publishes the existing localhost HTTP port and forwards only to the API. Access logging is disabled to avoid recording formula/permalink queries. Proxy response timeouts are 65 seconds, beyond the API's 60-second deadline; SVG headers are preserved.
 
 The renderer has `network_mode: none`. gRPC uses Netty's Unix-domain socket transport with generated Protocol Buffers on `/run/permmath/render.sock`. The named volume contains only the socket; it is writable in the renderer and read-only in the API. Directory mode 0750 and socket mode 0660 restrict access to renderer group 10002, which is a supplementary API group. Do not mount this volume into other workloads. Plaintext gRPC is confined to this filesystem boundary; neither a renderer TCP port nor host socket is exposed.
 
-External styles remain supported: only the API fetches them, using the existing HTTPS/public-address validation and size limits. The renderer receives sanitized embedded styles and serves trusted MathJax scripts on its private loopback interface. It cannot contact public or internal network destinations. The API has bounded fetch concurrency and still needs independent egress rules and client rate limits.
+External styles remain supported. Apache HttpClient's `DefaultProxyRoutePlanner`
+forces stylesheet downloads, imports and redirects through Squid; failure or denial
+never falls back to a direct route. The HTTPS certificate/hostname is still verified
+by Java against the destination. Squid independently resolves and checks all cached
+destination addresses used for its connection. It uses a deny list rather than a
+negated public-address allowlist, so mixed public/private answers reject the tunnel.
+
+The API joins only `api-private`, an internal bridge with gateway mode `isolated`.
+It has no external/default route, published port, or host bridge address. nginx
+provides ingress and Squid provides egress; each joins its own separate external
+network and `api-private`. The renderer still has no network. API-private peers
+are limited to the API and these two proxies; mount no unrelated workloads there.
+This configuration requires Docker Engine with isolated gateway mode (verified on
+28.5.1). Unsupported engines must fail deployment rather than remove this setting:
+an ordinary internal bridge still permits access to the host's bridge address.
+[Docker gateway modes](https://docs.docker.com/engine/network/port-publishing/#gateway-modes),
+[Squid ACLs](https://www.squid-cache.org/Doc/config/acl/).
+
+Compose sets `PERMMATH_STYLESHEET_FETCH_PROXY_REQUIRED=true` and
+`PERMMATH_STYLESHEET_FETCH_PROXY=http://stylesheet-egress:3128`. Missing/invalid
+proxy configuration fails application startup; unavailable/denying proxies fail
+the fetch. Standalone/Eclipse development defaults to direct fetching with the
+existing DNS snapshot validation. To use a managed proxy there, set the same two
+properties (environment variables or Spring configuration). Direct development
+mode does not provide an independent network boundary.
+
+The proxies use a digest-pinned Alpine base and distribution packages, read-only
+filesystems, dropped capabilities and private 32 MiB tmpfs. Squid has 128 MiB memory,
+0.5 CPU, 32 PIDs and an 8,192 file-descriptor limit; nginx has 256 MiB, 0.5 CPU and
+32 PIDs. Keep their packages patched. Public-site fetching and client rate limits
+remain separate concerns. Other deployment platforms need equivalent mandatory
+proxy routing, network isolation and destination ACLs.
 
 ## Execution limits
 
@@ -44,6 +77,21 @@ Remote TCP deployment requires its own private network, authentication, egress a
 `docker compose config --quiet` validates configuration. Check `/img?formula=x`, then use `/url` to create a styled descriptor and load its `/image` permalink. Confirm external styles survive rendering.
 
 Inspect the renderer with `docker inspect`: NetworkMode must be `none`, user 10002, read-only root, resource limits and security options present. `/proc/net/dev` should contain only loopback. Application/browser files must be unwritable. Chromium must launch without `--no-sandbox` and with seccomp active. Repeat these checks on production hosts after runtime upgrades.
+
+For the independent egress smoke test, start a separate project on port 5017:
+
+```powershell
+docker compose --env-file docker/egress/smoke.env -p permmath-egress-smoke up --build -d
+./scripts/test-egress.ps1
+docker compose -p permmath-egress-smoke down --volumes
+```
+
+The script verifies isolated network membership/default-route absence, direct
+internet denial, public HTTPS success, forbidden IP/port/DNS destinations and mixed
+DNS answers using a test-only dnsmasq fixture. It then renders formula and Bootstrap
+HTML through nginx and checks SVG headers/styles. It removes only fixtures it creates;
+the caller shuts down the separate Compose project. CDN checks require internet
+availability. This is not a complete native-proxy vulnerability or DNS-race audit.
 
 The socket healthcheck verifies listener-file presence for startup ordering; it is not a render probe. Monitor render latency/errors/restarts separately. After an abnormal shutdown a stale socket is removed on restart. Use `docker compose down --volumes` to remove this deployment's transient socket volume.
 

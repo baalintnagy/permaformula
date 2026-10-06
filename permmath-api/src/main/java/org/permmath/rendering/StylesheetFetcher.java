@@ -20,6 +20,7 @@ import org.apache.hc.core5.io.CloseMode;
 /**
  * Fetches CSS outside Chromium, with validated DNS used by the actual connection.
  */
+@org.springframework.stereotype.Component
 final class StylesheetFetcher {
 
     static final int MAX_BYTES = 1024 * 1024;
@@ -42,12 +43,20 @@ final class StylesheetFetcher {
     }
 
     private final Downloader downloader;
+    private final StylesheetFetchProperties properties;
 
     StylesheetFetcher() {
+        this(StylesheetFetchProperties.direct());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    StylesheetFetcher(StylesheetFetchProperties properties) {
+        this.properties = properties;
         downloader = this::download;
     }
 
     StylesheetFetcher(Downloader downloader) {
+        this.properties = StylesheetFetchProperties.direct();
         this.downloader = downloader;
     }
 
@@ -128,18 +137,25 @@ final class StylesheetFetcher {
         try (var timer = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
                 Thread.ofPlatform().daemon(true).name("stylesheet-deadline").factory())) {
             for (int redirects = 0; ; redirects++) {
+                // Proxied targets are resolved/validated by Squid at the actual connection boundary.
+                // The isolated API only resolves its trusted proxy, not public destination hosts.
                 long remaining = deadline - System.nanoTime();
                 if (remaining <= 0) {
                     throw WorkDeadline.timedOut();
                 }
                 var manager = PoolingHttpClientConnectionManagerBuilder.create()
-                        .setDnsResolver(new PublicDnsResolver())
+                        .setDnsResolver(properties.proxy() == null ? new PublicDnsResolver()
+                                : org.apache.hc.client5.http.SystemDefaultDnsResolver.INSTANCE)
                         .setDefaultConnectionConfig(ConnectionConfig.custom().setConnectTimeout(Timeout.ofSeconds(5))
                                 .setSocketTimeout(Timeout.ofSeconds(5)).build()).build();
-                try (var client = HttpClients.custom().setConnectionManager(manager)
+                var clientBuilder = HttpClients.custom().setConnectionManager(manager)
                         .disableRedirectHandling().disableAutomaticRetries().disableCookieManagement()
                         .disableContentCompression().setDefaultRequestConfig(RequestConfig.custom()
-                                .setResponseTimeout(Timeout.ofSeconds(5)).build()).build()) {
+                                .setResponseTimeout(Timeout.ofSeconds(5)).build());
+                if (properties.proxy() != null) clientBuilder.setRoutePlanner(
+                        new org.apache.hc.client5.http.impl.routing.DefaultProxyRoutePlanner(
+                                org.apache.hc.core5.http.HttpHost.create(properties.proxy())));
+                try (var client = clientBuilder.build()) {
                     var request = new HttpGet(uri);
                     var cancellation = timer.schedule(() -> {
                         request.cancel();

@@ -20,6 +20,8 @@ public class ImageRendererService implements AutoCloseable {
     private final String template;
     @org.springframework.beans.factory.annotation.Autowired
     private ApiWorkService work = new ApiWorkService(ApiWorkProperties.defaults());
+    @org.springframework.beans.factory.annotation.Autowired
+    private StylesheetFetcher stylesheetFetcher = new StylesheetFetcher();
 
     public ImageRendererService(PermMathProperties properties, RenderGateway gateway) throws IOException {
         this.properties = properties;
@@ -34,7 +36,7 @@ public class ImageRendererService implements AutoCloseable {
         PreparationComplexity.css(descriptor.style() == null ? "" : descriptor.style());
         var externalCss = descriptor.styleRefs() == null || descriptor.styleRefs().isEmpty()
                 ? java.util.List.<String>of()
-                : work.fetch(() -> new StylesheetFetcher().fetchAll(descriptor.styleRefs()));
+                : work.fetch(() -> stylesheetFetcher.fetchAll(descriptor.styleRefs()));
         var document = RenderContentPolicy.document(template, descriptor, externalCss);
         int width = Objects.requireNonNullElse(descriptor.imageWidth(), properties.defaultImageWidth());
         return new InputStreamResource(new ByteArrayInputStream(gateway.renderHtml(document, width)));
