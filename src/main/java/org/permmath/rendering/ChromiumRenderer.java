@@ -16,7 +16,7 @@ final class ChromiumRenderer implements AutoCloseable {
 
     ChromiumRenderer(RenderingProperties properties) throws IOException {
         var directory = properties.browserDirectory().toAbsolutePath().normalize();
-        // Only executables in the configured project-local directory are considered.
+        // Only executables in the configured browser installation are considered.
         playwright = Playwright.create(new Playwright.CreateOptions().setEnv(Map.of(
                 "PLAYWRIGHT_BROWSERS_PATH", directory.toString(), "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1")));
         try {
@@ -26,7 +26,8 @@ final class ChromiumRenderer implements AutoCloseable {
                         + "; run scripts/install-rendering.ps1");
             }
             browser = playwright.chromium().launch(new BrowserType.LaunchOptions()
-                    .setExecutablePath(executable).setHeadless(true));
+                    .setExecutablePath(executable).setHeadless(true)
+                    .setChromiumSandbox(properties.chromiumSandbox()));
         } catch (RuntimeException | IOException e) {
             playwright.close();
             throw e;

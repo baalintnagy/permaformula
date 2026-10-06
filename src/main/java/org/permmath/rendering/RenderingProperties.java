@@ -4,9 +4,18 @@ import java.nio.file.Path;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 
 @ConfigurationProperties("permmath.rendering")
 public record RenderingProperties(
         @DefaultValue(".runtime/browsers") Path browserDirectory,
-        @DefaultValue("30s") Duration timeout) {
+        @DefaultValue("30s") Duration timeout,
+        @DefaultValue("false") boolean chromiumSandbox) {
+
+    @ConstructorBinding
+    public RenderingProperties {}
+
+    public RenderingProperties(Path browserDirectory, Duration timeout) {
+        this(browserDirectory, timeout, false);
+    }
 }

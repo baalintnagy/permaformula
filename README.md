@@ -155,6 +155,14 @@ Browser contexts block service workers, WebSockets and all requests except the c
 
 Deployment still requires OS-level egress restrictions and browser isolation; these application checks do not replace them.
 
+### Docker deployment
+
+The Dockerfile builds a separate JRE runtime image, runs as an unprivileged user
+and enables Chromium's sandbox. Use `docker compose up --build -d` to also apply
+a read-only filesystem, private temporary storage, resource limits and the
+Chromium seccomp profile. See [container deployment](docker/README.md) for
+configuration, smoke checks and remaining isolation/network requirements.
+
 ### Prerequisites
 
 - JDK 25 (set `JAVA_HOME` to its installation directory)

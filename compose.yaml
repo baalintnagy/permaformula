@@ -1,0 +1,35 @@
+services:
+  permmath:
+    build: .
+    init: true
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./docker/seccomp-chromium.json
+    # Private writable storage; browser/driver extraction needs executable /tmp.
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,size=512m,mode=1777
+    shm_size: 256m
+    mem_limit: 2g
+    memswap_limit: 2g
+    cpus: 2.0
+    pids_limit: 256
+    ulimits:
+      core: 0
+      nofile:
+        soft: 8192
+        hard: 8192
+    ports:
+      - "127.0.0.1:${PORT:-5000}:5000"
+    environment:
+      PORT: "5000"
+      PERMMATH_HOST: "${PERMMATH_HOST:-http://localhost:5000}"
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

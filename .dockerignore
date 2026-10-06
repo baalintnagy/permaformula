@@ -1,3 +1,14 @@
 .git
 .runtime
 target
+.idea
+.vscode
+.codex
+.agents
+.aws
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx

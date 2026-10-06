@@ -1,87 +1,133 @@
-The current /image renderer should be treated as executing untrusted web content on your server. The main protections needed are input sanitization, network restrictions, process isolation, resource limits, and safe SVG delivery. Each protects a different boundary.
-I reviewed the implementation; this is a threat assessment, not a penetration test. I haven’t changed the code.
-The numbered findings retain the original assessment wording. Implementation notes below describe subsequent changes.
-The most significant findings are:
-- Submitted HTML and CSS enter the document without sanitization.
-- Scripts and event handlers are removed during export, after they could already execute.
-- Browser engines can request external resources without a service-level network policy.
-- Chromium’s launch doesn’t enable its sandbox; Playwright documents that option as disabled by default. Our Dockerfile also doesn’t configure a non-root runtime user. Playwright launch options, Playwright Docker guidance
-- Decompression, render queues, resource downloads, and generated output have insufficient size limits.
-These are the attack paths I would address.
-1. JavaScript execution through submitted HTML
-   Vector: <script>, event attributes such as onerror, nested documents, SVG scripting, or injected markup execute inside the renderer. They can alter the document, make requests, consume resources, or forge the result.
-   Mitigation: Sanitize HTML before the browser parses it, using an allowlist of presentation elements and attributes. Remove scripting, event attributes, embedded documents, forms, and navigation features. Keep JavaScript enabled only for our trusted MathJax and exporter code, with a restrictive CSP.
-   Use a maintained parser-based sanitizer such as OWASP Java HTML Sanitizer, rather than regex replacements. It needs an explicit policy suited to our supported HTML and CSS.
-2. Breaking out of the stylesheet
-   Vector: The style field is inserted directly into a <style> element. Content containing an HTML closing tag can escape that element and introduce markup. CSS itself can also import external resources.
-   Mitigation: Parse and sanitize CSS separately. Never concatenate raw CSS into HTML. Build the document using APIs that preserve text boundaries, and apply a restricted CSS property/value policy. Treat external stylesheets as untrusted too.
-3. SSRF and attacks against internal services
-   Vector: Images, stylesheets, fonts, frames, scripts, CSS url()/@import, navigation, and JavaScript requests can target localhost, private networks, cloud metadata, databases’ HTTP interfaces, or the application itself.
-   Impact: Internal scanning, blind requests that change state, and potentially reading internal responses.
-   Mitigation: Deny browser network access by default. If remote resources are required, fetch them through a controlled resource service that permits approved HTTPS destinations and returns bounded, validated content.
-   Block private, loopback, link-local, reserved, and inappropriate IPv6 destinations. Validate redirects and bind connections to validated addresses to prevent DNS rebinding. Enforce the restriction at the network layer as well. CORS does not stop requests from being sent. OWASP SSRF guidance
-4. Bypassing restrictions through alternative browser channels
-   Vector: Restricting ordinary HTTP requests can leave WebSockets, service workers, popups, redirects, frames, WebRTC, DNS traffic, or other mechanisms available.
-   Mitigation: Block workers, service workers, frames, popups, and unnecessary connection mechanisms. Apply restrictions to the whole browser context, not just the initial page. Use an OS-level egress policy as the final boundary.
-   Playwright specifically warns that service-worker requests can bypass its ordinary request interception. Playwright context routing
-   Implementation status: Application-level protections are now in place. Chromium uses a fresh context with service workers disabled and context-wide HTTP/WebSocket filtering. Only the initial document navigation in the approved main frame is permitted; reloads, redirects, extra pages and child frames are rejected. Local asset responses are fetched without following redirects before being delivered to the browser. An initialization script disables Worker, SharedWorker, WebRTC constructors, WebTransport, WebSocketStream, service-worker registration and window.open before document scripts execute. CSP supplies a separate worker/frame/connect restriction, and the asset server sends X-DNS-Prefetch-Control: off. Playwright is updated to 1.59.0, which fixes missing close-event fields during WebSocket teardown; install its matching Chromium with scripts/install-rendering.ps1.
-   Regression tests exercise these guards without the sanitizer or CSP: WebSockets and service workers cannot contact the test server; worker/WebRTC constructors fail before document scripts execute; native popups and extra pages close; same-document and non-network frames terminate the render; reloads, data navigation and document/script redirects are denied. Existing Bootstrap and MathJax rendering tests remain supported.
-   Remaining deployment work: Put Chromium and its local assets in an isolated worker with OS-level outbound TCP/UDP restrictions, including DNS. Initialization scripts, CSP and Playwright interception are defense in depth, not an OS security boundary; they do not guarantee that all native browser traffic or a browser exploit is contained. Keep the controlled stylesheet fetcher outside that restricted worker so external styles remain available.
-5. Local files and operating-system integration
-   Vector: Attempts to use file:, platform-specific schemes, external protocol handlers, downloads, or browser vulnerabilities to reach local files or invoke applications.
-   Normal browser JavaScript does not automatically grant filesystem or shell access, but it should never run beside sensitive files with unnecessary privileges.
-   Mitigation: Permit only explicitly supported URL schemes and resource types. Deny downloads and external handlers. Run the renderer with an empty temporary working directory, minimal environment variables, no secrets, no home directory mounts, and no access to project files or credentials.
-6. Native browser vulnerabilities and remote code execution
-   Vector: Crafted HTML, JavaScript, fonts, images, SVG, or media exploit Chromium/WebKit or their native libraries. Malicious content can reach these parsers even after scripts are removed.
-   Mitigation: Patch Chromium, JavaFX/WebKit, the JDK, and dependencies regularly. Run rendering in a separate restricted process or container under an unprivileged account. Use read-only filesystems, limited temporary storage, restricted syscalls, and no host sockets or privileged mounts.
-   For Chromium, explicitly enable and verify its sandbox. For JavaFX, move it into a separate worker JVM. A separate WebView inside the API JVM is not an operating-system security boundary.
-7. Tampering with our rendering machinery
-   Vector: Submitted scripts can replace window.exportStyledSvg, set window.renderState, provide their own window.renderSvg, or interfere with MathJax and browser APIs.
-   Impact: An attacker can manufacture output rather than merely supply content for rendering.
-   Mitigation: Prevent untrusted scripts from executing, isolate user content from the trusted control document, and validate the generated SVG outside the rendering page. The page’s “ready” flag should not be treated as proof that its output is trustworthy.
-8. XSS in the returned SVG
-   Vector: Our SVG contains HTML through foreignObject. Removing <script> and on… attributes doesn’t cover every active-content mechanism: nested frames, srcdoc, dangerous links, embedded objects, and other document features can survive.
-   SVG displayed through <img> has browser restrictions, but those restrictions do not generally apply when it is opened directly or embedded as a document. MDN SVG security contexts
-   Mitigation: Validate and sanitize the final SVG with a namespace-aware allowlist. Allow our outer foreignObject and approved presentation HTML, while rejecting nested active documents, dangerous URLs, and unexpected elements.
-   Serve generated images from a dedicated origin without application cookies. Add restrictive CSP, X-Content-Type-Options: nosniff, and an appropriate referrer policy. CSP is an additional layer; downloaded files and inline embedding can lose response-header protections. CSP sandbox documentation
-9. Cross-request data leakage
-   Vector: Cookies, storage, caches, service workers, browser state, or shared execution state influence another request. Internal documents also share the asset server’s origin.
-   Mitigation: Use fresh contexts and temporary profiles, no stored credentials, and no shared user storage. Chromium already uses fresh contexts, which is helpful. JavaFX needs explicit testing and isolation; creating a new WebView should not be assumed to isolate every process-wide facility.
-   Workers should expose only their own trusted assets and current document—not other jobs or the API.
-10. Browser permissions and interactive features
-    Vector: Permission requests, dialogs, fullscreen, clipboard access, media capture, geolocation, file choosers, notifications, printing, audio, and popup creation can interrupt or abuse rendering.
-    Availability varies by engine and permission model.
-    Mitigation: Grant no permissions. Deny or immediately dismiss interactive operations. Block frames, forms, navigation, downloads, and popups unless a supported rendering feature specifically needs them. Add a restrictive Permissions Policy where supported.
-11. Decompression and JSON denial of service
-    Vector: A small ubcq expands into enormous JSON; deeply nested structures, huge strings, or large stylesheet arrays consume memory and CPU.
-    Current issue: Decompression uses unbounded readAllBytes().
-    Mitigation: Bound encoded input, compressed bytes, total decompressed bytes, JSON depth, string lengths, and list counts. Stop decompression when the limit is crossed. Validate decoded descriptors before caching or rendering. Apply these protections to /decode too.
-12. Expensive layout, math, and resource decoding
-    Vector: Huge DOM trees, extreme dimensions, pathological formulas, expensive filters, enormous image dimensions, animated content, fonts, or CSS cause excessive CPU or memory consumption.
-    Mitigation: Limit DOM size, formula complexity/length, CSS size, image dimensions, resource count, total downloaded bytes, output size, and rendered height. Reject unnecessary media and animation. Use process-level CPU and memory limits.
-    Download limits need to apply while streaming; a resource’s declared size cannot be trusted.
-13. Timeouts that don’t actually stop work
-    Vector: Infinite JavaScript or native rendering hangs continue after the HTTP request times out.
-    Current issue: JavaFX’s timeout runs on the same FX thread that hostile content can block. Cancelling the Java future doesn’t guarantee that browser work stops.
-    Mitigation: Have an external supervisor enforce deadlines and kill the worker process when necessary. Recreate unhealthy workers. Use bounded render queues and reject overload rather than accumulating requests.
-14. Cache abuse and persistence of malicious output
-    Vector: Many unique requests cause rendering load and eviction. Malicious output can remain available for 60 days. Remote resources can also change while retaining the same URL.
-    Mitigation: Rate-limit cache misses, bound concurrent jobs, and limit individual artifact size before storing it. Sanitize before storage and before delivery where appropriate.
-    Include a security-policy version in the cache identity. Changing sanitizer rules should invalidate previous output. We can keep the key independent of JavaFX/Chromium while still including that policy version. Future persistent storage needs purge/quarantine support as well.
-15. Abuse of the formula-only renderer
-    Vector: Pathological math input, MathJax bugs, GraalJS vulnerabilities, or generated SVG features can affect /img, even though it launches no browser.
-    Existing protection: Formula text is passed as data, not interpolated into JavaScript, and Java host access is disabled.
-    Mitigation: Keep those restrictions; add formula limits, deadlines, output validation, and isolation for expensive work. Host-access restrictions alone don’t impose CPU or memory limits. GraalVM’s stronger sandbox facilities have deployment-specific requirements we’d need to check before relying on them. GraalVM sandbox guidance
-16. Leaks, supply-chain attacks, and future storage mistakes
-    Vector: Permalinks expose content through access logs, browser history, referrers, and monitoring. Compression is not encryption. Dependencies and downloaded browsers introduce supply-chain risk. Future persistence introduces filesystem paths and stored untrusted content.
-    Mitigation: Avoid logging payloads, redact sensitive error details, and use a restrictive referrer policy. Pin and verify dependencies/browser artifacts while maintaining an update process. Keep browser binaries unwritable by the rendering account.
-    For persistence, use the server-generated hash as the storage identifier, parameterized database queries, atomic writes, size quotas, and secure XML parsing with external entities disabled if SVG is parsed server-side.
-My recommended architecture is an API process, a restricted rendering worker, and a controlled resource fetcher. The worker receives sanitized content and embedded resources, has no general network access, produces SVG, and can be forcibly terminated. The API validates that output before caching and serving it.
-This preserves styled HTML. It requires defining a supported subset of HTML and CSS, while excluding scripts and interactive browser features.
-I would implement the protections in this order:
-1. Bound decompression, inputs, queues, resources, and output.
-2. Sanitize HTML/CSS before rendering and SVG after rendering.
-3. Deny unrestricted network access; add controlled fetching if needed.
-4. Isolate JavaFX in a worker JVM and harden Chromium’s sandbox and runtime privileges.
-5. Harden SVG delivery, version the security policy in cache keys, and add hostile-input regression tests.
-The highest-priority change is to stop treating arbitrary submitted HTML as trusted browser content. Output cleanup alone cannot protect the machine that already rendered it.
+# Security reassessment — 2026-10-06
+
+Reviewed application code at commit `728f740`, rendering policies, dependency declarations and Docker configuration. This replaces the original assessment; finding numbers are retained for continuity. Removed JavaFX functionality is excluded.
+
+This is a source review with a focused local rendering probe, not a penetration test, a full dependency vulnerability scan or verification of production infrastructure. Deployment controls outside this repository remain unverified. Prior implementation verification recorded 76 tests (75 passed, one skipped), followed by six passing browser-channel tests after the final guard change; the full suite was not rerun for this documentation update.
+
+The submitted HTML/CSS execution paths have been substantially hardened, and external styles remain supported through controlled fetching. The most urgent remaining issues are **unsafe MathJax-generated SVG links (8), unbounded decompression (11), expensive rendering and unbounded queues (12–13, 15), and insufficient process isolation (6)**.
+
+## Findings
+
+### 1. JavaScript execution through submitted HTML — addressed for submitted markup
+
+`RenderContentPolicy` applies OWASP Java HTML Sanitizer before Chromium parses the document. The allowlist permits presentation HTML and limited attributes, excludes scripts, event handlers, submitted SVG, frames, forms and links, and sanitizes inline CSS. The trusted template receives nonce-based CSP; only trusted MathJax/exporter scripts are intended to execute.
+
+The original raw-markup execution path is no longer present. This does not establish that DOM created later by MathJax, or the exported SVG, is safe: see 8. Keep hostile-markup regression coverage when expanding the supported HTML subset.
+
+### 2. Breaking out of the stylesheet — addressed for submitted CSS
+
+`StylesheetPolicy` parses CSS, restricts properties and value functions, rejects resource URLs and unsupported rules, and escapes literal `<` before stylesheet embedding. `RenderContentPolicy` builds the document with DOM APIs rather than substituting raw input into the template. Inline declarations use the same policy. External CSS is also sanitized.
+
+The original closing-style-tag injection path is addressed. CSS parsing/layout resource consumption is a separate open issue under 12.
+
+### 3. SSRF against internal services — substantially mitigated; deployment boundary pending
+
+Chromium has a deny-by-default request policy: the approved document and a narrow set of trusted local scripts are permitted. CSS is fetched outside Chromium by `StylesheetFetcher`, preserving `styleRefs` and supported imports.
+
+The fetcher requires HTTPS on port 443, rejects credentials/fragments and inappropriate destinations, validates all DNS answers and supplies those validated addresses to the actual HTTP connection. Redirects are manually revalidated. TLS verification remains enabled; automatic redirects, retries, cookies and response compression are disabled. CSS MIME type and streamed body size are checked.
+
+Current bounds: eight top-level references, 16 resources including imports, import depth three, three redirects per resource, 1 MiB per response and 4 MiB combined decoded CSS measured after UTF-8 re-encoding. Requests share a 15-second network deadline with five-second connection/socket/response timeouts.
+
+Remaining: no OS-level egress restriction is defined. Arbitrary public HTTPS hosts are allowed, so the API can still be abused as a bounded public-site fetcher. Apply fetch concurrency/rate limits; add a domain allowlist if product requirements permit it. Use network rules to reject internal/metadata destinations independently of application checks. Blocking DNS resolution and CSS processing are not proven to obey the network cancellation deadline; see 13. [OWASP SSRF guidance](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html).
+
+### 4. Alternative browser network channels — application guards implemented; OS boundary pending
+
+`BrowserChannelPolicy` uses a fresh context with service workers blocked, downloads disabled and context-wide HTTP/WebSocket handling. WebSockets never connect to their destination. Additional pages close; child frames terminate rendering, including non-network frames. Only the initial approved document navigation is admitted; reloads and other navigations are denied. Local assets are fetched without redirects and fulfilled only on status 200.
+
+An initialization script disables Worker, SharedWorker, WebRTC constructors, WebTransport, WebSocketStream, service-worker registration and `window.open` before document scripts execute. CSP independently restricts workers, frames and connections. The asset server sends `X-DNS-Prefetch-Control: off`. Playwright 1.59.0 addresses the close-event teardown problem encountered during WebSocket testing.
+
+Existing regression tests exercise guards independently of HTML sanitization/CSP, including WebSockets, workers, popups, frames, navigation and redirects. These are useful application controls, not proof that every native browser channel or exploit is contained. A restricted worker needs outbound TCP/UDP/DNS rules; keep controlled external stylesheet fetching outside that worker. [Playwright routing documentation](https://playwright.dev/java/docs/api/class-browsercontext#browser-context-route).
+
+### 5. Local files and operating-system integration — partially mitigated
+
+Submitted active markup, unsupported resource URLs and browser downloads are blocked. Normal submitted content has no supported filesystem or shell interface.
+
+However, Chromium still runs under the deployment account beside application files, without a separate restricted worker. Application routing is not filesystem containment following a native exploit. Run with a minimal environment, read-only trusted assets, a private bounded temporary directory and no credentials, home-directory mounts or host sockets. Do not infer those restrictions from project-local browser installation.
+
+### 6. Native browser vulnerabilities and process isolation — open, high priority
+
+The reassessment probe at `728f740` ran Chromium with `--no-sandbox`. Subsequent container preparation adds an explicit `chromium-sandbox` setting enabled in Docker, an unprivileged runtime user, a separate JRE runtime stage, non-writable application/browser assets, and a Compose configuration with read-only root filesystem, private temporary storage, dropped capabilities, seccomp and CPU/memory/process limits. Local development retains the previous sandbox default. See `docker/README.md` for configuration and validation requirements.
+
+These controls are prepared in the repository; effective Linux sandbox/container behavior must be verified on the deployment host. The API and renderer still share a container/account. No separate rendering worker or OS egress policy is implemented, and container limits do not impose per-request deadlines or prevent all denial of service.
+
+Container preparation was smoke-tested on Docker Desktop's Linux engine: the image built successfully with 77 tests (67 passed, 10 opt-in browser tests skipped); `/img` and `/image` returned SVG successfully, including externally fetched Bootstrap styling. Runtime inspection confirmed UID 10001, non-writable application/browser files, read-only root filesystem, configured memory/CPU/process limits, no-new-privileges and seccomp. Chromium launched without `--no-sandbox` and its processes showed active seccomp filtering. This verifies the local configuration, not every production host or workload.
+
+Use an unprivileged isolated worker, explicitly enable and verify the Chromium sandbox on the target platform, restrict filesystem/syscalls/network access, and impose CPU/memory/process/temp-storage limits. A separate browser process under the API account is insufficient containment. Maintain a browser/JDK/dependency patch process. [Playwright sandbox option](https://playwright.dev/docs/api/class-browsertype#browser-type-launch), [Playwright Docker guidance](https://playwright.dev/java/docs/docker).
+
+### 7. Tampering with rendering machinery — original script path mitigated; output trust remains open
+
+Input sanitization and CSP prevent the original supported route for submitted scripts to replace `window.exportStyledSvg`, `window.renderState` or `window.renderSvg`. The service still accepts the page's ready flag and SVG string without an independent final-output validator.
+
+Validate output outside the page before caching or serving it. The ready flag proves completion according to the renderer protocol, not safety of the resulting document. See the confirmed output gap in 8.
+
+### 8. Active content in returned SVG — confirmed open, high priority
+
+**Local reproduction:** render `<p>\(\href{javascript:alert(1)}{probe}\)</p>` through `ImageRendererService` with the current template and policies. The exported SVG retains `javascript:alert(1)` in a MathJax-generated link. The probe checked the generated bytes; it did not demonstrate execution in a victim browser or origin.
+
+The template loads `tex-svg.js` as well as ASCIIMath, so TeX processing remains reachable in HTML text. MathJax creates the link after input sanitization. `export-svg.js` removes scripts and event attributes but does not reject unsafe URI attributes. `GeneratedImageService` stores the output without final validation. The rendering page's CSP is not carried into the returned SVG document.
+
+Exploitability depends on how the SVG is consumed: an image-element context has different restrictions from direct document opening or inline embedding. Nevertheless, retaining a supplied JavaScript URI is an output-policy failure. `/image` and `/img` currently set SVG content type but no restrictive CSP, `nosniff` or referrer policy in their controller responses; deployment headers are unverified.
+
+Fix: enable/configure MathJax's `ui/safe` extension to restrict generated URLs/styles, and validate the final SVG with a namespace-aware presentation allowlist outside the rendering engine. Preserve required glyph paths, fragment references and the supported outer foreignObject while rejecting dangerous URI schemes and active document features. Apply the output policy to both renderer paths and version their cache keys when it changes. Serve SVG with restrictive CSP, `X-Content-Type-Options: nosniff` and referrer policy, preferably from a dedicated origin without application cookies. Header protections do not accompany downloaded/inline SVG everywhere. [MathJax safe-extension documentation](https://docs.mathjax.org/en/v3.2/options/safe.html).
+
+### 9. Cross-request data leakage — substantially mitigated; isolation validation remains
+
+Fresh Chromium contexts reduce cookie/storage/service-worker leakage. Browser routing admits only the current document URL and trusted assets. The loopback asset server uses random document identifiers and removes documents after rendering.
+
+The asset server is nevertheless shared by the renderer process and is not authenticated against other local processes. The formula renderer also reuses a synchronized GraalJS context. No cross-request leak was demonstrated in this review. Keep isolation tests and give a separate worker access only to its own current document/assets; test reused formula state before relying on it for sensitive input.
+
+### 10. Browser permissions and interactive features — partially mitigated
+
+No permissions are granted by the context setup; frames, forms, popups, navigation and downloads are restricted. These remove common interaction paths. There is no explicit comprehensive interactive-feature policy or Permissions-Policy header.
+
+Retain deny-by-default permissions, add a restrictive Permissions Policy where relevant, and verify dialogs/interactive operations cannot stall the worker. Prioritize worker termination and isolation over assuming every browser API can be disabled with JavaScript.
+
+### 11. Decompression and JSON denial of service — open, high priority
+
+`StringCompressionService.decompress` decodes the whole Base64 value and uses unbounded `GZIPInputStream.readAllBytes()`. `/image` and `/decode` decompress before descriptor validation. A small compressed query can therefore cause large allocations despite HTTP query-size limits. `/decode` does not invoke the rendering service's descriptor validation.
+
+Bound encoded input, compressed bytes and decompressed bytes while reading; then apply service-specific JSON depth/string/list and descriptor limits consistently to both paths. Jackson has default parser constraints, but those do not bound the preceding GZIP expansion. Reject over-limit input before cache-key serialization or rendering. Also bound `/url` and `/img` input sizes.
+
+### 12. Expensive layout, math and parsing — partially mitigated, high-priority gaps
+
+Image width is validated from 220 to 4000, remote stylesheet downloads have limits, and submitted images/fonts/resource URLs/animations outside the CSS subset are removed. These are real improvements.
+
+There are no explicit service limits on HTML/formula length, DOM node count, inline CSS size, total rule/selector complexity, rendered height or output bytes. Allowed CSS can still create expensive layouts and extreme dimensions. CSS nesting checks occur after parsing and are not a parser resource boundary. MathJax-generated DOM can also grow substantially. Export copies the DOM and computed styles and holds several representations in memory.
+
+Add limits before parsing/rendering, enforce height/output limits, and bound total work with worker CPU/memory limits. Reject oversized output before returning/caching it; checking cache weight after generation is too late.
+
+### 13. Deadlines, queues and work cancellation — open, high priority
+
+`ImageRendererService` uses `newSingleThreadExecutor`, whose queue is unbounded. HTML sanitization, external fetching and CSS parsing happen on the calling thread before submission, outside the render future timeout. Render waiting has a deadline and calls `task.cancel(true)`, but no supervisor kills/replaces a hung Chromium worker. A native stall can monopolize the single renderer and queue subsequent work.
+
+The stylesheet timer cancels HTTP requests and closes connections, but blocking system DNS and CSS parsing are not demonstrated to stop on that deadline. Formula rendering has no deadline (15).
+
+Use bounded admission/queues and fetch concurrency, reject overload, enforce an end-to-end budget including preparation, and have an independent supervisor forcibly terminate and recreate unhealthy workers. Java future cancellation alone is not that guarantee.
+
+### 14. Cache abuse and persistence — partially mitigated
+
+Caffeine has a configurable weight budget (1 GB by default), estimates string/key memory, shares generation for identical keys and does not cache failed generations. HTML keys include `presentation-policy-3`; formula keys have their own format/MathJax version. Expiry is 60 days **after access**, so repeated hits can extend residency.
+
+Unique cache misses still cause unbounded aggregate generation/preparation pressure, and cache weight does not cap transient or individual output allocation. Unsafe SVG can be retained. Add miss rate/admission limits and a per-artifact size limit, sanitize before storage, and change policy versions after output-security fixes. External stylesheet contents can change without a URL/key change; define refresh/TTL semantics if freshness matters. Current storage is in-memory; future persistence would require purge/quarantine support.
+
+### 15. Formula-only renderer abuse — open availability risk; host access restricted
+
+`FormulaSvgRenderer` passes formula text as a value rather than executable JavaScript and disables Java host access/class lookup. Those protections address direct host/script injection. `/img` uses neither Chromium nor external CSS fetching.
+
+Rendering is synchronized in one reused GraalJS context, with no formula size/work deadline, process-level memory/CPU boundary or final SVG validator. An expensive input can block other formula requests and consume API-process resources. Add input/output limits, supervised execution/isolation and the common output policy from 8. The MathJax TeX-link probe targeted the HTML renderer; it is not evidence of that exact payload working in ASCIIMath-only `/img`.
+
+### 16. Data exposure and supply chain — partially mitigated; ongoing operational work
+
+Endpoint logging records the request path, handler, status/error type and duration rather than query payloads. Cache logging uses hashed identities. Nevertheless, compressed permalinks and plain formula queries expose content to browser history, reverse-proxy/access logs and monitoring unless those systems redact them. Compression provides no confidentiality.
+
+Dependencies have declared versions, and browser installation uses the selected Playwright version. This reassessment did not perform a complete CVE scan or establish that dependencies are vulnerability-free. Establish automated dependency/browser advisory checks, reproducible artifact verification and timely updates. Use an immutable runtime image with browser binaries unwritable by the runtime account. Add referrer controls and document permalink privacy. If persistence is added, use server-generated identifiers, quotas, atomic writes and safe database/XML handling.
+
+## Recommended next work
+
+1. Fix confirmed generated-link handling and validate SVG before caching/delivery (8); update security cache versions.
+2. Bound decompression and all entry-point payloads, including `/decode` (11).
+3. Bound preparation/fetch/render admission, DOM/CSS/math complexity, output and height; supervise deadlines for both rendering paths (12–13, 15).
+4. Deploy a sandboxed unprivileged rendering worker with resource limits and OS egress restrictions (3–6). Keep the controlled CSS fetcher available outside its restricted network boundary.
+5. Finish delivery headers/origin isolation, cache-miss controls and operational patch/privacy policies (8, 14, 16).
+
+The target architecture remains an API, a controlled stylesheet fetcher and a restricted rendering worker. It preserves external styling while putting limits and independent validation around untrusted content.
