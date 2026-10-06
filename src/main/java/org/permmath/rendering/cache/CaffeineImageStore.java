@@ -28,12 +28,12 @@ public class CaffeineImageStore implements GeneratedImageStore {
                 // Conservative UTF-16 content estimate plus key and per-entry overhead.
                 .weigher((String key, String svg) -> (int) Math.min(Integer.MAX_VALUE,
                         2L * (key.length() + svg.length()) + 256))
-                .expireAfterWrite(properties.expireAfterWrite())
+                .expireAfterAccess(properties.expireAfterAccess())
                 .removalListener((String key, String svg, com.github.benmanes.caffeine.cache.RemovalCause cause) ->
                         log.debug("event=cache_removed key={} cause={}", key, cause))
                 .ticker(ticker).recordStats().build();
-        log.info("event=cache_initialized maximumBytes={} expireAfterWrite={}",
-                properties.maximumSize().toBytes(), properties.expireAfterWrite());
+        log.info("event=cache_initialized maximumBytes={} expireAfterAccess={}",
+                properties.maximumSize().toBytes(), properties.expireAfterAccess());
     }
 
     @Override

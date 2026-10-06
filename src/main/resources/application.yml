@@ -10,7 +10,7 @@ permmath:
     host: "http://localhost:8086"
     image-cache:
         maximum-size: 1GB
-        expire-after-write: 60d
+        expire-after-access: 60d
     rendering:
         browser-directory: .runtime/browsers
         timeout: 30s

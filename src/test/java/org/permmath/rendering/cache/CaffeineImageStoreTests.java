@@ -58,6 +58,25 @@ class CaffeineImageStoreTests {
     }
 
     @Test
+    void cacheHitsResetTheFullConfiguredTtl() throws Exception {
+        var time = new AtomicLong();
+        var store = store(65536, time);
+        assertEquals("original", store.getOrGenerate("key", () -> "original"));
+        time.set(Duration.ofMinutes(45).toNanos());
+        assertEquals("original", store.getOrGenerate("key", () -> {
+            throw new AssertionError("Entry should still be cached");
+        }));
+        // Beyond the original TTL, but within one TTL of the previous hit.
+        time.set(Duration.ofMinutes(90).toNanos());
+        assertEquals("original", store.getOrGenerate("key", () -> {
+            throw new AssertionError("Hit must extend expiry");
+        }));
+        time.set(Duration.ofMinutes(151).toNanos());
+        assertEquals("regenerated", store.getOrGenerate("key", () -> "regenerated"));
+        assertEquals(2, store.stats().loadSuccessCount());
+    }
+
+    @Test
     void oversizedImagesAreReturnedButNotRetained() throws Exception {
         var store = store(256, new AtomicLong());
         var calls = new AtomicInteger();

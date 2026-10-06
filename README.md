@@ -82,13 +82,14 @@ one generation. Errors are not cached. Entries disappear on service restart.
 permmath:
     image-cache:
         maximum-size: 1GB
-        expire-after-write: 60d
+        expire-after-access: 60d
 ```
 
 The memory budget uses an estimate of SVG string storage, keys and entry overhead;
 it is not a hard limit on total JVM memory or in-flight rendering. Caffeine evicts
 entries to stay within the budget. Images larger than the budget are returned but
-not retained. Expiry is measured from generation, so repeated reads do not extend it.
+not retained. Each cache hit resets the full configured TTL (60 days by default).
+Entries expire after that duration without access.
 External CSS and image resources are captured during generation; changes to those
 resources become visible after eviction, expiry or restart.
 

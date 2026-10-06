@@ -8,9 +8,9 @@ import org.springframework.util.unit.DataSize;
 @ConfigurationProperties("permmath.image-cache")
 public record ImageCacheProperties(
         @DefaultValue("1GB") DataSize maximumSize,
-        @DefaultValue("60d") Duration expireAfterWrite) {
+        @DefaultValue("60d") Duration expireAfterAccess) {
     public ImageCacheProperties {
-        if (maximumSize.toBytes() <= 0 || expireAfterWrite.isNegative() || expireAfterWrite.isZero()) {
+        if (maximumSize.toBytes() <= 0 || expireAfterAccess.isNegative() || expireAfterAccess.isZero()) {
             throw new IllegalArgumentException("Image cache size and expiry must be positive");
         }
     }
