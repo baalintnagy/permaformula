@@ -70,6 +70,27 @@ Simply send a GET request to the relevant endpoint with your desired parameters.
 
 Generate a permalink with /url, then request the returned link to render it.
 
+`/url` remains publicly available on the API origin. In Compose, permalinks point
+to the dedicated image origin: the API defaults to `http://localhost:5000`, images
+to `http://localhost:5001`. Existing API `/image` and `/img` links redirect there.
+The image listener exposes only those two endpoints and strips cookies and
+authorization; `/url`, `/decode` and Swagger stay on the API listener.
+
+Configure `permmath.host` for the API origin and `permmath.image-host` for the image
+origin (`PERMMATH_HOST` / `PERMMATH_IMAGE_HOST`). Origins must be HTTP(S), without
+credentials, a path, query or fragment; an explicitly configured image origin must
+differ from the API origin. Standalone/Eclipse development defaults image-host to
+host when omitted. Compose also enables `permmath.image-delivery.required`, so SVG
+handlers require the trusted image-ingress marker even if paths are normalized
+differently upstream. Keep the API container private.
+
+For production, configure HTTPS origins on different registrable domains and map
+each public host to its corresponding nginx listener. Localhost's different ports
+test origin separation but do not separate cookie scope. The image host must be
+anonymous, without sessions or shared application-domain cookies. Anonymous Swagger
+SVG reads allow CORS only from the configured API origin, without credentials.
+See [deployment configuration](docker/README.md) for listener mappings and tests.
+
 ## Getting Started for Developers
 
 ### Generated image caching

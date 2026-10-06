@@ -8,7 +8,8 @@ import org.boava.exception.LocalExceptionHandler;
 
 @EnableConfigurationProperties({PermMathProperties.class, org.permmath.rendering.RenderingProperties.class,
         org.permmath.rendering.cache.ImageCacheProperties.class, org.permmath.rendering.ApiWorkProperties.class,
-        org.permmath.rendering.StylesheetFetchProperties.class, org.permmath.ratelimit.ClientRateLimitProperties.class})
+        org.permmath.rendering.StylesheetFetchProperties.class, org.permmath.ratelimit.ClientRateLimitProperties.class,
+        org.permmath.delivery.ImageDeliveryProperties.class})
 @SpringBootApplication
 @Import(LocalExceptionHandler.class)
 public class PermMathApplication {

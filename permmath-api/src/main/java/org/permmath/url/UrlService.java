@@ -64,7 +64,7 @@ public class UrlService {
                         styleRefs,
                         style));
         return "%s/image?%s".formatted(
-                permMathProperties.host(),
+                permMathProperties.imageHost(),
                 "ubcq=" + encode(stringCompressionService.compress(imageJson), UTF_8));
     }
 

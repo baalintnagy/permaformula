@@ -4,7 +4,7 @@ Reviewed the current Maven modules, rendering policies, gRPC service and Docker 
 
 This is a source review with focused local rendering probes, not a penetration test, a full dependency vulnerability scan or verification of production infrastructure. Deployment controls outside this repository remain unverified. Previous browser-enabled Maven verification: 111 tests, 110 passed and one opt-in Swagger UI test skipped, including output-policy and response-header regressions. Existing coverage includes gRPC transport/cancellation, correlation and supervised process termination/recovery. Styled SVG is also checked visually and in Chromium both as an image and as a document with the delivery CSP.
 
-The submitted HTML/CSS execution paths have been substantially hardened, and external styles remain supported through controlled fetching. Generated SVG passes an independent API-side presentation policy before caching or delivery. Decompression/endpoint payload limits (11), parser/render budgets (12), per-client request/cache-miss controls (13–14) and Compose's independent stylesheet egress boundary (3) are implemented. Next priorities are **delivery-origin isolation and production verification**; non-cooperative API work still needs consideration (13).
+The submitted HTML/CSS execution paths have been substantially hardened, and external styles remain supported through controlled fetching. Generated SVG passes an independent API-side presentation policy before caching or delivery. Decompression/endpoint payload limits (11), parser/render budgets (12), per-client request/cache-miss controls (13–14), separate image delivery in Compose (8) and Compose's independent stylesheet egress boundary (3) are implemented. Next priorities are **production verification and operational patch/privacy controls**; non-cooperative API work still needs consideration (13).
 
 ## Findings
 
@@ -95,7 +95,34 @@ The template loads `tex-svg.js` as well as ASCIIMath, so TeX processing remains 
 
 Both `/image` and `/img` return restrictive sandbox CSP, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. CSP permits embedded presentation styles while denying scripts, external resources, connections, frames and objects. Both cache identities include the new output-policy version; failed validation is not cached. Regression coverage includes forged renderer output, namespaces, active features, CSS URI escapes, XML entities, limits and delivery headers.
 
-A dedicated delivery origin without application cookies remains a deployment improvement. Headers do not accompany downloaded/inline SVG everywhere, so maintain the independent byte-level policy and bump its version when changed. This is a presentation subset, not support for arbitrary active SVG. [MathJax safe-extension documentation](https://docs.mathjax.org/en/v3.2/options/safe.html).
+Compose now supplies a dedicated anonymous image listener. `permmath.image-host`
+controls generated permalink origins independently of the public API host.
+`/url`, `/decode` and Swagger remain publicly available on the API listener;
+existing API `/image` and `/img` URLs redirect with HTTP 307 and preserve raw queries.
+Only those two image routes allow GET/HEAD/OPTIONS on the image listener; other
+routes/methods fail closed. Native nginx strips Cookie/Authorization/Proxy-Authorization
+requests and hides Set-Cookie/WWW-Authenticate responses. Only the configured API
+origin gets anonymous image CORS read access; credentialed CORS is not enabled.
+OpenAPI uses the configured API origin in protected mode, supporting upstream TLS.
+
+Compose requires a separate image origin and trusted ingress configuration.
+Spring MVC checks the selected SVG handler for a marker written only by the trusted
+image ingress, so permissive path normalization or forged client headers cannot
+return SVG through the API delivery path. The API listener removes that marker;
+the image listener overwrites it. Direct untrusted access redirects before input
+decoding/rendering, including matrix-parameter image paths. The backend remains
+private and both listeners share the existing client quotas and deadlines.
+
+Production must map two HTTPS origins on different registrable domains to their
+respective listeners and keep the image host anonymous without shared application
+cookies. Default localhost ports test origin separation but cannot isolate cookie
+scope. Domains, certificates, TLS ingress and production cookie policies are not
+provisioned or verified here. Standalone/Eclipse mode retains the single-origin
+fallback unless explicitly configured and does not provide independent delivery
+isolation. Headers do not accompany downloaded/inline SVG everywhere, so maintain
+the independent byte-level policy and bump its version when changed. This is a
+presentation subset, not support for arbitrary active SVG.
+[MathJax safe-extension documentation](https://docs.mathjax.org/en/v3.2/options/safe.html).
 
 The HTML exporter now uses pinned html-to-image 1.11.13, built into a local bundle.
 Its source adapter handles dimensions, disables font embedding and removes stylesheet
@@ -329,11 +356,32 @@ configurations and `git diff --check` passed. Temporary test containers/networks
 were removed. Production peer identity, NAT policy and replica-wide quotas still
 require deployment-specific verification. The work queue remains a TODO.
 
+## Image-origin delivery verification
+
+Browser-enabled Maven verification after the boundary/OpenAPI changes passed:
+189 tests, 188 passed and one opt-in Swagger UI test skipped. New configuration
+and MVC regressions cover origin validation, raw redirect queries, public permalink
+creation, trusted/forged/duplicate markers, matrix-parameter paths, required startup
+configuration and retained SVG/OpenAPI headers.
+
+The separate Compose deployment passed delivery and egress smoke tests: image-only
+routes, method/CORS restrictions, cross-origin legacy redirects, public `/url`,
+actual SVG headers, Bootstrap styling and independent egress restrictions. A native
+nginx upstream fixture confirms credential-header removal and response-cookie
+suppression on both image endpoints. An additional opt-in Chromium integration
+test passed against the running deployment: anonymous API-to-image fetches render
+formula and HTML SVG, while credentialed cross-origin reads are rejected by the
+browser. Direct private-API probes reject forged markers and matrix-parameter
+paths; the existing rate-limit smoke test also passes after cross-origin redirects,
+including cached SVG availability. Compose validation and `git diff --check` pass;
+temporary fixtures and the test deployment were removed. This verifies local two-origin behavior; production domain/cookie/TLS
+isolation still requires deployment-specific checks. The work queue remains a TODO.
+
 ## Recommended next work
 
 1. Maintain decompression and endpoint validation regressions (11); individual payload limits are implemented.
 2. Maintain the implemented DOM/CSS/math and dimension budgets (12); non-cooperative API work may need process isolation (13). TODO: Add a bounded work queue with configurable capacity/wait limits, cancellation, the existing end-to-end deadline, and cache-hit bypass of queued generation. Keep immediate rejection when the queue is full.
 3. Verify isolated renderer and implemented API/proxy network controls on production hosts (3–6); maintain proxy ACL/package regressions.
-4. Add delivery-origin isolation and operational patch/privacy policies (8, 16); define external-style freshness semantics and shared rate-limit state if replicas are deployed (13–14).
+4. Verify the implemented delivery-origin boundary with production domains/cookies/TLS and maintain operational patch/privacy policies (8, 16); define external-style freshness semantics and shared rate-limit state if replicas are deployed (13–14).
 
 The target architecture remains an API, a controlled stylesheet fetcher and a restricted rendering worker. It preserves external styling while putting limits and independent validation around untrusted content.

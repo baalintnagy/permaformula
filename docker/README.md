@@ -1,6 +1,6 @@
 # Container deployment
 
-Run `docker compose up --build -d` from the repository root with Docker's Linux engine running. The API is exposed on `127.0.0.1:5000`. Set `PORT` for a different host port and `PERMMATH_HOST` to the public origin used in permalinks. Public deployment needs a TLS reverse proxy and ingress/admission controls.
+Run `docker compose up --build -d` from the repository root with Docker's Linux engine running. The public API is exposed on `127.0.0.1:5000`; anonymous images on `127.0.0.1:5001`. Set `PORT` / `IMAGE_PORT` for different local ports and `PERMMATH_HOST` / `PERMMATH_IMAGE_HOST` for their public origins. Public deployment needs TLS termination for both hosts.
 
 ## Four services
 
@@ -9,7 +9,48 @@ The Maven build verifies all four modules. Docker builds separate targets:
 - `runtime`: Spring API, UID/GID 10001, no Chromium or GraalJS. Fetches and sanitizes external CSS, prepares HTML, caches SVG and serves HTTP.
 - `renderer`: gRPC service, UID/GID 10002, Chromium and GraalJS. Runs both HTML and formula jobs in disposable JVMs. Contains no API application or credentials.
 - `stylesheet-egress`: Squid 7 from Alpine packages, running as `squid`. Its native ACLs allow CONNECT to public port 443 and reject internal, metadata, reserved and transition addresses, including any blocked answer in a mixed DNS result. No port is published, no TLS interception or content cache is used, and access logging is disabled.
-- `ingress`: nginx from Alpine packages, running as `nginx`. Publishes the existing localhost HTTP port and forwards only to the API. Access logging is disabled to avoid recording formula/permalink queries. Proxy response timeouts are 65 seconds, beyond the API's 60-second deadline; SVG headers are preserved.
+- `ingress`: nginx from Alpine packages, running as `nginx`. Publishes separate API/image listeners and forwards only to the private API. Access logging is disabled to avoid recording formula/permalink queries. Proxy response timeouts are 65 seconds, beyond the API's 60-second deadline; SVG headers are preserved.
+
+## Image delivery origins
+
+The API listener is nginx port 8080: public `/url`, `/decode`, Swagger UI and
+OpenAPI remain available. `/url` returns links on the configured image origin.
+Existing `/image` and `/img` API URLs redirect with HTTP 307 and preserve the raw
+query. Other API routes fail 404 rather than passing arbitrary paths upstream.
+The image listener is nginx port 8081: only exact `/image` and `/img` routes allow
+GET/HEAD, plus OPTIONS for anonymous CORS reads. Other routes fail 404 and other
+methods fail 403. Cookie, Authorization and Proxy-Authorization request headers
+are removed, and Set-Cookie/WWW-Authenticate responses are hidden. SVG CSP,
+nosniff and referrer policy pass through unchanged.
+
+Production configuration must use HTTPS origins on different registrable domains,
+for example `PERMMATH_HOST=https://math.example.com` and
+`PERMMATH_IMAGE_HOST=https://math-images.example.net`. Map the first TLS host only
+to localhost `PORT` and the second only to localhost `IMAGE_PORT`. Do not expose
+the API container directly or route either host to both listeners. Do not add
+authentication, sessions or shared cookie scope to the image host. Localhost ports
+are distinct origins for testing, but cookies do not distinguish ports; deployment
+on separate domains is still required for cookie isolation. The repository does
+not provision domains, certificates or production TLS ingress.
+
+Compose enables `PERMMATH_IMAGE_DELIVERY_REQUIRED=true`. Spring MVC checks the
+selected SVG handler for the image-ingress marker, independently of path spelling
+or normalization. Only configured trusted ingress IPs may supply that marker;
+nginx overwrites it on image requests and removes it on API requests. Missing or
+forged markers redirect to the image origin before input decoding/rendering.
+Startup requires a separate image origin and trusted proxy when this control is
+enabled. Standalone/Eclipse mode defaults it to false and defaults image-host to
+host; it supplies no independent delivery-origin guarantee. Never disable it in
+the protected deployment.
+
+Anonymous image CORS reads allow only `PERMMATH_HOST`, with GET/HEAD/OPTIONS and
+no Access-Control-Allow-Credentials. This preserves Swagger rendering after the
+cross-origin redirect. OpenAPI uses the configured public API origin in protected
+mode, rather than inferring HTTPS from private HTTP. Other sites can embed SVG as
+images but do not receive arbitrary cross-origin JavaScript read access.
+nginx configuration uses gettext's `envsubst` for these two deployment origins
+only, writing the rendered config into its private tmpfs; native nginx variables
+and immutable source includes are preserved.
 
 The renderer has `network_mode: none`. gRPC uses Netty's Unix-domain socket transport with generated Protocol Buffers on `/run/permmath/render.sock`. The named volume contains only the socket; it is writable in the renderer and read-only in the API. Directory mode 0750 and socket mode 0660 restrict access to renderer group 10002, which is a supplementary API group. Do not mount this volume into other workloads. Plaintext gRPC is confined to this filesystem boundary; neither a renderer TCP port nor host socket is exposed.
 
@@ -105,7 +146,7 @@ Remote TCP deployment requires its own private network, authentication, egress a
 
 Inspect the renderer with `docker inspect`: NetworkMode must be `none`, user 10002, read-only root, resource limits and security options present. `/proc/net/dev` should contain only loopback. Application/browser files must be unwritable. Chromium must launch without `--no-sandbox` and with seccomp active. Repeat these checks on production hosts after runtime upgrades.
 
-For the independent egress smoke test, start a separate project on port 5017:
+For the independent egress smoke test, start a separate project on ports 5017/5018:
 
 ```powershell
 docker compose --env-file docker/egress/smoke.env -p permmath-egress-smoke up --build -d
@@ -133,6 +174,30 @@ The script checks HTTP 429 headers, continued cached SVG access after render-tok
 exhaustion and that changing incoming forwarding headers cannot grant another
 allowance. The egress and rate-limit projects use the same test port/subnet; shut
 down one before starting the other.
+
+For delivery-origin verification, use a fresh project with the normal quotas:
+
+```powershell
+docker compose --env-file docker/egress/smoke.env -p permmath-delivery-smoke up --build -d
+./scripts/test-image-delivery.ps1
+docker compose --env-file docker/egress/smoke.env -p permmath-delivery-smoke down --volumes
+```
+
+This checks public permalink creation, cross-origin redirects, route/method/CORS
+restrictions, actual SVG headers and forged markers against the private API. A native nginx upstream fixture also checks
+which Cookie/Authorization/Proxy-Authorization headers reach the upstream and
+that Set-Cookie is suppressed on both image endpoints. Fixture ports are ephemeral
+and fixtures are removed on completion; shut down the main test project yourself.
+
+While that deployment is running, the opt-in Chromium regression also verifies
+anonymous API-to-image fetches and rejection of credentialed cross-origin reads:
+
+```powershell
+mvn -o -pl permmath-api -am "-Dtest=ImageDeliveryBrowserTests" "-Dsurefire.failIfNoSpecifiedTests=false" "-Ddelivery.tests=true" test
+```
+
+Override `delivery.api-url` / `delivery.image-url` for other test origins. Run smoke
+scripts and browser probes sequentially: the renderer still admits one job at a time.
 
 The socket healthcheck verifies listener-file presence for startup ordering; it is not a render probe. Monitor render latency/errors/restarts separately. After an abnormal shutdown a stale socket is removed on restart. Use `docker compose down --volumes` to remove this deployment's transient socket volume.
 

@@ -39,6 +39,7 @@ public class PermMathController {
             description = "Pass an uncompressed plain ASCIIMath formula without HTML or backtick delimiters. Dimensions follow the formula; styling and layout options are not supported. "
                     + "Returns a standalone SVG with embedded glyph paths. No browser is launched.")
     @GetMapping(path = "/img", produces = "image/svg+xml")
+    @org.permmath.delivery.ImageDelivery
     public ResponseEntity<String> getImg(
             @Parameter(description = "Plain ASCIIMath formula, URL-encoded as a query parameter", example = "sqrt(x^2 + y^2)")
             @NotBlank @RequestParam String formula) throws IOException {
@@ -74,6 +75,7 @@ public class PermMathController {
                 using Chromium. Returns SVG with styled HTML inside foreignObject \
                 and math glyphs as vector paths. Intended for browsers; use /img for standalone formula SVG.""")
     @GetMapping(value = "/image", produces = "image/svg+xml")
+    @org.permmath.delivery.ImageDelivery
     public ResponseEntity<String> getImage(
             @Parameter(description = "Compressed descriptor from the ubcq parameter of a /url permalink. Paste the decoded parameter value into Swagger; it handles URL encoding.",
                     example = "H4sIAAAAAAACCqtWSssvKs3NSVSyUkqoiDNKUNJRysxNTE8Nz0wpyVCyMjIyqAUAxqPtbyQAAAA=")
