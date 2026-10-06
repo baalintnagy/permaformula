@@ -48,8 +48,8 @@ no Access-Control-Allow-Credentials. This preserves Swagger rendering after the
 cross-origin redirect. OpenAPI uses the configured public API origin in protected
 mode, rather than inferring HTTPS from private HTTP. Other sites can embed SVG as
 images but do not receive arbitrary cross-origin JavaScript read access.
-nginx configuration uses gettext's `envsubst` for these two deployment origins
-only, writing the rendered config into its private tmpfs; native nginx variables
+nginx configuration uses gettext's `envsubst` for an explicit list of deployment origins
+and ingress limits, writing the rendered config into its private tmpfs; native nginx variables
 and immutable source includes are preserved.
 
 The renderer has `network_mode: none`. gRPC uses Netty's Unix-domain socket transport with generated Protocol Buffers on `/run/permmath/render.sock`. The named volume contains only the socket; it is writable in the renderer and read-only in the API. Directory mode 0750 and socket mode 0660 restrict access to renderer group 10002, which is a supplementary API group. Do not mount this volume into other workloads. Plaintext gRPC is confined to this filesystem boundary; neither a renderer TCP port nor host socket is exposed.
@@ -102,6 +102,46 @@ load balancer/NAT must preserve client IPs or have an explicitly reviewed nginx
 real-IP configuration; arbitrary incoming forwarded headers are never appended.
 
 ## Execution limits
+
+### Ingress connections and slow clients
+
+Native nginx connection accounting is shared across both listeners and uses the
+socket client address, ignoring supplied forwarding headers. Overload returns
+HTTP 429 with `Retry-After: 1`; anonymous image CORS headers remain present.
+These environment variables configure the ingress container:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `PERMMATH_INGRESS_CLIENT_CONNECTIONS` | 64 | Active requests per socket client IP across both listeners |
+| `PERMMATH_INGRESS_TOTAL_CONNECTIONS` | 128 | Active requests across both listeners |
+| `PERMMATH_INGRESS_HEADER_TIMEOUT_SECONDS` | 15 | Time to finish the complete request header |
+| `PERMMATH_INGRESS_BODY_TIMEOUT_SECONDS` | 30 | Idle time between request-body reads |
+| `PERMMATH_INGRESS_SEND_TIMEOUT_SECONDS` | 30 | Idle time between response writes to the client |
+| `PERMMATH_INGRESS_KEEPALIVE_TIMEOUT_SECONDS` | 15 | Idle time between keepalive requests |
+
+Values must be positive decimal integers without leading zeros; invalid settings
+fail startup. Keepalive connections are recycled after 1,000 requests. Request
+bodies are capped at 8 MiB; the existing two 12 MiB large-header buffers preserve
+the generous permalink/request-line allowance. Upstream read/write timeouts remain
+65 seconds, allowing the API's 60-second deadline to finish; client write timeout
+is an idle timeout and does not impose a 30-second total render deadline.
+
+The single worker's 256 socket slots also include upstream sockets and idle or
+incomplete-header clients. Native `limit_conn` counts only requests whose headers
+are complete; header timeout closes partial requests but does not prevent a flood
+of new sockets or simultaneous large-header allocations. With the retained large
+URI allowance, the 256 MiB container can still exhaust memory before all socket
+slots fill. Production TLS/front-door infrastructure must additionally bound
+connections before header parsing and apply a header-memory budget. Body/write
+timeouts are idle limits, so trickling traffic can retain a counted slot. These
+controls bound admitted concurrency and idle waits, not distributed DoS. NAT or
+a load balancer hiding source IPs shares the per-client allowance; review real-IP
+trust at the front door before deployment. Raising concurrency also requires
+reviewing worker socket capacity and container memory.
+
+Run `./scripts/test-ingress-limits.ps1` after `docker compose build ingress` to
+exercise the production image with short test-only limits and native nginx
+upstreams. The script creates and removes its own containers/network.
 
 `RENDERER_CONCURRENCY` defaults to 1. There is no rendering queue: occupied capacity returns gRPC RESOURCE_EXHAUSTED, exposed as HTTP 503. Both render paths have a 30-second maximum (`RENDERER_TIMEOUT_SECONDS`), further restricted by the API RPC deadline (`PERMMATH_RENDERING_TIMEOUT`, default 30s). The supervisor terminates job descendants on cancellation, timeout or failure. Fatal jobs cause service exit and Compose restarts the container, clearing its PID namespace, including orphan native processes. A supervisor is required when running outside Compose.
 

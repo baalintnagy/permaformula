@@ -253,7 +253,8 @@ Worker interruption and network/gRPC cancellation are attempted on timeout. Slot
 are released only after the operation exits, so non-cooperative DNS/parsers cannot
 create unlimited lingering tasks through repeated timeouts. They can still retain
 slots and consume CPU within the API JVM; stronger termination guarantees require
-process isolation. Proxy connection limits and response delivery remain open.
+process isolation. Native ingress connection and idle-delivery controls are now
+implemented as described below; pre-header flood protection remains a deployment requirement.
 Compose's independent API egress
 restrictions are implemented under 3.
 
@@ -385,3 +386,30 @@ isolation still requires deployment-specific checks. The work queue remains a TO
 4. Verify the implemented delivery-origin boundary with production domains/cookies/TLS and maintain operational patch/privacy policies (8, 16); define external-style freshness semantics and shared rate-limit state if replicas are deployed (13–14).
 
 The target architecture remains an API, a controlled stylesheet fetcher and a restricted rendering worker. It preserves external styling while putting limits and independent validation around untrusted content.
+
+### Ingress connection and slow-client controls
+
+The nginx ingress now uses native shared connection zones across the API and
+image listeners: 64 active requests per socket client IP and 128 total by default.
+Client-supplied forwarding headers cannot change the quota key. Excess admitted
+requests return 429 with Retry-After: 1, retaining image CORS headers. Header
+completion is bounded to 15 seconds; body-read and client-response-write idle
+limits are 30 seconds, and idle keepalive closes after 15 seconds. Limits are
+configurable via PERMMATH_INGRESS_* settings documented in docker/README.md;
+non-positive/non-integer settings fail startup. Existing large permalink headers
+and the API's 60-second processing deadline remain supported. No work queue was added.
+
+Residual: nginx limit_conn starts accounting only after complete headers. Partial
+headers expire, but fast connection floods and concurrent large header allocations
+can still exhaust ingress sockets/memory (the retained two 12 MiB header buffers
+can exceed the 256 MiB container budget in aggregate). Production front-door/TLS
+infrastructure must enforce connection admission before HTTP header parsing and
+budget header memory. Idle body/write deadlines do not terminate traffic that
+continues making progress. NAT/replicas require deployment-specific quota review.
+
+Validation: the production ingress image passed native Docker smoke coverage for
+an 11 MiB request line, 8 MiB body cap, shared per-client and total connection
+limits, spoofed forwarded headers, Retry-After/image CORS, header/body/keepalive
+and slow-response-reader deadlines, recovery and invalid configuration rejection.
+Compose validation and git diff whitespace checks passed. Test-only containers
+and networks were removed; no production deployment was performed.
