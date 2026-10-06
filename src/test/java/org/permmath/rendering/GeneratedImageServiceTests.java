@@ -32,12 +32,12 @@ class GeneratedImageServiceTests {
     }
 
     @Test
-    void formulaIgnoresUnusedLayoutOptionsAndDoesNotCollideWithHtml() throws Exception {
+    void formulaCachesExactContentAndDoesNotCollideWithHtml() throws Exception {
         when(formula.render("x")).thenReturn("formula-svg");
         when(html.getImage(any())).thenReturn(resource("html-svg"));
         var service = service(800);
-        assertEquals("formula-svg", service.getImg(new ImageDescriptor("x", null, null, null)));
-        assertEquals("formula-svg", service.getImg(new ImageDescriptor("x", 640, List.of("external.css"), "red")));
+        assertEquals("formula-svg", service.getImg("x"));
+        assertEquals("formula-svg", service.getImg("x"));
         assertEquals("html-svg", service.getImage(new ImageDescriptor("x", null, null, null)));
         verify(formula, times(1)).render("x");
     }

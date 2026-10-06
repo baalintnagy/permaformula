@@ -14,10 +14,10 @@ MathRenderAPI generates SVG images from compressed formula and styled HTML descr
 |---|---|
 | `GET /url?formula=...` | Generate a compressed permalink. Optional `imageWidth`, `style`, and repeated `styleRefs` parameters. |
 | `GET /image?ubcq=...` | Render compressed styled HTML with backtick-delimited ASCIIMath as SVG. |
-| `GET /img?ubcq=...` | Render the compressed descriptor's plain ASCIIMath formula as standalone SVG, without a browser. |
+| `GET /img?formula=...` | Render an uncompressed plain ASCIIMath formula as standalone SVG, without a browser. |
 | `GET /decode?ubcq=...` | Decode a compressed payload into its JSON descriptor. |
 
-All rendering requests use `ubcq`: a GZIP-compressed UTF-8 JSON image descriptor,
+`/image` and `/decode` use `ubcq`: a GZIP-compressed UTF-8 JSON image descriptor,
 Base64-encoded and URL-encoded. `/url` always generates this format, including
 for short formulas. The `compressUrlQuery` option and uncompressed input modes
 have been removed. `/image` and `/decode` require `ubcq`; the former
@@ -25,22 +25,25 @@ have been removed. `/image` and `/decode` require `ubcq`; the former
 
 ### Formula-only SVG: `/img`
 
-Generate a payload using `/url`, then use the returned query string with `/img`
-instead of `/image`. Supply plain ASCIIMath without HTML or backtick delimiters:
+Send plain ASCIIMath directly, without HTML or backtick delimiters:
 
 ```sh
-link=$(curl --get --data-urlencode 'formula=sqrt(x^2 + y^2)' http://localhost:8086/url)
-curl "http://localhost:8086/img?${link#*\?}" --output formula.svg
+curl --get --data-urlencode 'formula=sqrt(x^2 + y^2)' http://localhost:8086/img --output formula.svg
 ```
 
-The substitution above uses Bash. The `ubcq` query parameter is identical for both
-rendering endpoints. `/img` uses only the descriptor's `forumla` field; width and
-style options apply to `/image`. The expression determines its natural dimensions.
-The historical `forumla` JSON spelling is retained for compressed payload compatibility.
+`/img` accepts only a required `formula` parameter. The formula determines its
+natural dimensions; there are no width or styling options. The former compressed
+`ubcq` input is no longer supported by this endpoint. `/url` continues to generate
+compressed permalinks for `/image`.
 
 Response: `200 OK`, `Content-Type: image/svg+xml`. The standalone formula SVG
 contains embedded glyph paths and can be used as an HTML image source. Missing
-payloads, invalid compression, or blank formulas return `400 Bad Request`.
+or blank formulas return `400 Bad Request`. Query parameters must still be
+URL-encoded, including literal `+` characters.
+
+Formula, HTML, CSS and stylesheet references are preserved without whitespace
+normalization. The historical `forumla` JSON spelling remains in compressed
+payloads for `/image` and `/decode`.
 
 This endpoint runs bundled MathJax 3.2.2 with its lightweight DOM adapter in
 GraalJS inside the JVM. It launches neither Chromium nor JavaFX and needs no

@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Objects;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
 import org.permmath.PermMathProperties;
 import org.permmath.rendering.cache.GeneratedImageStore;
 import org.permmath.url.ImageDescriptor;
@@ -47,12 +48,11 @@ public class GeneratedImageService {
         });
     }
 
-    public String getImg(@NotNull ImageDescriptor descriptor) throws IOException {
-        if (descriptor.forumla().isBlank()) throw new IllegalArgumentException("Formula must not be blank");
-        // Layout and CSS do not affect the formula-only renderer.
-        var effective = new ImageDescriptor(descriptor.forumla(), null, null, null);
-        return store.getOrGenerate(key("formula-svg-v1:mathjax-3.2.2", effective),
-                () -> formulaRenderer.render(effective.forumla()));
+    public String getImg(@NotBlank String formula) throws IOException {
+        if (formula == null || formula.isBlank()) throw new IllegalArgumentException("Formula must not be blank");
+        var identity = new ImageDescriptor(formula, null, null, null);
+        return store.getOrGenerate(key("formula-svg-v1:mathjax-3.2.2", identity),
+                () -> formulaRenderer.render(formula));
     }
 
     private String key(String format, ImageDescriptor descriptor) throws IOException {

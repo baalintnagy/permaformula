@@ -75,10 +75,10 @@ class PermMathControllerTests {
 
     @Test
     void generatedLinksPassTheSameContentToRenderer() throws Exception {
-        String formula = "<p>`α + β = 50% & x # y?`</p>";
+        String formula = "  <pre>α\n\t +  β = 50% & x # y?</pre>  ";
         List<String> refs = List.of("https://example.com/a.css?q=a+b%20c&v=1",
                 "https://example.com/b.css");
-        String style = "p { width: 50%; }";
+        String style = "\npre::before { content: 'a  b'; }\n\tpre { width: 50%; }  ";
         String image = "<svg>α</svg>";
         when(renderer.getImage(any())).thenReturn(image);
 
@@ -96,12 +96,23 @@ class PermMathControllerTests {
     }
 
     @Test
-    void generatedLinksOmitAbsentOptionsAndNormalizeWhitespace() throws Exception {
+    void generatedLinksPreserveWhitespaceExactly() throws Exception {
         when(renderer.getImage(any())).thenReturn("<svg/>");
         String link = urlService.getImageUrl("x\n\t +   y", null, List.of(), " \n ");
 
         mvc.perform(followLink(link)).andExpect(status().isOk());
-        verify(renderer).getImage(new ImageDescriptor("x + y", null, null, null));
+        verify(renderer).getImage(new ImageDescriptor("x\n\t +   y", null, null, " \n "));
+    }
+
+    @Test
+    void formulaEndpointPassesUncompressedFormulaExactly() throws Exception {
+        String formula = "  x\n\t +   y = 50% & z # w?  ";
+        when(renderer.getImg(formula)).thenReturn("<svg/>");
+        mvc.perform(get("/img").param("formula", formula))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("image/svg+xml"))
+                .andExpect(content().string("<svg/>"));
+        verify(renderer).getImg(formula);
     }
 
     @Test

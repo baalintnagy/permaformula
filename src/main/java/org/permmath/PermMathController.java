@@ -37,27 +37,26 @@ public class PermMathController {
     private GeneratedImageService generatedImageService;
 
     @Operation(summary = "Render a single ASCIIMath formula as SVG",
-            description = "Pass a compressed image descriptor in ubcq. Its forumla field must contain plain ASCIIMath without HTML or backtick delimiters. "
+            description = "Pass an uncompressed plain ASCIIMath formula without HTML or backtick delimiters. Dimensions follow the formula; styling and layout options are not supported. "
                     + "Returns a standalone SVG with embedded glyph paths. No browser is launched.")
     @GetMapping(path = "/img", produces = "image/svg+xml")
     public ResponseEntity<String> getImg(
-            @Parameter(description = "GZIP/Base64 image descriptor, URL-encoded as a query parameter")
-            @NotBlank @RequestParam String ubcq) throws IOException {
-        var descriptor = urlService.decodeUbcq(ubcq);
+            @Parameter(description = "Plain ASCIIMath formula, URL-encoded as a query parameter", example = "sqrt(x^2 + y^2)")
+            @NotBlank @RequestParam String formula) throws IOException {
         return ok().contentType(org.springframework.http.MediaType.parseMediaType("image/svg+xml;charset=UTF-8"))
-                .body(generatedImageService.getImg(descriptor));
+                .body(generatedImageService.getImg(formula));
     }
 
     @Operation(summary = "Create a compressed image permalink",
             description = "Serializes the content and optional layout settings into a UTF-8 JSON descriptor, "
                     + "compresses it with GZIP and Base64, and returns an /image?ubcq=... permalink. "
-                    + "No rendering is performed. For formula-only SVG, supply plain ASCIIMath and use the returned query with /img.")
+                    + "No rendering is performed. For formula-only SVG, call /img directly with its formula parameter.")
     @GetMapping(path = "/url", produces = { TEXT_PLAIN_VALUE, APPLICATION_JSON_VALUE })
     public String getUrl(
-            @Parameter(description = "HTML content with backtick-delimited ASCIIMath for /image, or plain ASCIIMath for /img",
+            @Parameter(description = "HTML content with backtick-delimited ASCIIMath for /image",
                     example = "<p>`sqrt(x^2 + y^2)`</p>")
             @NotBlank @RequestParam String formula,
-            @Parameter(description = "HTML layout width in CSS pixels, from 220 to 4000. Defaults to the configured width (800 by default). Ignored by /img.", example = "800")
+            @Parameter(description = "HTML layout width in CSS pixels, from 220 to 4000. Defaults to the configured width (800 by default).", example = "800")
             @Nullable @ValidImageWidth @RequestParam(required = false) Integer imageWidth,
             @Parameter(description = "External stylesheet URLs in application order. Repeat this parameter for multiple stylesheets. Used by /image.",
                     example = "[\"https://example.com/formula.css\"]")

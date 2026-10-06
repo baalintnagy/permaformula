@@ -20,8 +20,6 @@ class PermMathApplicationTests {
     @Autowired
     private MockMvc mvc;
 
-    @Autowired
-    private org.permmath.url.UrlService urlService;
 
 	@Test
 	void contextLoads() {
@@ -106,7 +104,7 @@ class PermMathApplicationTests {
 
     @Test
     void formulaEndpointReturnsSvgWithoutStartingABrowser() throws Exception {
-        mvc.perform(get("/img").param("ubcq", formulaPayload("sqrt(x^2 + y^2)")))
+        mvc.perform(get("/img").param("formula", "sqrt(x^2 + y^2)"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith("image/svg+xml"))
                 .andExpect(content().string(org.hamcrest.Matchers.startsWith("<svg")));
@@ -114,8 +112,7 @@ class PermMathApplicationTests {
 
     @Test
     void blankFormulaEndpointInputReturnsProblem() throws Exception {
-        mvc.perform(get("/img").param("ubcq", new org.permmath.compression.StringCompressionService()
-                .compress("{\"forumla\":\" \"}")))
+        mvc.perform(get("/img").param("formula", " "))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith("application/problem+json"));
     }
@@ -133,18 +130,13 @@ class PermMathApplicationTests {
         mvc.perform(get("/decode").param("url", "http://localhost/image?formula=x")).andExpect(status().isBadRequest());
         mvc.perform(get("/image-cq")).andExpect(status().isNotFound());
         mvc.perform(get("/decode-cq")).andExpect(status().isNotFound());
-        mvc.perform(get("/img").param("formula", "x")).andExpect(status().isBadRequest());
+        mvc.perform(get("/img").param("ubcq", "legacy-payload")).andExpect(status().isBadRequest());
         mvc.perform(get("/v3/api-docs"))
                 .andExpect(jsonPath("$.paths['/image']").exists())
                 .andExpect(jsonPath("$.paths['/decode']").exists())
                 .andExpect(jsonPath("$.paths['/image-cq']").doesNotExist())
                 .andExpect(jsonPath("$.paths['/decode-cq']").doesNotExist())
                 .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("compressUrlQuery"))));
-    }
-
-    private String formulaPayload(String formula) throws Exception {
-        var query = java.net.URI.create(urlService.getImageUrl(formula, null, null, null)).getRawQuery();
-        return java.net.URLDecoder.decode(query.substring("ubcq=".length()), java.nio.charset.StandardCharsets.UTF_8);
     }
 
 }
