@@ -164,6 +164,11 @@ and keep MathJax formulas as vector paths. They are intended for browsers;
 SVG tools that do not support `foreignObject` should use `/img` for individual
 formulas. Ordinary HTML text still uses the viewer's fonts.
 
+Styled HTML export uses bundled html-to-image 1.11.13 through the small source
+adapter in `tools/svg/export-styled-svg.js`. Node.js is needed only to rebuild
+the checked-in bundle. The exporter copies computed styles and retains nested
+MathJax SVG; browser network guards and API-side SVG validation still apply.
+
 Both renderers enable MathJax's safe extension. The API independently validates
 SVG before caching or serving it, using secure JDK StAX XML parsing, OWASP URL
 filtering and ph-css. The presentation policy preserves computed styles,

@@ -2,13 +2,16 @@
   "name": "permmath-svg-bundle",
   "private": true,
   "scripts": {
-    "build": "esbuild renderer.js --bundle --format=iife --global-name=PermMathSvg --platform=browser --define:global=globalThis --outfile=../../renderer-core/src/main/resources/svg/renderer.js"
+    "build": "npm run build:formula && npm run build:html",
+    "build:formula": "esbuild renderer.js --bundle --format=iife --global-name=PermMathSvg --platform=browser --define:global=globalThis --outfile=../../renderer-core/src/main/resources/svg/renderer.js",
+    "build:html": "esbuild export-styled-svg.js --bundle --format=iife --platform=browser --outfile=../../renderer-core/src/main/resources/export-svg.js"
   },
   "overrides": {
     "@xmldom/xmldom": "0.9.12"
   },
   "devDependencies": {
     "esbuild": "0.25.12",
+    "html-to-image": "1.11.13",
     "mathjax-full": "3.2.2"
   }
 }

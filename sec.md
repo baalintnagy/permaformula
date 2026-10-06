@@ -66,6 +66,15 @@ Both `/image` and `/img` return restrictive sandbox CSP, `X-Content-Type-Options
 
 A dedicated delivery origin without application cookies remains a deployment improvement. Headers do not accompany downloaded/inline SVG everywhere, so maintain the independent byte-level policy and bump its version when changed. This is a presentation subset, not support for arbitrary active SVG. [MathJax safe-extension documentation](https://docs.mathjax.org/en/v3.2/options/safe.html).
 
+The HTML exporter now uses pinned html-to-image 1.11.13, built into a local bundle.
+Its source adapter handles dimensions, disables font embedding and removes stylesheet
+nodes and the library's obsolete foreignObject attribute. DOM cloning and computed-style
+copying are delegated to the library. Existing browser network restrictions and API-side
+SVG validation remain the security boundaries; html-to-image itself is not a sanitizer.
+The HTML cache format is bumped to `html-svg-v6` and includes the exporter version.
+Browser regressions cover external Bootstrap styles, safe math links, hostile input,
+cross-request styles, vector positioning and viewing with the response CSP.
+
 ### 9. Cross-request state — fresh execution state
 
 Each HTML/formula job runs in a fresh JVM; Chromium contexts and GraalJS state are not reused across jobs. The API intentionally shares completed cached SVG by content identity. No cross-request leak was demonstrated. Do not add reusable execution state without isolation tests or mount other users' inputs/results into the renderer.

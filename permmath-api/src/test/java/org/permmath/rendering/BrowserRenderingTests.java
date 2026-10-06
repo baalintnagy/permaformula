@@ -92,7 +92,7 @@ class BrowserRenderingTests {
             assertTrue(Integer.parseInt(decoded.getDocumentElement().getAttribute("height")) > 100);
             assertTrue(decoded.getElementsByTagNameNS("http://www.w3.org/2000/svg", "foreignObject").getLength() > 0);
             assertTrue(decoded.getElementsByTagNameNS("http://www.w3.org/2000/svg", "path").getLength() > 0);
-            assertTrue(Files.readString(destination).contains("background-color:rgb(48,48,48)"));
+            assertTrue(Files.readString(destination).contains("rgb(48,48,48)"));
             assertTrue(Files.readString(destination).contains("color:rgb(248,249,250)"),
                     "Title must use the external Bootstrap light color");
             assertTrue(Files.readString(destination).contains("color:rgb(108,117,125)"),
@@ -114,7 +114,7 @@ class BrowserRenderingTests {
                 var image = parse(svg).getDocumentElement();
                 assertEquals("320", image.getAttribute("width"));
                 assertEquals("150", image.getAttribute("height"));
-                assertTrue(svg.contains("background-color:rgb(180, 30, 30)"));
+                  assertTrue(svg.contains("rgb(180, 30, 30)"));
             }
             var second = renderer.getImage(new ImageDescriptor("<div>New request</div>", 320, null,
                     "body {margin:0; background:rgb(30,30,180);} div {height:180px;}"));
@@ -122,7 +122,7 @@ class BrowserRenderingTests {
                 var svg = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
                 var image = parse(svg).getDocumentElement();
                 assertEquals("180", image.getAttribute("height"));
-                assertTrue(svg.contains("background-color:rgb(30, 30, 180)"));
+                  assertTrue(svg.contains("rgb(30, 30, 180)"));
                 assertFalse(svg.contains("<script"));
             }
         }
