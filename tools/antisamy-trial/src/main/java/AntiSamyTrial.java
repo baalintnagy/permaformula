@@ -36,18 +36,18 @@ public class AntiSamyTrial {
     // Diagnostic only: permissive values separate parser limitations from default-policy exclusions.
     // This policy is deliberately unsuitable for production or security claims.
     while(rules.hasChildNodes()) rules.removeChild(rules.getFirstChild());
-    for (String name : List.of("--accent", "color", "width", "display", "gap", "grid-template-columns", "background-image", "fill", "clip")) {
+    List.of("--accent", "color", "width", "display", "gap", "grid-template-columns", "background-image", "fill", "clip").forEach(name -> {
       var property = doc.createElement("property"); property.setAttribute("name", name);
       var list = doc.createElement("regexp-list"); var regex = doc.createElement("regexp");
       regex.setAttribute("value", "[\\s\\S]*"); list.appendChild(regex); property.appendChild(list); rules.appendChild(property);
-    }
+    });
     var output = new ByteArrayOutputStream();
     TransformerFactory.newDefaultInstance().newTransformer().transform(new DOMSource(doc), new StreamResult(output));
     Files.write(Path.of("target/diagnostic-policy.xml"), output.toByteArray());
     var permissive = (InternalPolicy) Policy.getInstance(new ByteArrayInputStream(output.toByteArray()));
     var messages = ResourceBundle.getBundle("AntiSamy", Locale.US);
-    for (var item : CASES) {
-      for (var policy : List.of(defaults, permissive)) {
+    CASES.forEach(item -> {
+      List.of(defaults, permissive).forEach(policy -> {
         String mode = policy == defaults ? "default" : "diagnostic";
         try {
           var result = new CssScanner(policy, messages).scanStyleSheet(item.css, 1_048_576);
@@ -56,8 +56,8 @@ public class AntiSamyTrial {
         } catch (Exception error) {
           System.out.println(item.name + " | " + mode + " | ERROR | " + error.getClass().getSimpleName() + ": " + error.getMessage());
         }
-      }
-    }
+      });
+    });
     try (var playwright = Playwright.create(new Playwright.CreateOptions().setEnv(Map.of(
         "PLAYWRIGHT_BROWSERS_PATH", Path.of("../../.runtime/browsers").toAbsolutePath().normalize().toString(),
         "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1")));
@@ -67,11 +67,11 @@ public class AntiSamyTrial {
       for (String css : List.of("p {display:grid;grid-template-columns:repeat(2,1fr)}",
           "p {background-image:linear-gradient(red,blue)}")) {
         String sanitized = new CssScanner(permissive, messages).scanStyleSheet(css, 1_048_576).getCleanHTML();
-        for (String candidate : List.of(css, sanitized)) {
+        List.of(css, sanitized).forEach(candidate -> {
           page.setContent("<style>" + candidate + "</style><p>x</p>");
           System.out.println("Browser | " + (candidate.equals(css) ? "original" : "AntiSamy") + " | "
               + page.evaluate("({grid:getComputedStyle(document.querySelector('p')).gridTemplateColumns, background:getComputedStyle(document.querySelector('p')).backgroundImage})"));
-        }
+        });
       }
     }
   }

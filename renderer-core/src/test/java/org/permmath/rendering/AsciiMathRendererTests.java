@@ -5,16 +5,16 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 import javax.xml.parsers.DocumentBuilderFactory;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.permmath.contract.ComplexityPolicy;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -42,11 +42,11 @@ class AsciiMathRendererTests {
             assertTrue(sum.getElementsByTagNameNS("http://www.w3.org/2000/svg", "path").getLength() > 0);
             var uses = sum.getElementsByTagNameNS("http://www.w3.org/2000/svg", "use");
             assertTrue(uses.getLength() > 0);
-            for (int i = 0; i < uses.getLength(); i++) {
-                var element = (Element) uses.item(i);
-                assertTrue(element.getAttributeNS("http://www.w3.org/1999/xlink", "href").startsWith("#"),
-                        "Glyph references must be local to the returned SVG");
-            }
+            assertAll(IntStream.range(0, uses.getLength())
+                .mapToObj(i -> (Element) uses.item(i))
+                .<Executable>map(element -> () -> assertTrue(
+                    element.getAttributeNS("http://www.w3.org/1999/xlink", "href").startsWith("#"),
+                    "Glyph references must be local to the returned SVG")));
             assertNotEquals(simple.getDocumentElement().getAttribute("viewBox"),
                     sum.getDocumentElement().getAttribute("viewBox"));
         }
@@ -72,14 +72,12 @@ class AsciiMathRendererTests {
     void sharedRendererHandlesConcurrentRequests() throws Exception {
         try (var renderer = new AsciiMathRenderer();
              var requests = Executors.newVirtualThreadPerTaskExecutor()) {
-            var results = new ArrayList<Future<String>>();
-            for (String formula : List.of("x^2", "sqrt(x)", "a+b", "sum_(i=1)^n i")) {
-                results.add(requests.submit(() -> renderer.render(formula)));
-            }
-            for (var result : results) {
-                assertEquals("svg", parse(result.get(20, TimeUnit.SECONDS))
-                        .getDocumentElement().getLocalName());
-            }
+            var results = List.of("x^2", "sqrt(x)", "a+b", "sum_(i=1)^n i").stream()
+                .map(formula -> requests.submit(() -> renderer.render(formula)))
+                .toList();
+            assertAll(results.stream()
+                .<Executable>map(result -> () -> assertEquals("svg", parse(result.get(20, TimeUnit.SECONDS))
+                    .getDocumentElement().getLocalName())));
         }
     }
 

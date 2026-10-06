@@ -1,5 +1,6 @@
 package org.permmath;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -30,6 +31,7 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
@@ -87,17 +89,19 @@ class PermMathControllerTests {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         Assertions.assertEquals(3 * maximum, result.length());
         assertTrue(result.startsWith("%25") && result.endsWith("%25"));
-        for (var text : List.of("x".repeat(maximum + 1), "漢".repeat(maximum / 3 + 1))) {
-            mvc.perform(get("/url-encode").param("text", text)).andExpect(status().isBadRequest());
-        }
+        assertAll(List.of("x".repeat(maximum + 1), "漢".repeat(maximum / 3 + 1)).stream()
+            .<Executable>map(text -> () -> {
+                mvc.perform(get("/url-encode").param("text", text)).andExpect(status().isBadRequest());
+            }));
         Mockito.verifyNoInteractions(renderer);
     }
 
     @Test
     void removedDecodeRoutesAreNotAvailable() throws Exception {
-        for (String path : List.of("/decode", "/decode/", "/decode;ignored", "/decode-cq")) {
-            mvc.perform(get(path).param("ubcq", "bad")).andExpect(status().isNotFound());
-        }
+        assertAll(List.of("/decode", "/decode/", "/decode;ignored", "/decode-cq").stream()
+            .<Executable>map(path -> () -> {
+                mvc.perform(get(path).param("ubcq", "bad")).andExpect(status().isNotFound());
+            }));
         Mockito.verifyNoInteractions(renderer);
     }
 
@@ -130,15 +134,16 @@ class PermMathControllerTests {
         when(renderer.getImg("x")).thenReturn("<svg/>");
         when(renderer.getImage(any())).thenReturn("<svg/>");
         String link = urlService.getImageUrl("x", null, null, null);
-        for (var request : List.of(get("/img").param("formula", "x"), followLink(link))) {
-            mvc.perform(request).andExpect(status().isOk())
-                    .andExpect(MockMvcResultMatchers.header()
-                            .string("Content-Security-Policy", SvgOutputPolicy.CSP))
-                    .andExpect(MockMvcResultMatchers.header()
-                            .string("X-Content-Type-Options", "nosniff"))
-                    .andExpect(MockMvcResultMatchers.header()
-                            .string("Referrer-Policy", "no-referrer"));
-        }
+        assertAll(List.of(get("/img").param("formula", "x"), followLink(link)).stream()
+            .<Executable>map(request -> () -> {
+                mvc.perform(request).andExpect(status().isOk())
+                        .andExpect(MockMvcResultMatchers.header()
+                                .string("Content-Security-Policy", SvgOutputPolicy.CSP))
+                        .andExpect(MockMvcResultMatchers.header()
+                                .string("X-Content-Type-Options", "nosniff"))
+                        .andExpect(MockMvcResultMatchers.header()
+                                .string("Referrer-Policy", "no-referrer"));
+            }));
     }
 
     @Test
@@ -276,20 +281,22 @@ class PermMathControllerTests {
 
     @Test
     void imageRejectsMalformedAndInvalidDescriptorsBeforeRendering() throws Exception {
-        for (String json : List.of("null", "{}", "{\"forumla\":\" \"}",
+        assertAll(List.of("null", "{}", "{\"forumla\":\" \"}",
                 "{\"forumla\":\"x\",\"imageWidth\":4001}",
                 "{\"forumla\":\"x\",\"styleRefs\":[\"\"]}",
                 "{\"forumla\":\"x\",\"styleRefs\":[" + String.join(",", Collections.nCopies(9, "\"a.css\"")) + "]}",
                 "{\"forumla\":\"x\",\"style\":\"" + "s".repeat(InputLimits.MAX_STYLE_BYTES + 1) + "\"}",
                 "{\"forumla\":\"" + "x".repeat(InputLimits.MAX_CONTENT_BYTES + 1) + "\"}",
                 "{\"forumla\":\"x\"} {}",
-                "{\"forumla\":" + "[".repeat(20) + "0" + "]".repeat(20) + "}")) {
-            mvc.perform(get("/image").param("ubcq", new StringCompressionService().compress(json)))
-                    .andExpect(status().isBadRequest());
-        }
-        for (String payload : List.of("%%%", "AQIDBA==")) {
-            mvc.perform(get("/image").param("ubcq", payload)).andExpect(status().isBadRequest());
-        }
+                "{\"forumla\":" + "[".repeat(20) + "0" + "]".repeat(20) + "}").stream()
+            .<Executable>map(json -> () -> {
+                mvc.perform(get("/image").param("ubcq", new StringCompressionService().compress(json)))
+                        .andExpect(status().isBadRequest());
+            }));
+        assertAll(List.of("%%%", "AQIDBA==").stream()
+            .<Executable>map(payload -> () -> {
+                mvc.perform(get("/image").param("ubcq", payload)).andExpect(status().isBadRequest());
+            }));
         Mockito.verifyNoInteractions(renderer);
     }
 

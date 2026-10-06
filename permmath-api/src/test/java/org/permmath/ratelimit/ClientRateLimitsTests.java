@@ -13,6 +13,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.permmath.rendering.ApiWorkProperties;
 import org.permmath.rendering.ApiWorkService;
 import org.permmath.rendering.cache.CaffeineImageStore;
@@ -52,11 +53,12 @@ class ClientRateLimitsTests {
     @Test
     void rejectsMissingAmbiguousOrNonLiteralTrustedProxyHeadersWithoutDns() {
         var limits = limits(10, Duration.ofMinutes(1), List.of("172.30.86.2"));
-        for (String value : List.of("example.com", "127.0.0.1, 203.0.113.1", "203.0.113.1:80", "[::1]", " 203.0.113.1")) {
-            var proxy = request("172.30.86.2");
-            proxy.addHeader("X-Forwarded-For", value);
-            assertEquals(400, assertThrows(ResponseStatusException.class, () -> limits.open(proxy)).getStatusCode().value());
-        }
+        assertAll(List.of("example.com", "127.0.0.1, 203.0.113.1", "203.0.113.1:80", "[::1]", " 203.0.113.1").stream()
+            .<Executable>map(value -> () -> {
+                var proxy = request("172.30.86.2");
+                proxy.addHeader("X-Forwarded-For", value);
+                assertEquals(400, assertThrows(ResponseStatusException.class, () -> limits.open(proxy)).getStatusCode().value());
+            }));
         assertThrows(ResponseStatusException.class, () -> limits.open(request("172.30.86.2")));
         var duplicate = request("172.30.86.2");
         duplicate.addHeader("X-Forwarded-For", "203.0.113.1");

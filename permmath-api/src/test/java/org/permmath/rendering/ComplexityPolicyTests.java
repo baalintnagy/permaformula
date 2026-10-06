@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.permmath.contract.ComplexityPolicy;
 
 import tools.jackson.databind.json.JsonMapper;
@@ -30,10 +31,11 @@ class ComplexityPolicyTests {
 
     @Test
     void rejectsInvalidAndTransportExceedingConfiguration() {
-        for (String value : List.of("0", "-1", "NaN", "2147483648")) {
-            assertThrows(IllegalArgumentException.class, () -> ComplexityPolicy.load(new Properties(),
-                    Map.of("PERMMATH_COMPLEXITY_HTML_DEPTH", value)));
-        }
+        assertAll(List.of("0", "-1", "NaN", "2147483648").stream()
+            .<Executable>map(value -> () -> {
+                assertThrows(IllegalArgumentException.class, () -> ComplexityPolicy.load(new Properties(),
+                        Map.of("PERMMATH_COMPLEXITY_HTML_DEPTH", value)));
+            }));
         assertThrows(IllegalArgumentException.class, () -> ComplexityPolicy.load(new Properties(),
                 Map.of("PERMMATH_COMPLEXITY_SVG_BYTES", "16777217")));
     }

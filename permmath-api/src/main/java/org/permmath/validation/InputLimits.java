@@ -44,12 +44,12 @@ public final class InputLimits {
             if (refs.size() > MAX_STYLE_REFS) {
                 throw new IllegalArgumentException("At most eight stylesheet references are allowed");
             }
-            for (String ref : refs) {
+            refs.forEach(ref -> {
                 text(ref, MAX_REF_BYTES, "Stylesheet reference");
                 if (ref == null || ref.isBlank()) {
                     throw new IllegalArgumentException("Stylesheet references must not be blank");
                 }
-            }
+            });
         }
     }
 }

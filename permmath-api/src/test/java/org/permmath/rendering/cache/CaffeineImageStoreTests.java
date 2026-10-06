@@ -4,15 +4,15 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.permmath.rendering.WorkDeadline;
 import org.springframework.util.unit.DataSize;
 import org.springframework.web.server.ResponseStatusException;
@@ -36,22 +36,20 @@ class CaffeineImageStoreTests {
         var ready = new CountDownLatch(8);
         var start = new CountDownLatch(1);
         try (var workers = Executors.newFixedThreadPool(8)) {
-            var results = new ArrayList<Future<String>>();
-            for (int i = 0; i < 8; i++) {
-                results.add(workers.submit(() -> {
+            var results = IntStream.range(0, 8)
+                .mapToObj(_ -> workers.submit(() -> {
                     ready.countDown();
                     assertTrue(start.await(5, TimeUnit.SECONDS));
                     return store.getOrGenerate("same", () -> {
                         calls.incrementAndGet();
                         return "<svg/>";
                     });
-                }));
-            }
+                }))
+                .toList();
             assertTrue(ready.await(5, TimeUnit.SECONDS));
             start.countDown();
-            for (var result : results) {
-                assertEquals("<svg/>", result.get(5, TimeUnit.SECONDS));
-            }
+            assertAll(results.stream()
+                .<Executable>map(result -> () -> assertEquals("<svg/>", result.get(5, TimeUnit.SECONDS))));
         }
         assertEquals(1, calls.get());
         assertEquals(1, store.stats().loadSuccessCount());
@@ -102,14 +100,14 @@ class CaffeineImageStoreTests {
     void oversizedImagesAreReturnedButNotRetained() throws Exception {
         var store = store(256, new AtomicLong());
         var calls = new AtomicInteger();
-        for (int i = 0; i < 2; i++) {
+        assertAll(IntStream.range(0, 2).mapToObj(_ -> (Executable) () -> {
             assertEquals("svg".repeat(1000), store.getOrGenerate("key", () -> {
                 calls.incrementAndGet();
                 return "svg".repeat(1000);
             }));
             // Caffeine eviction maintenance is asynchronous; force it for this assertion.
             store.cleanUp();
-        }
+        }));
         assertEquals(2, calls.get());
     }
 

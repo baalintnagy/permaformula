@@ -1,12 +1,12 @@
 package org.permmath.rendering;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -94,12 +94,20 @@ final class StylesheetFetcher {
         if (refs.size() > MAX_REFS) {
             throw new IllegalArgumentException("Too many stylesheet references (maximum 8)");
         }
-        var result = new ArrayList<String>();
         var budget = new Budget();
-        for (var ref : refs) {
-            result.add(expand(destination(ref), budget, new HashSet<>(), 0));
+        try {
+            return refs.stream()
+                .map(ref -> {
+                    try {
+                        return expand(destination(ref), budget, new HashSet<>(), 0);
+                    } catch (IOException failure) {
+                        throw new UncheckedIOException(failure);
+                    }
+                })
+                .toList();
+        } catch (UncheckedIOException failure) {
+            throw failure.getCause();
         }
-        return result;
     }
 
     String fetch(String ref) throws IOException {

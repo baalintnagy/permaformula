@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.junit.jupiter.api.function.Executable;
 
 import com.microsoft.playwright.*;
 import com.sun.net.httpserver.HttpServer;
@@ -118,23 +119,24 @@ class BrowserChannelPolicyTests {
 
     @Test
     void rejectsEvenNonNetworkChildFrames() throws Exception {
-        for (var source : List.of("about:blank", "srcdoc", "data:text/html,child", "same-document")) {
-            try (var fixture = new Fixture();
-                var context = BrowserChannelPolicy.newContext(browser, 320)) {
-                var page = fixture.page(context);
-                attempt(() -> page.evaluate("""
-                    source => {
-                      const frame = document.createElement('iframe');
-                      if (source === 'srcdoc') frame.srcdoc = '<p>child</p>';
-                      else frame.src = source === 'same-document' ? location.href : source;
-                      document.body.appendChild(frame);
-                    }
-                    """, source));
-                context.waitForCondition(page::isClosed);
-                assertEquals(0, fixture.otherHits.get());
-                assertEquals(1, fixture.documentHits.get());
-            }
-        }
+        assertAll(List.of("about:blank", "srcdoc", "data:text/html,child", "same-document").stream()
+            .<Executable>map(source -> () -> {
+                try (var fixture = new Fixture();
+                    var context = BrowserChannelPolicy.newContext(browser, 320)) {
+                    var page = fixture.page(context);
+                    attempt(() -> page.evaluate("""
+                        source => {
+                          const frame = document.createElement('iframe');
+                          if (source === 'srcdoc') frame.srcdoc = '<p>child</p>';
+                          else frame.src = source === 'same-document' ? location.href : source;
+                          document.body.appendChild(frame);
+                        }
+                        """, source));
+                    context.waitForCondition(page::isClosed);
+                    assertEquals(0, fixture.otherHits.get());
+                    assertEquals(1, fixture.documentHits.get());
+                }
+            }));
     }
 
     @Test

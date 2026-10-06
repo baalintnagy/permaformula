@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
 import org.permmath.PermMathProperties;
@@ -87,10 +88,10 @@ class GeneratedImageServiceTests {
         when(formula.render("x")).thenReturn(attack);
         var service = service(800);
         var descriptor = new ImageDescriptor("x", null, null, null);
-        for (int attempt = 0; attempt < 2; attempt++) {
+        IntStream.range(0, 2).forEach(_ -> {
             assertThrows(IOException.class, () -> service.getImage(descriptor));
             assertThrows(IOException.class, () -> service.getImg("x"));
-        }
+        });
         verify(html, times(2)).getImage(any());
         verify(formula, times(2)).render("x");
     }

@@ -1,5 +1,6 @@
 package org.permmath.delivery;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -11,6 +12,7 @@ import java.util.List;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.permmath.PermMathProperties;
 import org.permmath.ratelimit.ClientRateLimitProperties;
 import org.permmath.rendering.FormulaSvgRenderer;
@@ -39,13 +41,14 @@ class ImageDeliveryBoundaryTests {
 
     @Test
     void redirectsUntrustedOrUnmarkedHandlersBeforeRenderingAndPreservesRawQuery() throws Exception {
-        for (var request : List.of(
+        assertAll(List.of(
                 peer("/img?formula=x%2By", "203.0.113.50").header("X-Permmath-Image-Delivery", "1"),
-                peer("/img?formula=x%2By", "172.30.86.2").header("X-Forwarded-For", "203.0.113.51"))) {
-            mvc.perform(request).andExpect(status().isTemporaryRedirect())
-                    .andExpect(header().string("Location", "https://math-images.example.net/img?formula=x%2By"))
-                    .andExpect(header().string("Cache-Control", "no-store"));
-        }
+                peer("/img?formula=x%2By", "172.30.86.2").header("X-Forwarded-For", "203.0.113.51")).stream()
+            .<Executable>map(request -> () -> {
+                mvc.perform(request).andExpect(status().isTemporaryRedirect())
+                        .andExpect(header().string("Location", "https://math-images.example.net/img?formula=x%2By"))
+                        .andExpect(header().string("Cache-Control", "no-store"));
+            }));
         mvc.perform(peer("/image?ubcq=malformed", "203.0.113.52"))
                 .andExpect(status().isTemporaryRedirect());
         mvc.perform(peer("/img;ignored?formula=x", "203.0.113.53"))

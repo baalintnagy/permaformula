@@ -1,5 +1,6 @@
 package org.permmath.ratelimit;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -7,9 +8,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.permmath.compression.StringCompressionService;
 import org.permmath.rendering.FormulaSvgRenderer;
 import org.permmath.rendering.ImageRendererService;
@@ -54,10 +57,10 @@ class ClientRateLimitHttpTests {
 
     @Test
     void requestLimitRunsBeforeInputValidationAndCannotBeBypassedBySpoofedHeaders() throws Exception {
-        for (int i = 0; i < 3; i++) {
+        assertAll(IntStream.range(0, 3).mapToObj(i -> (Executable) () -> {
             mvc.perform(client("/url-encode", "203.0.113.10")
                     .header("X-Forwarded-For", "198.51.100." + i)).andExpect(status().isBadRequest());
-        }
+        }));
         mvc.perform(client("/url-encode", "203.0.113.10"))
                 .andExpect(status().isTooManyRequests()).andExpect(header().string("Retry-After", "20"))
                 .andExpect(header().string("Cache-Control", "no-store"));
@@ -87,10 +90,10 @@ class ClientRateLimitHttpTests {
         mvc.perform(client("/url", "172.30.86.2").param("formula", "x")
                 .header("X-Forwarded-For", "203.0.113.30, 203.0.113.31"))
                 .andExpect(status().isBadRequest());
-        for (int i = 0; i < 3; i++) {
+        assertAll(IntStream.range(0, 3).mapToObj(_ -> (Executable) () -> {
             mvc.perform(client("/url", "172.30.86.2").param("formula", "x")
                     .header("X-Forwarded-For", "203.0.113.30")).andExpect(status().isOk());
-        }
+        }));
         mvc.perform(client("/url", "172.30.86.2").param("formula", "x")
                 .header("X-Forwarded-For", "203.0.113.30")).andExpect(status().isTooManyRequests());
         mvc.perform(client("/url", "172.30.86.2").param("formula", "x")

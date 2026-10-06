@@ -201,8 +201,8 @@ public final class RenderWorkQueue implements RenderJobExecutor, AutoCloseable {
 
     @Override
     public void close() {
-        for (Runnable task : executor.shutdownNow()) {
-            ((Job) task).cancelWaiting();
-        }
+        executor.shutdownNow().stream()
+            .map(Job.class::cast)
+            .forEach(Job::cancelWaiting);
     }
 }

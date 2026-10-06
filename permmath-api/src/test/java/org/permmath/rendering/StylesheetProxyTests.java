@@ -15,6 +15,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
@@ -34,10 +35,11 @@ class StylesheetProxyTests {
                     assertNull(context.getStartupFailure());
                     assertTrue(context.getBean(StylesheetFetchProperties.class).proxyRequired());
                 });
-        for (String value : List.of("https://proxy:3128", "http://user:pass@proxy:3128",
-                "http://proxy", "http://proxy:3128/path", "http://proxy:3128?x=1")) {
-            assertThrows(IllegalArgumentException.class, () -> new StylesheetFetchProperties(true, URI.create(value)));
-        }
+        assertAll(List.of("https://proxy:3128", "http://user:pass@proxy:3128",
+                "http://proxy", "http://proxy:3128/path", "http://proxy:3128?x=1").stream()
+            .<Executable>map(value -> () -> {
+                assertThrows(IllegalArgumentException.class, () -> new StylesheetFetchProperties(true, URI.create(value)));
+            }));
     }
 
     @Test

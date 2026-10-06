@@ -125,11 +125,9 @@ final class StylesheetPolicy {
             PreparationComplexity.reject("CSS nesting");
         }
         if (rule instanceof CSSStyleRule style) {
-            for (var selector : style.getAllSelectors()) {
-                String value = selector.getAsCSSString(WRITER, 0);
-                if (value.length() > LIMITS.get(CSS_SELECTOR_CHARS)) {
-                    PreparationComplexity.reject("CSS selector length");
-                }
+            if (style.getAllSelectors().stream()
+                .anyMatch(selector -> selector.getAsCSSString(WRITER, 0).length() > LIMITS.get(CSS_SELECTOR_CHARS))) {
+                PreparationComplexity.reject("CSS selector length");
             }
             cleanDeclarations(style);
             for (int i = style.getRuleCount() - 1; i >= 0; i--) {

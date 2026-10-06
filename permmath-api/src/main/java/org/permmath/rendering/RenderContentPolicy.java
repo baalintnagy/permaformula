@@ -37,10 +37,8 @@ final class RenderContentPolicy {
 
     static String document(String template, ImageDescriptor descriptor, List<String> externalCss) throws IOException {
         PreparationComplexity.html(descriptor.forumla());
-        int rules = PreparationComplexity.css(descriptor.style() == null ? "" : descriptor.style());
-        for (var css : externalCss) {
-            rules += PreparationComplexity.css(css);
-        }
+        int rules = PreparationComplexity.css(descriptor.style() == null ? "" : descriptor.style())
+            + externalCss.stream().mapToInt(PreparationComplexity::css).sum();
         if (rules > ComplexityPolicy.CURRENT.get(CSS_RULES)) {
             PreparationComplexity.reject("Combined CSS rules/selectors");
         }

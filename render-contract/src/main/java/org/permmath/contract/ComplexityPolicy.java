@@ -4,13 +4,13 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.EnumMap;
-import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
-import java.util.StringJoiner;
+import java.util.stream.Collectors;
 
 /** One validated policy for API checks, isolated workers and their JavaScript engines. */
 public final class ComplexityPolicy {
@@ -44,24 +44,29 @@ public final class ComplexityPolicy {
         } catch (IOException failure) {
             throw new IllegalStateException("Cannot load complexity defaults", failure);
         }
-        var values = new EnumMap<Limit, Integer>(Limit.class);
-        for (var limit : Limit.values()) {
-            String value = overrides.getProperty("permmath.complexity." + limit.key(),
-                    environment.getOrDefault("PERMMATH_COMPLEXITY_" + limit.name(), defaults.getProperty(limit.key())));
-            try {
-                int number = Integer.parseInt(value);
-                if (number <= 0) {
-                    throw new NumberFormatException();
-                }
-                values.put(limit, number);
-            } catch (NumberFormatException invalid) {
-                throw new IllegalArgumentException("Invalid complexity setting: " + limit.key());
-            }
-        }
+        var values = Arrays.stream(Limit.values())
+            .collect(Collectors.toMap(limit -> limit,
+                limit -> configuredValue(limit, overrides, environment, defaults),
+                (left, right) -> left, () -> new EnumMap<>(Limit.class)));
         if (values.get(Limit.SVG_BYTES) > RenderProtocol.MAX_CONTENT_BYTES) {
             throw new IllegalArgumentException("SVG limit exceeds transport size limit");
         }
         return new ComplexityPolicy(values);
+    }
+
+    private static int configuredValue(Limit limit, Properties overrides, Map<String, String> environment,
+        Properties defaults) {
+        String value = overrides.getProperty("permmath.complexity." + limit.key(),
+            environment.getOrDefault("PERMMATH_COMPLEXITY_" + limit.name(), defaults.getProperty(limit.key())));
+        try {
+            int number = Integer.parseInt(value);
+            if (number <= 0) {
+                throw new NumberFormatException();
+            }
+            return number;
+        } catch (NumberFormatException invalid) {
+            throw new IllegalArgumentException("Invalid complexity setting: " + limit.key());
+        }
     }
 
     public int get(Limit limit) {
@@ -76,19 +81,15 @@ public final class ComplexityPolicy {
 
     /** Keys are enum names and values validated positive integers, never submitted text. */
     public String json() {
-        var json = new StringJoiner(",", "{", "}");
-        for (var limit : Limit.values()) {
-            json.add("\"" + limit.name() + "\":" + get(limit));
-        }
-        return json.toString();
+        return Arrays.stream(Limit.values())
+            .map(limit -> "\"" + limit.name() + "\":" + get(limit))
+            .collect(Collectors.joining(",", "{", "}"));
     }
 
     public Map<String, String> workerEnvironment() {
-        var environment = new HashMap<String, String>();
-        for (var limit : Limit.values()) {
-            environment.put("PERMMATH_COMPLEXITY_" + limit.name(), Integer.toString(get(limit)));
-        }
-        return Map.copyOf(environment);
+        return Arrays.stream(Limit.values())
+            .collect(Collectors.toUnmodifiableMap(limit -> "PERMMATH_COMPLEXITY_" + limit.name(),
+                limit -> Integer.toString(get(limit))));
     }
 
     public String fingerprint() {

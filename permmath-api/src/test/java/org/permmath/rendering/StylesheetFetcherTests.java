@@ -3,18 +3,20 @@ package org.permmath.rendering;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Stream;
 
 import org.apache.hc.core5.http.ContentType;
 import org.apache.hc.core5.http.io.entity.InputStreamEntity;
 import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.apache.hc.core5.http.message.BasicClassicHttpResponse;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
 class StylesheetFetcherTests {
 
@@ -25,17 +27,18 @@ class StylesheetFetcherTests {
             response.setHeader("Location", "theme.css");
             assertEquals("https://example.com/css/theme.css", StylesheetFetcher.redirect(current, response, 0).toString());
             assertThrows(IllegalArgumentException.class, () -> StylesheetFetcher.redirect(current, response, StylesheetFetcher.MAX_REDIRECTS));
-            for (var location : List.of("http://example.com/main.css", "https://127.0.0.1/x.css",
-                    "https://169.254.169.254/latest/", "https://[::1]/x.css", "https://localhost/x.css")) {
-                response.setHeader("Location", location);
-                assertThrows(IllegalArgumentException.class, () -> StylesheetFetcher.redirect(current, response, 0), location);
-            }
+            assertAll(List.of("http://example.com/main.css", "https://127.0.0.1/x.css",
+                    "https://169.254.169.254/latest/", "https://[::1]/x.css", "https://localhost/x.css").stream()
+                .<Executable>map(location -> () -> {
+                    response.setHeader("Location", location);
+                    assertThrows(IllegalArgumentException.class, () -> StylesheetFetcher.redirect(current, response, 0), location);
+                }));
         }
     }
 
     @Test
     void expandsRelativeImportsFromFinalRedirectDestinationAndKeepsOrder() throws Exception {
-        var requested = new ArrayList<String>();
+        var requested = Stream.<String>builder();
         var fetcher = new StylesheetFetcher((uri, deadline) -> {
             requested.add(uri.toString());
             if (uri.getPath().equals("/main.css")) {
@@ -44,11 +47,34 @@ class StylesheetFetcherTests {
             return new StylesheetFetcher.Download(uri, "p {color:red; background-image:url(https://evil.example/x)}");
         });
         var css = fetcher.fetch("https://example.com/main.css");
-        assertEquals(List.of("https://example.com/main.css", "https://example.com/css/base.css"), requested);
+        assertEquals(List.of("https://example.com/main.css", "https://example.com/css/base.css"),
+            requested.build().toList());
         assertTrue(css.contains("@media screen"));
         assertTrue(css.indexOf("color:red") < css.indexOf("color:blue"));
         assertFalse(css.contains("@import"));
         assertFalse(css.contains("evil.example"));
+    }
+
+    @Test
+    void fetchesStylesheetsInOrderAndPreservesCheckedFailures() throws Exception {
+        var requested = Stream.<String>builder();
+        var refs = List.of("https://example.com/red.css", "https://example.com/blue.css");
+        var fetcher = new StylesheetFetcher((uri, deadline) -> {
+            requested.add(uri.toString());
+            return new StylesheetFetcher.Download(uri,
+                uri.getPath().equals("/red.css") ? "p{color:red}" : "p{color:blue}");
+        });
+        var stylesheets = fetcher.fetchAll(refs);
+        assertEquals(refs, requested.build().toList());
+        assertEquals(2, stylesheets.size());
+        assertTrue(stylesheets.get(0).contains("color:red"));
+        assertTrue(stylesheets.get(1).contains("color:blue"));
+
+        var failure = new IOException("download failed");
+        var failing = new StylesheetFetcher((uri, deadline) -> {
+            throw failure;
+        });
+        assertSame(failure, assertThrows(IOException.class, () -> failing.fetchAll(refs)));
     }
 
     @Test
@@ -65,24 +91,26 @@ class StylesheetFetcherTests {
 
     @Test
     void rejectsUnsafeSchemesCredentialsAndPorts() {
-        for (var url : List.of("http://example.com/x.css", "file:///tmp/x.css", "data:text/css,body{}",
-                "https://user:pass@example.com/x.css", "https://example.com:8080/x.css", "https://example.com/x.css#fragment")) {
-            assertThrows(IllegalArgumentException.class, () -> StylesheetFetcher.destination(url), url);
-        }
+        assertAll(List.of("http://example.com/x.css", "file:///tmp/x.css", "data:text/css,body{}",
+                "https://user:pass@example.com/x.css", "https://example.com:8080/x.css", "https://example.com/x.css#fragment").stream()
+            .<Executable>map(url -> () -> {
+                assertThrows(IllegalArgumentException.class, () -> StylesheetFetcher.destination(url), url);
+            }));
         assertEquals("example.com", StylesheetFetcher.destination("https://example.com/x.css?v=1").getHost());
     }
 
     @Test
     void blocksPrivateReservedAndTransitionAddresses() throws Exception {
-        for (var value : List.of("0.0.0.0", "10.1.2.3", "127.0.0.1", "169.254.169.254", "172.16.0.1",
+        assertAll(List.of("0.0.0.0", "10.1.2.3", "127.0.0.1", "169.254.169.254", "172.16.0.1",
                 "192.168.1.1", "100.64.0.1", "192.0.0.1", "192.0.2.1", "198.18.0.1", "198.51.100.1",
                 "203.0.113.1", "224.0.0.1", "255.255.255.255", "::", "::1", "fc00::1", "fe80::1",
-                "ff02::1", "::ffff:127.0.0.1", "64:ff9b::7f00:1", "2001:db8::1", "2001::1", "2002:7f00:1::1", "3fff::1")) {
-            var address = InetAddress.getByName(value);
-            assertFalse(StylesheetFetcher.publicAddress(address), value);
-            assertThrows(UnknownHostException.class,
-                    () -> StylesheetFetcher.PublicDnsResolver.validate(new InetAddress[]{address}), value);
-        }
+                "ff02::1", "::ffff:127.0.0.1", "64:ff9b::7f00:1", "2001:db8::1", "2001::1", "2002:7f00:1::1", "3fff::1").stream()
+            .<Executable>map(value -> () -> {
+                var address = InetAddress.getByName(value);
+                assertFalse(StylesheetFetcher.publicAddress(address), value);
+                assertThrows(UnknownHostException.class,
+                        () -> StylesheetFetcher.PublicDnsResolver.validate(new InetAddress[]{address}), value);
+            }));
         assertTrue(StylesheetFetcher.publicAddress(InetAddress.getByName("8.8.8.8")));
         assertTrue(StylesheetFetcher.publicAddress(InetAddress.getByName("2606:4700:4700::1111")));
     }

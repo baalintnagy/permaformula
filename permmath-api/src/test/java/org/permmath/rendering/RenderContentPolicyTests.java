@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.jsoup.Jsoup;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.permmath.url.ImageDescriptor;
 
 class RenderContentPolicyTests {
@@ -73,12 +74,13 @@ class RenderContentPolicyTests {
         var url = "http://127.0.0.1:1234/document/abc";
         assertTrue(ChromiumRenderer.allowedRequest(url, url, "GET", "document"));
         assertTrue(ChromiumRenderer.allowedRequest(url, "http://127.0.0.1:1234/mathjax/input/asciimath.js", "GET", "script"));
-        for (var target : List.of("http://169.254.169.254/latest/meta-data/", "http://localhost:1234/",
+        assertAll(List.of("http://169.254.169.254/latest/meta-data/", "http://localhost:1234/",
                 "http://127.0.0.1:8086/", "https://example.com/", "file:///etc/passwd",
-                "http://127.0.0.1:1234/document/other", "http://127.0.0.1:1234/mathjax/../document/abc")) {
-            assertFalse(ChromiumRenderer.allowedRequest(url, target, "GET", "document"), target);
-            assertFalse(ChromiumRenderer.allowedRequest(url, target, "GET", "script"), target);
-        }
+                "http://127.0.0.1:1234/document/other", "http://127.0.0.1:1234/mathjax/../document/abc").stream()
+            .<Executable>map(target -> () -> {
+                assertFalse(ChromiumRenderer.allowedRequest(url, target, "GET", "document"), target);
+                assertFalse(ChromiumRenderer.allowedRequest(url, target, "GET", "script"), target);
+            }));
         assertFalse(ChromiumRenderer.allowedRequest(url, url, "POST", "document"));
         assertFalse(ChromiumRenderer.allowedRequest(url, url, "GET", "fetch"));
     }
