@@ -1,10 +1,13 @@
 package org.permmath.ratelimit;
 
+import java.math.BigInteger;
 import java.time.Duration;
 import java.util.List;
-import com.google.common.net.InetAddresses;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
+
+import com.google.common.net.InetAddresses;
 
 @ConfigurationProperties("permmath.rate-limit")
 public record ClientRateLimitProperties(
@@ -31,8 +34,8 @@ public record ClientRateLimitProperties(
     }
 
     private static boolean fullyRefills(long nanos, long rate, long burst) {
-        return java.math.BigInteger.valueOf(nanos).multiply(java.math.BigInteger.valueOf(rate))
-                .compareTo(java.math.BigInteger.valueOf(Duration.ofMinutes(1).toNanos())
-                        .multiply(java.math.BigInteger.valueOf(burst))) >= 0;
+        return BigInteger.valueOf(nanos).multiply(BigInteger.valueOf(rate))
+            .compareTo(BigInteger.valueOf(Duration.ofMinutes(1).toNanos())
+                .multiply(BigInteger.valueOf(burst))) >= 0;
     }
 }

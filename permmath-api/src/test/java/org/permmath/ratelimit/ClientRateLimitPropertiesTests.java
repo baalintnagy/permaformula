@@ -1,6 +1,9 @@
 package org.permmath.ratelimit;
 
 import static org.junit.jupiter.api.Assertions.*;
+
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -14,7 +17,8 @@ class ClientRateLimitPropertiesTests {
     @EnableConfigurationProperties(ClientRateLimitProperties.class)
     static class Config { }
 
-    @Test void bindsSafeDefaultsAndExplicitProxyAddresses() {
+    @Test
+    void bindsSafeDefaultsAndExplicitProxyAddresses() {
         context.run(result -> {
             assertNull(result.getStartupFailure());
             var properties = result.getBean(ClientRateLimitProperties.class);
@@ -23,7 +27,7 @@ class ClientRateLimitPropertiesTests {
             assertTrue(properties.trustedProxies().isEmpty());
         });
         context.withPropertyValues("permmath.rate-limit.trusted-proxies=::ffff:172.30.86.2,2001:db8::1")
-                .run(result -> assertEquals(java.util.List.of("172.30.86.2", "2001:db8::1"),
+                .run(result -> assertEquals(List.of("172.30.86.2", "2001:db8::1"),
                         result.getBean(ClientRateLimitProperties.class).trustedProxies()));
     }
 

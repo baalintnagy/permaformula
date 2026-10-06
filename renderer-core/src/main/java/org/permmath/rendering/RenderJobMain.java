@@ -1,12 +1,16 @@
 package org.permmath.rendering;
 
-import com.google.protobuf.ByteString;
-import com.google.protobuf.CodedInputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
+
+import org.permmath.contract.ComplexityPolicy;
 import org.permmath.contract.v1.RenderRequest;
 import org.permmath.contract.v1.RenderResponse;
+
+import com.google.protobuf.ByteString;
+import com.google.protobuf.CodedInputStream;
 
 /** Disposable execution process. Pipes carry standard Protobuf messages, without custom framing. */
 public final class RenderJobMain {
@@ -28,9 +32,9 @@ public final class RenderJobMain {
                     svg = renderer.render(request.getFormula().getFormula()).getBytes(StandardCharsets.UTF_8);
                 }
             }
-            if (svg.length == 0 || svg.length > org.permmath.contract.ComplexityPolicy.CURRENT
-                    .get(org.permmath.contract.ComplexityPolicy.Limit.SVG_BYTES)) {
-                throw new java.io.IOException("Render output exceeds size limit");
+            if (svg.length == 0 || svg.length > ComplexityPolicy.CURRENT
+                    .get(ComplexityPolicy.Limit.SVG_BYTES)) {
+                throw new IOException("Render output exceeds size limit");
             }
             RenderResponse.newBuilder().setRequestId(request.getRequestId()).setSvg(ByteString.copyFrom(svg))
                     .build().writeTo(System.out);

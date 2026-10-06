@@ -4,15 +4,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.util.Map;
-import com.microsoft.playwright.BrowserType;
-import com.microsoft.playwright.Playwright;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.permmath.rendering.RenderGatewayTestConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Import;
+
+import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.Locator;
+import com.microsoft.playwright.Playwright;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@org.springframework.context.annotation.Import(org.permmath.rendering.RenderGatewayTestConfiguration.class)
+@Import(RenderGatewayTestConfiguration.class)
 @EnabledIfSystemProperty(named = "swagger.tests", matches = "true")
 class SwaggerUiTests {
     @LocalServerPort
@@ -30,17 +35,17 @@ class SwaggerUiTests {
             page.navigate("http://localhost:" + port + "/swagger-ui/index.html");
             var operation = page.locator("#operations-perm-math-controller-getUrl");
             operation.locator(".opblock-summary").click();
-            operation.getByText("Try it out", new com.microsoft.playwright.Locator.GetByTextOptions().setExact(true)).click();
+            operation.getByText("Try it out", new Locator.GetByTextOptions().setExact(true)).click();
             var response = page.waitForResponse(r -> r.url().contains("/url?") && r.status() == 200,
-                    () -> operation.getByText("Execute", new com.microsoft.playwright.Locator.GetByTextOptions().setExact(true)).click());
+                    () -> operation.getByText("Execute", new Locator.GetByTextOptions().setExact(true)).click());
             assertTrue(response.text().startsWith("http://localhost:8086/image?ubcq="));
             operation.locator(".responses-inner .response-col_status").filter(
-                    new com.microsoft.playwright.Locator.FilterOptions().setHasText("200")).first().waitFor();
+                    new Locator.FilterOptions().setHasText("200")).first().waitFor();
             var imageOperation = page.locator("#operations-perm-math-controller-getImage");
             imageOperation.locator(".opblock-summary").click();
-            imageOperation.getByText("Try it out", new com.microsoft.playwright.Locator.GetByTextOptions().setExact(true)).click();
+            imageOperation.getByText("Try it out", new Locator.GetByTextOptions().setExact(true)).click();
             var imageResponse = page.waitForResponse(r -> r.url().contains("/image?") && r.status() == 200,
-                    () -> imageOperation.getByText("Execute", new com.microsoft.playwright.Locator.GetByTextOptions().setExact(true)).click());
+                    () -> imageOperation.getByText("Execute", new Locator.GetByTextOptions().setExact(true)).click());
             assertTrue(imageResponse.text().startsWith("<svg"));
             assertTrue(imageResponse.text().contains("width=\"220\""));
             assertTrue(imageResponse.text().contains("<path"));

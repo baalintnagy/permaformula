@@ -1,7 +1,9 @@
 package org.permmath.rendering;
 
 import java.time.Duration;
+import java.util.Objects;
 import java.util.concurrent.*;
+
 import org.permmath.contract.v1.RenderRequest;
 import org.permmath.contract.v1.RenderResponse;
 
@@ -15,9 +17,11 @@ public final class RenderWorkQueue implements RenderJobExecutor, AutoCloseable {
     private long retainedBytes;
 
     public RenderWorkQueue(int concurrency, RenderQueueSettings settings, RenderJobExecutor jobs) {
-        if (concurrency < 1 || concurrency > 64) throw new IllegalArgumentException("Renderer concurrency must be 1..64");
-        this.settings = java.util.Objects.requireNonNull(settings);
-        this.jobs = java.util.Objects.requireNonNull(jobs);
+        if (concurrency < 1 || concurrency > 64) {
+            throw new IllegalArgumentException("Renderer concurrency must be 1..64");
+        }
+        this.settings = Objects.requireNonNull(settings);
+        this.jobs = Objects.requireNonNull(jobs);
         byteLimit = settings.effectiveRetainedBytes();
         outstanding = new Semaphore(concurrency + settings.capacity());
         BlockingQueue<Runnable> waiting = settings.capacity() == 0 ? new SynchronousQueue<>()
@@ -26,15 +30,27 @@ public final class RenderWorkQueue implements RenderJobExecutor, AutoCloseable {
                 Thread.ofPlatform().daemon(true).name("renderer-work-", 0).factory(), new ThreadPoolExecutor.AbortPolicy());
     }
 
-    public int maxOutstanding() { return executor.getMaximumPoolSize() + settings.capacity(); }
-    public long effectiveRetainedBytes() { return byteLimit; }
-    synchronized long retainedBytes() { return retainedBytes; }
-    int waitingJobs() { return executor.getQueue().size(); }
+    public int maxOutstanding() {
+        return executor.getMaximumPoolSize() + settings.capacity();
+    }
+    public long effectiveRetainedBytes() {
+        return byteLimit;
+    }
+    synchronized long retainedBytes() {
+        return retainedBytes;
+    }
+    int waitingJobs() {
+        return executor.getQueue().size();
+    }
 
     @Override
     public RenderResponse execute(RenderRequest request, Duration budget) throws RenderException {
-        if (Thread.currentThread().isInterrupted()) throw new RenderException(RenderException.Kind.QUEUE_CANCELLED, "Rendering cancelled before admission");
-        if (budget.isNegative() || budget.isZero()) throw queueExpired();
+        if (Thread.currentThread().isInterrupted()) {
+            throw new RenderException(RenderException.Kind.QUEUE_CANCELLED, "Rendering cancelled before admission");
+        }
+        if (budget.isNegative() || budget.isZero()) {
+            throw queueExpired();
+        }
         // Clamp direct callers too; service callers supply the remaining RPC budget.
         long budgetNanos = (budget.compareTo(Duration.ofMinutes(5)) > 0 ? Duration.ofMinutes(5) : budget).toNanos();
         long now = System.nanoTime();
@@ -43,7 +59,9 @@ public final class RenderWorkQueue implements RenderJobExecutor, AutoCloseable {
         // Conservative payload accounting includes protobuf bytes and UTF-16 strings.
         // Charge running requests too, so dequeue/cancellation cannot create extra memory headroom.
         long weight = 1024L + 3L * request.getSerializedSize();
-        if (!reserve(weight)) throw overloaded();
+        if (!reserve(weight)) {
+            throw overloaded();
+        }
         Job task;
         try {
             RenderLimits.validate(request);
@@ -66,30 +84,40 @@ public final class RenderWorkQueue implements RenderJobExecutor, AutoCloseable {
                 task.started.get(Math.max(1, queueDeadline - System.nanoTime()), TimeUnit.NANOSECONDS);
             } catch (TimeoutException expired) {
                 // A worker may have started within the budget just as the waiter woke.
-                if (task.cancelWaiting()) throw queueExpired();
+                if (task.cancelWaiting()) {
+                    throw queueExpired();
+                }
             }
             return task.get(Math.max(1, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
         } catch (InterruptedException cancelled) {
             boolean waiting = task.cancelWaiting();
-            if (!waiting) task.cancel(true);
+            if (!waiting) {
+                task.cancel(true);
+            }
             Thread.currentThread().interrupt();
             throw new RenderException(waiting ? RenderException.Kind.QUEUE_CANCELLED : RenderException.Kind.CANCELLED,
                     "Rendering cancelled", cancelled);
         } catch (TimeoutException expired) {
             boolean waiting = task.cancelWaiting();
-            if (!waiting) task.cancel(true);
+            if (!waiting) {
+                task.cancel(true);
+            }
             throw new RenderException(waiting ? RenderException.Kind.QUEUE_DEADLINE : RenderException.Kind.DEADLINE,
                     "Render deadline exceeded", expired);
         } catch (CancellationException cancelled) {
             throw new RenderException(RenderException.Kind.QUEUE_CANCELLED, "Rendering stopped before execution", cancelled);
         } catch (ExecutionException failed) {
-            if (failed.getCause() instanceof RenderException rendering) throw rendering;
+            if (failed.getCause() instanceof RenderException rendering) {
+                throw rendering;
+            }
             throw new RenderException(RenderException.Kind.FAILED, "Render worker failed", failed.getCause());
         }
     }
 
     private synchronized boolean reserve(long weight) {
-        if (weight > byteLimit - retainedBytes || !outstanding.tryAcquire()) return false;
+        if (weight > byteLimit - retainedBytes || !outstanding.tryAcquire()) {
+            return false;
+        }
         retainedBytes += weight;
         return true;
     }
@@ -117,16 +145,22 @@ public final class RenderWorkQueue implements RenderJobExecutor, AutoCloseable {
         Job(RenderRequest request, long weight, long deadline, long queueDeadline) {
             super(() -> {
                 long remaining = deadline - System.nanoTime();
-                if (remaining <= 0) throw queueExpired();
+                if (remaining <= 0) {
+                    throw queueExpired();
+                }
                 return jobs.execute(request, Duration.ofNanos(remaining));
             });
             this.weight = weight;
             this.queueDeadline = queueDeadline;
         }
 
-        @Override public void run() {
+        @Override
+        public void run() {
             synchronized (this) {
-                if (isCancelled()) { releaseOnce(); return; }
+                if (isCancelled()) {
+                    releaseOnce();
+                    return;
+                }
                 if (queueDeadline - System.nanoTime() <= 0) {
                     setException(queueExpired());
                     started.complete(null);
@@ -136,12 +170,20 @@ public final class RenderWorkQueue implements RenderJobExecutor, AutoCloseable {
                 running = true;
                 started.complete(null);
             }
-            try { super.run(); }
-            finally { synchronized (this) { releaseOnce(); } }
+            try {
+                super.run();
+            }
+            finally {
+                synchronized (this) {
+                    releaseOnce();
+                }
+            }
         }
 
         synchronized boolean cancelWaiting() {
-            if (running) return false;
+            if (running) {
+                return false;
+            }
             cancel(false);
             executor.remove(this);
             releaseOnce();
@@ -150,11 +192,17 @@ public final class RenderWorkQueue implements RenderJobExecutor, AutoCloseable {
         }
 
         private void releaseOnce() {
-            if (!released) { released = true; release(weight); }
+            if (!released) {
+                released = true;
+                release(weight);
+            }
         }
     }
 
-    @Override public void close() {
-        for (Runnable task : executor.shutdownNow()) ((Job) task).cancelWaiting();
+    @Override
+    public void close() {
+        for (Runnable task : executor.shutdownNow()) {
+            ((Job) task).cancelWaiting();
+        }
     }
 }

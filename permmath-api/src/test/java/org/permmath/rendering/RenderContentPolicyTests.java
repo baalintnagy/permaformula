@@ -1,13 +1,16 @@
 package org.permmath.rendering;
 
 import static org.junit.jupiter.api.Assertions.*;
+
 import java.util.List;
+
 import org.jsoup.Jsoup;
 import org.junit.jupiter.api.Test;
 import org.permmath.url.ImageDescriptor;
 
 class RenderContentPolicyTests {
-    @Test void preservesExternalCascadeVariablesResponsiveStylesAndInlineOverrides() throws Exception {
+    @Test
+    void preservesExternalCascadeVariablesResponsiveStylesAndInlineOverrides() throws Exception {
         var descriptor = new ImageDescriptor("<p class='title'>hello</p>", 320,
                 List.of("https://example.com/first.css", "https://example.com/second.css"), "p {color:green}");
         var html = RenderContentPolicy.document("<html><head></head><body></body></html>", descriptor,
@@ -22,7 +25,8 @@ class RenderContentPolicyTests {
         assertFalse(html.contains("evil.example"));
     }
 
-    @Test void rejectsCssNetworkFunctionsEvenWhenNestedEscapedOrStoredInVariables() throws Exception {
+    @Test
+    void rejectsCssNetworkFunctionsEvenWhenNestedEscapedOrStoredInVariables() throws Exception {
         var css = RenderContentPolicy.css("div {--evil:url(https://evil.example/a); background-image:var(--evil);"
                 + "color:expression(alert(1)); background:image-set('https://evil.example/b' 1x);"
                 + "list-style-image:u\\72l(https://evil.example/c); width:calc(1px + url(https://evil.example/d));}"
@@ -32,7 +36,8 @@ class RenderContentPolicyTests {
         assertFalse(css.contains("@font-face"));
     }
 
-    @Test void removesExecutableAndNetworkMarkupBeforeParsing() throws Exception {
+    @Test
+    void removesExecutableAndNetworkMarkupBeforeParsing() throws Exception {
         var html = RenderContentPolicy.document("<html><head></head><body></body></html>",
                 new ImageDescriptor("<div class='math' style='color:red'>`x^2`</div>"
                         + "<script>window.PermMathRenderer.state='ready'</script><img src='http://127.0.0.1' onerror='alert(1)'>"
@@ -46,7 +51,8 @@ class RenderContentPolicyTests {
         assertTrue(body.selectFirst("div").attr("style").contains("color:red"));
     }
 
-    @Test void stylesheetCannotEscapeOrLoadResources() throws Exception {
+    @Test
+    void stylesheetCannotEscapeOrLoadResources() throws Exception {
         var html = RenderContentPolicy.document("<html><head></head><body></body></html>",
                 new ImageDescriptor("<p>hello</p>", 320, null,
                         "@import url(http://localhost/x); body {color:red;background-image:url(http://localhost/y)}"));
@@ -62,7 +68,8 @@ class RenderContentPolicyTests {
                 new ImageDescriptor("hello", null, List.of("http://127.0.0.1/x.css"), null)));
     }
 
-    @Test void networkPolicyOnlyPermitsCurrentDocumentAndBundledScripts() {
+    @Test
+    void networkPolicyOnlyPermitsCurrentDocumentAndBundledScripts() {
         var url = "http://127.0.0.1:1234/document/abc";
         assertTrue(ChromiumRenderer.allowedRequest(url, url, "GET", "document"));
         assertTrue(ChromiumRenderer.allowedRequest(url, "http://127.0.0.1:1234/mathjax/input/asciimath.js", "GET", "script"));

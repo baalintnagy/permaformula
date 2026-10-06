@@ -7,15 +7,20 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.NotBlank;
+
 import org.permmath.PermMathProperties;
+import org.permmath.contract.ComplexityPolicy;
 import org.permmath.ratelimit.ClientRateLimits;
 import org.permmath.rendering.cache.GeneratedImageStore;
 import org.permmath.url.ImageDescriptor;
+import org.permmath.validation.InputLimits;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
@@ -31,7 +36,7 @@ public class GeneratedImageService {
     private final PermMathProperties defaults;
 
     private final ObjectMapper mapper;
-    @org.springframework.beans.factory.annotation.Autowired
+    @Autowired
     private ApiWorkService work = new ApiWorkService(ApiWorkProperties.defaults());
 
 
@@ -64,8 +69,8 @@ public class GeneratedImageService {
 
     public String getImg(@NotBlank String formula) throws IOException {
         var cacheKey = work.prepare(() -> {
-            org.permmath.validation.InputLimits.formula(formula);
-            org.permmath.contract.ComplexityPolicy.CURRENT.checkMathInput(formula);
+            InputLimits.formula(formula);
+            ComplexityPolicy.CURRENT.checkMathInput(formula);
             var identity = new ImageDescriptor(formula, null, null, null);
             return key("formula-svg-v4:complexity-policy-2:mathjax-3.2.2:" + SvgOutputPolicy.VERSION, identity);
         });
@@ -76,7 +81,7 @@ public class GeneratedImageService {
 
     private String key(String format, ImageDescriptor descriptor) throws IOException {
         // Stable versioned content identity, also suitable for filenames or database keys.
-        var identity = format + ":" + org.permmath.contract.ComplexityPolicy.CURRENT.fingerprint()
+        var identity = format + ":" + ComplexityPolicy.CURRENT.fingerprint()
                 + "\n" + mapper.writeValueAsString(descriptor);
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")

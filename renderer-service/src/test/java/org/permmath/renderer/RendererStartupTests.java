@@ -1,12 +1,14 @@
 package org.permmath.renderer;
 
 import static org.junit.jupiter.api.Assertions.*;
+
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.Test;
 
 class RendererStartupTests {

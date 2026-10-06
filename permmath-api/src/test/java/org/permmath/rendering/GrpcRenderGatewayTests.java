@@ -1,16 +1,22 @@
 package org.permmath.rendering;
 
 import static org.junit.jupiter.api.Assertions.*;
-import com.google.protobuf.ByteString;
-import io.grpc.*;
-import io.grpc.netty.shaded.io.grpc.netty.*;
-import io.grpc.stub.StreamObserver;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.Test;
 import org.permmath.contract.v1.*;
 import org.springframework.web.server.ResponseStatusException;
+
+import com.google.protobuf.ByteString;
+
+import io.grpc.*;
+import io.grpc.netty.shaded.io.grpc.netty.*;
+import io.grpc.stub.StreamObserver;
 
 class GrpcRenderGatewayTests {
 
@@ -18,8 +24,9 @@ class GrpcRenderGatewayTests {
     void grpcReceivesRemainingRequestBudgetRatherThanFullRendererTimeout() throws Exception {
         var server = NettyServerBuilder.forAddress(new InetSocketAddress("127.0.0.1", 0))
                 .addService(new RendererGrpc.RendererImplBase() {
-                    @Override public void render(RenderRequest request, StreamObserver<RenderResponse> observer) {
-                        long remaining = Context.current().getDeadline().timeRemaining(java.util.concurrent.TimeUnit.MILLISECONDS);
+                    @Override
+                    public void render(RenderRequest request, StreamObserver<RenderResponse> observer) {
+                        long remaining = Context.current().getDeadline().timeRemaining(TimeUnit.MILLISECONDS);
                         observer.onNext(RenderResponse.newBuilder().setRequestId(request.getRequestId())
                                 .setSvg(ByteString.copyFromUtf8(Long.toString(remaining))).build());
                         observer.onCompleted();
@@ -28,9 +35,11 @@ class GrpcRenderGatewayTests {
         var channel = NettyChannelBuilder.forAddress("127.0.0.1", server.getPort()).usePlaintext().build();
         try (var gateway = new GrpcRenderGateway(channel, Duration.ofSeconds(5));
                 var scope = WorkDeadline.open(Duration.ofSeconds(2))) {
-            long remaining = Long.parseLong(new String(gateway.renderFormula("x"), java.nio.charset.StandardCharsets.UTF_8));
+            long remaining = Long.parseLong(new String(gateway.renderFormula("x"), StandardCharsets.UTF_8));
             assertTrue(remaining > 0 && remaining <= 2000, "RPC must use remaining API budget");
-        } finally { server.shutdownNow(); }
+        } finally {
+            server.shutdownNow();
+        }
     }
 
     @Test
@@ -54,8 +63,8 @@ class GrpcRenderGatewayTests {
         }).build().start();
         var channel = NettyChannelBuilder.forAddress("127.0.0.1", server.getPort()).usePlaintext().build();
         try (var gateway = new GrpcRenderGateway(channel, Duration.ofSeconds(5))) {
-            assertEquals("<p>π</p>", new String(gateway.renderHtml("<p>π</p>", 240), java.nio.charset.StandardCharsets.UTF_8));
-            assertEquals("sqrt(x)", new String(gateway.renderFormula("sqrt(x)"), java.nio.charset.StandardCharsets.UTF_8));
+            assertEquals("<p>π</p>", new String(gateway.renderHtml("<p>π</p>", 240), StandardCharsets.UTF_8));
+            assertEquals("sqrt(x)", new String(gateway.renderFormula("sqrt(x)"), StandardCharsets.UTF_8));
             assertThrows(IOException.class, () -> gateway.renderFormula("wrong"));
             var overloaded = assertThrows(ResponseStatusException.class, () -> gateway.renderFormula("busy"));
             assertEquals(503, overloaded.getStatusCode().value());

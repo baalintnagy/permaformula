@@ -1,21 +1,23 @@
 package org.permmath.rendering;
 
-import io.grpc.*;
-import io.grpc.netty.shaded.io.grpc.netty.*;
-import io.grpc.netty.shaded.io.netty.channel.EventLoopGroup;
-import io.grpc.netty.shaded.io.netty.channel.MultiThreadIoEventLoopGroup;
-import io.grpc.netty.shaded.io.netty.channel.epoll.*;
-import io.grpc.netty.shaded.io.netty.channel.unix.DomainSocketAddress;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+
 import org.permmath.contract.RenderProtocol;
 import org.permmath.contract.v1.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+
+import io.grpc.*;
+import io.grpc.netty.shaded.io.grpc.netty.*;
+import io.grpc.netty.shaded.io.netty.channel.EventLoopGroup;
+import io.grpc.netty.shaded.io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.grpc.netty.shaded.io.netty.channel.epoll.*;
+import io.grpc.netty.shaded.io.netty.channel.unix.DomainSocketAddress;
 import jakarta.annotation.PreDestroy;
 
 @Service

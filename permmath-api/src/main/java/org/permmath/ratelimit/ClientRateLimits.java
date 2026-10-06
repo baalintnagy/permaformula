@@ -2,19 +2,23 @@ package org.permmath.ratelimit;
 
 import java.time.Duration;
 import java.util.concurrent.Semaphore;
+
+import org.permmath.rendering.ApiWorkService.Operation;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
+
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Expiry;
 import com.github.benmanes.caffeine.cache.Ticker;
 import com.google.common.net.InetAddresses;
+
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.TimeMeter;
 import jakarta.servlet.http.HttpServletRequest;
-import org.permmath.rendering.ApiWorkService.Operation;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 /** In-memory per-instance quotas. Expiration never resets a partially refilled bucket. */
 @Component
@@ -25,7 +29,9 @@ public final class ClientRateLimits {
     private final TimeMeter clock;
 
     @Autowired
-    public ClientRateLimits(ClientRateLimitProperties properties) { this(properties, Ticker.systemTicker()); }
+    public ClientRateLimits(ClientRateLimitProperties properties) {
+        this(properties, Ticker.systemTicker());
+    }
 
     ClientRateLimits(ClientRateLimitProperties properties, Ticker ticker) {
         this.properties = properties;
@@ -35,13 +41,33 @@ public final class ClientRateLimits {
                 // Pin its identity until the worker actually exits, rather than resetting its concurrency allowance.
                 return client.leases > 0 ? Long.MAX_VALUE : properties.expireAfterAccess().toNanos();
             }
-            @Override public long expireAfterCreate(String key, Client value, long now) { return duration(value); }
-            @Override public long expireAfterUpdate(String key, Client value, long now, long remaining) { return duration(value); }
-            @Override public long expireAfterRead(String key, Client value, long now, long remaining) { return duration(value); }
+
+            @Override
+            public long expireAfterCreate(String key, Client value, long now) {
+                return duration(value);
+            }
+
+            @Override
+            public long expireAfterUpdate(String key, Client value, long now, long remaining) {
+                return duration(value);
+            }
+
+            @Override
+            public long expireAfterRead(String key, Client value, long now, long remaining) {
+                return duration(value);
+            }
+
         }).ticker(ticker).build();
         clock = new TimeMeter() {
-            @Override public long currentTimeNanos() { return ticker.read(); }
-            @Override public boolean isWallClockBased() { return false; }
+            @Override
+            public long currentTimeNanos() {
+                return ticker.read();
+            }
+
+            @Override
+            public boolean isWallClockBased() {
+                return false;
+            }
         };
     }
 
@@ -49,15 +75,21 @@ public final class ClientRateLimits {
         String peer = canonical(request.getRemoteAddr());
         if (properties.trustedProxies().contains(peer)) {
             var headers = request.getHeaders("X-Forwarded-For");
-            if (!headers.hasMoreElements()) throw invalidProxyHeader();
+            if (!headers.hasMoreElements()) {
+                throw invalidProxyHeader();
+            }
             String forwarded = headers.nextElement();
-            if (headers.hasMoreElements() || !InetAddresses.isInetAddress(forwarded)) throw invalidProxyHeader();
+            if (headers.hasMoreElements() || !InetAddresses.isInetAddress(forwarded)) {
+                throw invalidProxyHeader();
+            }
             return canonical(forwarded);
         }
         return peer;
     }
 
-    private static String canonical(String value) { return InetAddresses.toAddrString(InetAddresses.forString(value)); }
+    private static String canonical(String value) {
+        return InetAddresses.toAddrString(InetAddresses.forString(value));
+    }
     private static ResponseStatusException invalidProxyHeader() {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trusted proxy must supply one literal client IP");
     }
@@ -65,7 +97,9 @@ public final class ClientRateLimits {
     // Serialize admission only; never evict a live client to make room for a fresh allowance.
     private synchronized Client client(String identity) {
         Client client = clients.getIfPresent(identity);
-        if (client != null) return client;
+        if (client != null) {
+            return client;
+        }
         clients.cleanUp();
         if (clients.estimatedSize() >= properties.maximumClients()) {
             throw new Limited("Client rate-limit capacity reached", properties.expireAfterAccess().toSeconds() + 1);
@@ -98,18 +132,26 @@ public final class ClientRateLimits {
     /** Called only by the cache's actual loader; capture identity before the worker thread starts. */
     public static <T> Operation<T> generation(Operation<T> operation) {
         Context context = CURRENT.get();
-        if (context == null) return operation; // Non-HTTP internal callers have global admission only.
+        if (context == null) {
+            return operation; // Non-HTTP internal callers have global admission only.
+        }
         Client client = context.client();
         consume(client.generations(), "Render rate exceeded");
         return () -> {
             context.owner().acquireGeneration(client);
-            try { return operation.run(); }
-            finally { context.owner().releaseGeneration(client); }
+            try {
+                return operation.run();
+            }
+            finally {
+                context.owner().releaseGeneration(client);
+            }
         };
     }
 
     private synchronized void acquireGeneration(Client client) {
-        if (!client.slots().tryAcquire()) throw new Limited("Client rendering concurrency exceeded", 1);
+        if (!client.slots().tryAcquire()) {
+            throw new Limited("Client rendering concurrency exceeded", 1);
+        }
         retain(client);
     }
 
@@ -156,9 +198,15 @@ public final class ClientRateLimits {
             this.generations = generations;
             this.slots = slots;
         }
-        Bucket requests() { return requests; }
-        Bucket generations() { return generations; }
-        Semaphore slots() { return slots; }
+        Bucket requests() {
+            return requests;
+        }
+        Bucket generations() {
+            return generations;
+        }
+        Semaphore slots() {
+            return slots;
+        }
     }
 
     public static final class Scope implements AutoCloseable {
@@ -170,8 +218,13 @@ public final class ClientRateLimits {
             this.client = client;
             this.previous = previous;
         }
-        @Override public void close() {
-            if (previous == null) CURRENT.remove(); else CURRENT.set(previous);
+        @Override
+        public void close() {
+            if (previous == null) {
+                CURRENT.remove();
+            } else {
+                CURRENT.set(previous);
+            }
             owner.releaseRequest(client);
         }
     }
@@ -183,8 +236,9 @@ public final class ClientRateLimits {
             super(HttpStatus.TOO_MANY_REQUESTS, reason);
             this.retryAfter = retryAfter;
         }
-        @Override public org.springframework.http.HttpHeaders getHeaders() {
-            var headers = new org.springframework.http.HttpHeaders();
+        @Override
+        public HttpHeaders getHeaders() {
+            var headers = new HttpHeaders();
             headers.set("Retry-After", Long.toString(retryAfter));
             headers.setCacheControl("no-store");
             return headers;

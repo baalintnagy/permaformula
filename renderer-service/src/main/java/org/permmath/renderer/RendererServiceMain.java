@@ -1,5 +1,15 @@
 package org.permmath.renderer;
 
+import java.net.InetSocketAddress;
+import java.nio.file.*;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Duration;
+import java.util.concurrent.*;
+
+import org.permmath.contract.v1.RendererGrpc;
+import org.permmath.rendering.*;
+
+import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
 import io.grpc.netty.shaded.io.grpc.netty.*;
 import io.grpc.netty.shaded.io.netty.channel.EventLoopGroup;
 import io.grpc.netty.shaded.io.netty.channel.MultiThreadIoEventLoopGroup;
@@ -7,14 +17,6 @@ import io.grpc.netty.shaded.io.netty.channel.epoll.*;
 import io.grpc.netty.shaded.io.netty.channel.unix.DomainSocketAddress;
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
 import io.grpc.protobuf.services.HealthStatusManager;
-import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
-import java.net.InetSocketAddress;
-import java.nio.file.*;
-import java.nio.file.attribute.PosixFilePermissions;
-import java.time.Duration;
-import java.util.concurrent.*;
-import org.permmath.contract.v1.RendererGrpc;
-import org.permmath.rendering.*;
 
 public final class RendererServiceMain {
 

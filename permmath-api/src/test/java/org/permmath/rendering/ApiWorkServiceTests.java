@@ -1,12 +1,14 @@
 package org.permmath.rendering;
 
 import static org.junit.jupiter.api.Assertions.*;
+
 import java.io.IOException;
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -31,7 +33,9 @@ class ApiWorkServiceTests {
                 assertEquals("1", overloaded.getHeaders().getFirst("Retry-After"));
                 assertEquals("prepare", work.prepare(() -> "prepare"));
                 assertEquals("fetch", work.fetch(() -> "fetch"));
-            } finally { release.countDown(); }
+            } finally {
+                release.countDown();
+            }
             assertEquals("done", active.get(2, TimeUnit.SECONDS));
             assertEquals("recovered", work.generate(() -> "recovered"));
         }
@@ -39,8 +43,12 @@ class ApiWorkServiceTests {
 
     @Test
     void failuresReleasePreparationAndFetchSlots() throws Exception {
-        assertThrows(IOException.class, () -> work.prepare(() -> { throw new IOException("bad input"); }));
-        assertThrows(IllegalArgumentException.class, () -> work.fetch(() -> { throw new IllegalArgumentException("bad URL"); }));
+        assertThrows(IOException.class, () -> work.prepare(() -> {
+            throw new IOException("bad input");
+        }));
+        assertThrows(IllegalArgumentException.class, () -> work.fetch(() -> {
+            throw new IllegalArgumentException("bad URL");
+        }));
         assertEquals("ok", work.prepare(() -> "ok"));
         assertEquals("ok", work.fetch(() -> "ok"));
     }
@@ -78,7 +86,9 @@ class ApiWorkServiceTests {
                 assertEquals(504, assertThrows(ResponseStatusException.class, () -> work.fetch(() -> {
                     worker.set(Thread.currentThread());
                     while (release.getCount() != 0) {
-                        try { release.await(); } catch (InterruptedException ignored) { }
+                        try {
+                            release.await();
+                        } catch (InterruptedException ignored) { }
                     }
                     return "late";
                 })).getStatusCode().value());
@@ -87,13 +97,17 @@ class ApiWorkServiceTests {
                     () -> work.fetch(() -> "must not start")).getStatusCode().value());
         } finally {
             release.countDown();
-            if (worker.get() != null) worker.get().join(2000);
+            if (worker.get() != null) {
+                worker.get().join(2000);
+            }
         }
         assertEquals("recovered", work.fetch(() -> "recovered"));
     }
 
     private static void await(CountDownLatch latch) throws IOException {
-        try { latch.await(); } catch (InterruptedException interrupted) {
+        try {
+            latch.await();
+        } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new IOException("interrupted", interrupted);
         }

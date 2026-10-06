@@ -1,9 +1,13 @@
 package org.permmath;
 
-import jakarta.validation.constraints.NotBlank;
+import java.net.URI;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
+
+import jakarta.validation.constraints.NotBlank;
 
 @Validated
 @ConfigurationProperties(prefix = "permmath")
@@ -12,14 +16,15 @@ public record PermMathProperties(
         String imageHost,
         @DefaultValue("800") int defaultImageWidth,
         @DefaultValue("2000.0") float defaultDpi) {
-    @org.springframework.boot.context.properties.bind.ConstructorBinding
+
+    @ConstructorBinding
     public PermMathProperties {
         host = origin(host, "host");
         if (imageHost == null) {
             imageHost = host; // Standalone development retains a single origin unless explicitly configured.
         } else {
             imageHost = origin(imageHost, "image-host");
-            if (sameOrigin(java.net.URI.create(host), java.net.URI.create(imageHost))) {
+            if (sameOrigin(URI.create(host), URI.create(imageHost))) {
                 throw new IllegalArgumentException("Configured image-host must use a different origin from host");
             }
         }
@@ -30,8 +35,10 @@ public record PermMathProperties(
     }
 
     private static String origin(String value, String property) {
-        java.net.URI uri;
-        try { uri = java.net.URI.create(value); }
+        URI uri;
+        try {
+            uri = URI.create(value);
+        }
         catch (IllegalArgumentException | NullPointerException invalid) {
             throw new IllegalArgumentException("permmath." + property + " must be an HTTP(S) origin");
         }
@@ -45,12 +52,12 @@ public record PermMathProperties(
         return result.endsWith("/") ? result.substring(0, result.length() - 1) : result;
     }
 
-    private static boolean sameOrigin(java.net.URI left, java.net.URI right) {
+    private static boolean sameOrigin(URI left, URI right) {
         return left.getScheme().equalsIgnoreCase(right.getScheme()) && left.getHost().equalsIgnoreCase(right.getHost())
                 && port(left) == port(right);
     }
 
-    private static int port(java.net.URI uri) {
+    private static int port(URI uri) {
         return uri.getPort() != -1 ? uri.getPort() : "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
     }
 }

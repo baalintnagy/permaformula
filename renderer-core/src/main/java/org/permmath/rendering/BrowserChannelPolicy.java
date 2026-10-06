@@ -1,5 +1,10 @@
 package org.permmath.rendering;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import com.microsoft.playwright.*;
 import com.microsoft.playwright.options.ServiceWorkerPolicy;
 
@@ -12,10 +17,12 @@ final class BrowserChannelPolicy {
 
     private static String loadGuards() {
         try (var input = BrowserChannelPolicy.class.getResourceAsStream("/browser-guards.js")) {
-            if (input == null) throw new IllegalStateException("Missing browser guards resource");
-            return new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-        } catch (java.io.IOException error) {
-            throw new java.io.UncheckedIOException("Unable to load browser guards", error);
+            if (input == null) {
+                throw new IllegalStateException("Missing browser guards resource");
+            }
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException error) {
+            throw new UncheckedIOException("Unable to load browser guards", error);
         }
     }
 
@@ -36,7 +43,7 @@ final class BrowserChannelPolicy {
     static Page newPage(BrowserContext context, String documentUrl) {
         // The initial about:blank page has no content. Install all guards before navigating it.
         var page = context.newPage();
-        var documentAdmitted = new java.util.concurrent.atomic.AtomicBoolean();
+        var documentAdmitted = new AtomicBoolean();
         context.onPage(extra -> {
             if (extra != page) {
                 extra.close();

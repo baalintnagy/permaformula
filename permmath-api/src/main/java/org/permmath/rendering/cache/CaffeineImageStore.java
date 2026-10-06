@@ -2,15 +2,26 @@ package org.permmath.rendering.cache;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+import org.permmath.rendering.WorkDeadline;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
+
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.github.benmanes.caffeine.cache.Ticker;
 import com.github.benmanes.caffeine.cache.stats.CacheStats;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
 @Component
 public class CaffeineImageStore implements GeneratedImageStore {
@@ -18,8 +29,8 @@ public class CaffeineImageStore implements GeneratedImageStore {
     private static final Logger log = LoggerFactory.getLogger(CaffeineImageStore.class);
 
     private final Cache<String, String> cache;
-    private final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CompletableFuture<String>> loading
-            = new java.util.concurrent.ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, CompletableFuture<String>> loading
+            = new ConcurrentHashMap<>();
 
     @Autowired
     public CaffeineImageStore(ImageCacheProperties properties) {
@@ -28,8 +39,17 @@ public class CaffeineImageStore implements GeneratedImageStore {
 
     CaffeineImageStore(ImageCacheProperties properties, Ticker ticker) {
         long effectiveBytes = properties.effectiveMaximumBytes(Runtime.getRuntime().maxMemory());
-        cache = // Conservative UTF-16 content estimate plus key and per-entry overhead.
-        Caffeine.newBuilder().maximumWeight(effectiveBytes).weigher((String key, String svg) -> (int) Math.min(Integer.MAX_VALUE, 2L * (key.length() + svg.length()) + 256)).expireAfterAccess(properties.expireAfterAccess()).removalListener((String key, String svg, com.github.benmanes.caffeine.cache.RemovalCause cause) -> log.debug("event=cache_removed key={} cause={}", key, cause)).ticker(ticker).recordStats().build();
+        // Conservative UTF-16 content estimate plus key and per-entry overhead.
+        cache = Caffeine.newBuilder()
+            .maximumWeight(effectiveBytes)
+            .weigher((String key, String svg) -> (int) Math.min(Integer.MAX_VALUE,
+                2L * (key.length() + svg.length()) + 256))
+            .expireAfterAccess(properties.expireAfterAccess())
+            .removalListener((String key, String svg, RemovalCause cause) ->
+                log.debug("event=cache_removed key={} cause={}", key, cause))
+            .ticker(ticker)
+            .recordStats()
+            .build();
         log.info("event=cache_initialized configuredBytes={} effectiveBytes={} expireAfterAccess={}",
                 properties.maximumSize().toBytes(), effectiveBytes, properties.expireAfterAccess());
     }
@@ -41,23 +61,29 @@ public class CaffeineImageStore implements GeneratedImageStore {
             log.info("event=cache_hit key={} source=cached", key);
             return cached;
         }
-        var completion = new java.util.concurrent.CompletableFuture<String>();
+        var completion = new CompletableFuture<String>();
         var pending = loading.putIfAbsent(key, completion);
         if (pending != null) {
             try {
-                return pending.get(org.permmath.rendering.WorkDeadline.remainingNanos(java.time.Duration.ofSeconds(60)),
+                return pending.get(WorkDeadline.remainingNanos(Duration.ofSeconds(60)),
                         TimeUnit.NANOSECONDS);
-            } catch (java.util.concurrent.TimeoutException timeout) {
-                throw new org.springframework.web.server.ResponseStatusException(
-                        org.springframework.http.HttpStatus.GATEWAY_TIMEOUT, "Waiting for image exceeded request deadline");
+            } catch (TimeoutException timeout) {
+                throw new ResponseStatusException(
+                        HttpStatus.GATEWAY_TIMEOUT, "Waiting for image exceeded request deadline");
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
-                throw new org.springframework.web.server.ResponseStatusException(
-                        org.springframework.http.HttpStatus.GATEWAY_TIMEOUT, "Image wait interrupted");
-            } catch (java.util.concurrent.ExecutionException failed) {
-                if (failed.getCause() instanceof IOException checked) throw checked;
-                if (failed.getCause() instanceof RuntimeException runtime) throw runtime;
-                if (failed.getCause() instanceof Error error) throw error;
+                throw new ResponseStatusException(
+                        HttpStatus.GATEWAY_TIMEOUT, "Image wait interrupted");
+            } catch (ExecutionException failed) {
+                if (failed.getCause() instanceof IOException checked) {
+                    throw checked;
+                }
+                if (failed.getCause() instanceof RuntimeException runtime) {
+                    throw runtime;
+                }
+                if (failed.getCause() instanceof Error error) {
+                    throw error;
+                }
                 throw new IOException("Image generation failed", failed.getCause());
             }
         }

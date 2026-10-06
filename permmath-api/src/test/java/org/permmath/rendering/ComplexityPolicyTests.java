@@ -2,14 +2,19 @@ package org.permmath.rendering;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.permmath.contract.ComplexityPolicy.Limit.*;
+
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+
 import org.junit.jupiter.api.Test;
 import org.permmath.contract.ComplexityPolicy;
+
 import tools.jackson.databind.json.JsonMapper;
 
 class ComplexityPolicyTests {
-    @Test void sharesValidatedOverridesWithJavascriptWorkersAndCacheIdentity() throws Exception {
+    @Test
+    void sharesValidatedOverridesWithJavascriptWorkersAndCacheIdentity() throws Exception {
         var properties = new Properties();
         properties.setProperty("permmath.complexity.render-dimension", "12000");
         var policy = ComplexityPolicy.load(properties, Map.of("PERMMATH_COMPLEXITY_RENDER_DIMENSION", "10000",
@@ -23,8 +28,9 @@ class ComplexityPolicyTests {
         assertNotEquals(ComplexityPolicy.load(new Properties(), Map.of()).fingerprint(), child.fingerprint());
     }
 
-    @Test void rejectsInvalidAndTransportExceedingConfiguration() {
-        for (String value : java.util.List.of("0", "-1", "NaN", "2147483648")) {
+    @Test
+    void rejectsInvalidAndTransportExceedingConfiguration() {
+        for (String value : List.of("0", "-1", "NaN", "2147483648")) {
             assertThrows(IllegalArgumentException.class, () -> ComplexityPolicy.load(new Properties(),
                     Map.of("PERMMATH_COMPLEXITY_HTML_DEPTH", value)));
         }

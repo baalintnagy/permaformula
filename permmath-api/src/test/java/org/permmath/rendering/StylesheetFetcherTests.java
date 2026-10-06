@@ -1,21 +1,26 @@
 package org.permmath.rendering;
 
 import static org.junit.jupiter.api.Assertions.*;
+
 import java.io.ByteArrayInputStream;
 import java.net.InetAddress;
+import java.net.URI;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import org.junit.jupiter.api.Test;
+
 import org.apache.hc.core5.http.ContentType;
 import org.apache.hc.core5.http.io.entity.InputStreamEntity;
 import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.apache.hc.core5.http.message.BasicClassicHttpResponse;
+import org.junit.jupiter.api.Test;
 
 class StylesheetFetcherTests {
 
     @Test
     void checksEveryRedirectIncludingRelativeLocationsAndDowngrades() throws Exception {
-        var current = java.net.URI.create("https://example.com/css/main.css");
+        var current = URI.create("https://example.com/css/main.css");
         try (var response = new BasicClassicHttpResponse(302)) {
             response.setHeader("Location", "theme.css");
             assertEquals("https://example.com/css/theme.css", StylesheetFetcher.redirect(current, response, 0).toString());
@@ -30,11 +35,11 @@ class StylesheetFetcherTests {
 
     @Test
     void expandsRelativeImportsFromFinalRedirectDestinationAndKeepsOrder() throws Exception {
-        var requested = new java.util.ArrayList<String>();
+        var requested = new ArrayList<String>();
         var fetcher = new StylesheetFetcher((uri, deadline) -> {
             requested.add(uri.toString());
             if (uri.getPath().equals("/main.css")) {
-                return new StylesheetFetcher.Download(java.net.URI.create("https://example.com/css/final.css"), "@import 'base.css' screen; p {color:blue}");
+                return new StylesheetFetcher.Download(URI.create("https://example.com/css/final.css"), "@import 'base.css' screen; p {color:blue}");
             }
             return new StylesheetFetcher.Download(uri, "p {color:red; background-image:url(https://evil.example/x)}");
         });
@@ -117,7 +122,7 @@ class StylesheetFetcherTests {
             assertThrows(IllegalArgumentException.class, () -> StylesheetFetcher.readCss(response));
         }
         assertThrows(IllegalArgumentException.class, () -> new StylesheetFetcher().fetchAll(
-                java.util.Collections.nCopies(StylesheetFetcher.MAX_REFS + 1, "https://example.com/x.css")));
+                Collections.nCopies(StylesheetFetcher.MAX_REFS + 1, "https://example.com/x.css")));
     }
 
     private static BasicClassicHttpResponse response(String body, String type) {

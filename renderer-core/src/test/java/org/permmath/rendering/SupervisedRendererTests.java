@@ -1,13 +1,16 @@
 package org.permmath.rendering;
 
 import static org.junit.jupiter.api.Assertions.*;
-import com.google.protobuf.ByteString;
+
 import java.nio.file.*;
 import java.time.Duration;
 import java.util.concurrent.*;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.permmath.contract.v1.*;
+
+import com.google.protobuf.ByteString;
 
 class SupervisedRendererTests {
 
@@ -52,7 +55,9 @@ class SupervisedRendererTests {
             var hanging = request().toBuilder().setRequestId("hang").build();
             var active = callers.submit(() -> queue.execute(hanging, Duration.ofSeconds(10)));
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-            while (!Files.exists(temp.resolve("pid")) && System.nanoTime() < deadline) Thread.sleep(10);
+            while (!Files.exists(temp.resolve("pid")) && System.nanoTime() < deadline) {
+                Thread.sleep(10);
+            }
             assertTrue(Files.exists(temp.resolve("pid")));
             long pid = Long.parseLong(Files.readString(temp.resolve("pid")));
             assertTrue(ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false));

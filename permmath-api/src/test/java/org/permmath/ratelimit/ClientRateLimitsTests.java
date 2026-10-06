@@ -1,14 +1,24 @@
 package org.permmath.ratelimit;
 
 import static org.junit.jupiter.api.Assertions.*;
+
+import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
+
 import org.junit.jupiter.api.Test;
+import org.permmath.rendering.ApiWorkProperties;
+import org.permmath.rendering.ApiWorkService;
+import org.permmath.rendering.cache.CaffeineImageStore;
+import org.permmath.rendering.cache.ImageCacheProperties;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.util.unit.DataSize;
 import org.springframework.web.server.ResponseStatusException;
 
 class ClientRateLimitsTests {
@@ -25,7 +35,8 @@ class ClientRateLimitsTests {
         return request;
     }
 
-    @Test void ignoresForgedHeadersFromUntrustedPeersAndCanonicalizesAddresses() {
+    @Test
+    void ignoresForgedHeadersFromUntrustedPeersAndCanonicalizesAddresses() {
         var limits = limits(10, Duration.ofMinutes(1), List.of("172.30.86.2"));
         var direct = request("203.0.113.1");
         direct.addHeader("X-Forwarded-For", "198.51.100.1");
@@ -38,7 +49,8 @@ class ClientRateLimitsTests {
         assertEquals("203.0.113.1", limits.identity(request("::ffff:203.0.113.1")));
     }
 
-    @Test void rejectsMissingAmbiguousOrNonLiteralTrustedProxyHeadersWithoutDns() {
+    @Test
+    void rejectsMissingAmbiguousOrNonLiteralTrustedProxyHeadersWithoutDns() {
         var limits = limits(10, Duration.ofMinutes(1), List.of("172.30.86.2"));
         for (String value : List.of("example.com", "127.0.0.1, 203.0.113.1", "203.0.113.1:80", "[::1]", " 203.0.113.1")) {
             var proxy = request("172.30.86.2");
@@ -52,7 +64,8 @@ class ClientRateLimitsTests {
         assertThrows(ResponseStatusException.class, () -> limits.open(duplicate));
     }
 
-    @Test void isolatesClientsAndRefillsUsingMonotonicTime() {
+    @Test
+    void isolatesClientsAndRefillsUsingMonotonicTime() {
         var limits = limits(10, Duration.ofMinutes(1), List.of());
         var first = request("203.0.113.1");
         try (var scope = limits.open(first)) { }
@@ -65,7 +78,8 @@ class ClientRateLimitsTests {
         assertThrows(ClientRateLimits.Limited.class, () -> limits.open(first));
     }
 
-    @Test void rejectsNewIdentitiesAtCapacityWithoutResettingExistingAllowances() {
+    @Test
+    void rejectsNewIdentitiesAtCapacityWithoutResettingExistingAllowances() {
         var limits = limits(1, Duration.ofSeconds(2), List.of());
         var first = request("203.0.113.1");
         try (var scope = limits.open(first)) { }
@@ -76,7 +90,8 @@ class ClientRateLimitsTests {
         try (var scope = limits.open(request("203.0.113.2"))) { }
     }
 
-    @Test void pinsActiveRequestsBeyondIdleExpiry() {
+    @Test
+    void pinsActiveRequestsBeyondIdleExpiry() {
         var limits = limits(1, Duration.ofSeconds(2), List.of());
         try (var scope = limits.open(request("203.0.113.1"))) {
             now.addAndGet(Duration.ofSeconds(3).toNanos());
@@ -86,16 +101,21 @@ class ClientRateLimitsTests {
         try (var scope = limits.open(request("203.0.113.2"))) { }
     }
 
-    @Test void retainsWorkerConcurrencyAfterRequestClosesAndReleasesOnActualExit() throws Exception {
+    @Test
+    void retainsWorkerConcurrencyAfterRequestClosesAndReleasesOnActualExit() throws Exception {
         var limits = limits(2, Duration.ofSeconds(2), List.of());
         var entered = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         try (var executor = Executors.newSingleThreadExecutor()) {
-            java.util.concurrent.Future<String> active;
+            Future<String> active;
             try (var scope = limits.open(request("203.0.113.1"))) {
                 var operation = ClientRateLimits.generation(() -> {
                     entered.countDown();
-                    try { release.await(); } catch (InterruptedException interrupted) { throw new java.io.IOException(interrupted); }
+                    try {
+                        release.await();
+                    } catch (InterruptedException interrupted) {
+                        throw new IOException(interrupted);
+                    }
                     return "done";
                 });
                 active = executor.submit(operation::run);
@@ -110,7 +130,9 @@ class ClientRateLimitsTests {
                 try (var scope = limits.open(request("203.0.113.2"))) {
                     assertEquals("other", ClientRateLimits.generation(() -> "other").run());
                 }
-            } finally { release.countDown(); }
+            } finally {
+                release.countDown();
+            }
             assertEquals("done", active.get(2, TimeUnit.SECONDS));
             now.addAndGet(Duration.ofSeconds(1).toNanos());
             try (var scope = limits.open(request("203.0.113.1"))) {
@@ -119,11 +141,12 @@ class ClientRateLimitsTests {
         }
     }
 
-    @Test void failedGenerationsSpendTokensAndReleaseConcurrency() throws Exception {
+    @Test
+    void failedGenerationsSpendTokensAndReleaseConcurrency() throws Exception {
         var limits = limits(10, Duration.ofMinutes(1), List.of());
         try (var scope = limits.open(request("203.0.113.1"))) {
-            assertThrows(java.io.IOException.class, () -> ClientRateLimits.generation(() -> {
-                throw new java.io.IOException("failed");
+            assertThrows(IOException.class, () -> ClientRateLimits.generation(() -> {
+                throw new IOException("failed");
             }).run());
             assertEquals("ok", ClientRateLimits.generation(() -> "ok").run());
             assertThrows(ClientRateLimits.Limited.class, () -> ClientRateLimits.generation(() -> "denied"));
@@ -131,18 +154,20 @@ class ClientRateLimitsTests {
         assertEquals("internal", ClientRateLimits.generation(() -> "internal").run());
     }
 
-    @Test void rejectsExpiryThatWouldGrantFreshTokensBeforeFullRefillAndHostnames() {
+    @Test
+    void rejectsExpiryThatWouldGrantFreshTokensBeforeFullRefillAndHostnames() {
         assertThrows(IllegalArgumentException.class, () -> limits(10, Duration.ofSeconds(1), List.of()));
         assertThrows(IllegalArgumentException.class, () -> limits(10, Duration.ofMinutes(1), List.of("ingress")));
     }
 
-    @Test void sharedInFlightCacheLoadDoesNotSpendAnotherClientsGenerationTokens() throws Exception {
+    @Test
+    void sharedInFlightCacheLoadDoesNotSpendAnotherClientsGenerationTokens() throws Exception {
         var limits = new ClientRateLimits(new ClientRateLimitProperties(60, 10, 32, 1, 1, 1,
                 10, Duration.ofMinutes(1), List.of()), now::get);
-        var store = new org.permmath.rendering.cache.CaffeineImageStore(
-                new org.permmath.rendering.cache.ImageCacheProperties(
-                        org.springframework.util.unit.DataSize.ofMegabytes(1), Duration.ofHours(1)));
-        var work = new org.permmath.rendering.ApiWorkService(org.permmath.rendering.ApiWorkProperties.defaults());
+        var store = new CaffeineImageStore(
+                new ImageCacheProperties(
+                        DataSize.ofMegabytes(1), Duration.ofHours(1)));
+        var work = new ApiWorkService(ApiWorkProperties.defaults());
         var entered = new CountDownLatch(1);
         var waiting = new CountDownLatch(1);
         var release = new CountDownLatch(1);
@@ -151,7 +176,11 @@ class ClientRateLimitsTests {
                 try (var scope = limits.open(request("203.0.113.1"))) {
                     return store.getOrGenerate("shared", () -> work.generate(ClientRateLimits.generation(() -> {
                         entered.countDown();
-                        try { release.await(); } catch (InterruptedException interrupted) { throw new java.io.IOException(interrupted); }
+                        try {
+                            release.await();
+                        } catch (InterruptedException interrupted) {
+                            throw new IOException(interrupted);
+                        }
                         return "shared-svg";
                     })));
                 }
@@ -170,14 +199,17 @@ class ClientRateLimitsTests {
             });
             try {
                 assertTrue(waiting.await(2, TimeUnit.SECONDS));
-                assertThrows(java.util.concurrent.TimeoutException.class, () -> second.get(50, TimeUnit.MILLISECONDS));
-            } finally { release.countDown(); }
+                assertThrows(TimeoutException.class, () -> second.get(50, TimeUnit.MILLISECONDS));
+            } finally {
+                release.countDown();
+            }
             assertEquals("shared-svg", first.get(2, TimeUnit.SECONDS));
             assertEquals("shared-svg", second.get(2, TimeUnit.SECONDS));
         }
     }
 
-    @Test void boundsConcurrentRequestsIncludingSharedImageWaitersAndReleasesOnClose() {
+    @Test
+    void boundsConcurrentRequestsIncludingSharedImageWaitersAndReleasesOnClose() {
         var limits = new ClientRateLimits(new ClientRateLimitProperties(60, 10, 1, 60, 2, 1,
                 10, Duration.ofMinutes(1), List.of()), now::get);
         try (var scope = limits.open(request("203.0.113.1"))) {

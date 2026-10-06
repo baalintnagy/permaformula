@@ -1,15 +1,20 @@
 package org.permmath.rendering;
 
 import static org.junit.jupiter.api.Assertions.*;
-import com.microsoft.playwright.*;
-import com.sun.net.httpserver.HttpServer;
+
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+
+import com.microsoft.playwright.*;
+import com.sun.net.httpserver.HttpServer;
 
 /**
  * Exercise the browser guards directly, without the input sanitizer or CSP hiding a missing guard.
@@ -52,7 +57,7 @@ class BrowserChannelPolicyTests {
                   socket.onerror = () => resolve('closed');
                 })
                 """, fixture.base.replace("http:", "ws:") + "/socket"));
-            assertEquals(java.util.List.of("SecurityError", "SecurityError"), page.evaluate("""
+            assertEquals(List.of("SecurityError", "SecurityError"), page.evaluate("""
                 async () => {
                   const results = [];
                   for (const register of [navigator.serviceWorker.register, ServiceWorkerContainer.prototype.register]) {
@@ -82,7 +87,7 @@ class BrowserChannelPolicyTests {
                 </script>
                 """;
             var page = fixture.page(context);
-            assertEquals(java.util.Collections.nCopies(6, "SecurityError"), page.evaluate("window.results"));
+            assertEquals(Collections.nCopies(6, "SecurityError"), page.evaluate("window.results"));
             assertEquals(Boolean.TRUE, page.evaluate("""
                 () => {
                   try { Object.defineProperty(window, 'Worker', {value: function () {}}); return false; }
@@ -113,7 +118,7 @@ class BrowserChannelPolicyTests {
 
     @Test
     void rejectsEvenNonNetworkChildFrames() throws Exception {
-        for (var source : java.util.List.of("about:blank", "srcdoc", "data:text/html,child", "same-document")) {
+        for (var source : List.of("about:blank", "srcdoc", "data:text/html,child", "same-document")) {
             try (var fixture = new Fixture();
                 var context = BrowserChannelPolicy.newContext(browser, 320)) {
                 var page = fixture.page(context);

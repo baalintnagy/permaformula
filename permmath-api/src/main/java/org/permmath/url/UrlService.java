@@ -6,33 +6,39 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import java.io.IOException;
 import java.util.List;
 
-import jakarta.validation.constraints.NotBlank;
-
+import org.jspecify.annotations.Nullable;
 import org.permmath.PermMathProperties;
 import org.permmath.compression.StringCompressionService;
+import org.permmath.rendering.ApiWorkProperties;
+import org.permmath.rendering.ApiWorkService;
+import org.permmath.validation.InputLimits;
 import org.permmath.validation.ValidImageWidth;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
+import jakarta.validation.constraints.NotBlank;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.StreamReadConstraints;
+import tools.jackson.core.json.JsonFactory;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
-
+import tools.jackson.databind.json.JsonMapper;
 
 @Validated
 @Service
 public class UrlService {
 
-    private static final ObjectMapper DESCRIPTOR_MAPPER = tools.jackson.databind.json.JsonMapper.builder(
-            tools.jackson.core.json.JsonFactory.builder().streamReadConstraints(
-                    tools.jackson.core.StreamReadConstraints.builder()
+    private static final ObjectMapper DESCRIPTOR_MAPPER = JsonMapper.builder(
+            JsonFactory.builder().streamReadConstraints(
+                    StreamReadConstraints.builder()
                             .maxNestingDepth(8)
                             .maxTokenCount(128)
                             .maxNameLength(64)
-                            .maxStringLength(org.permmath.validation.InputLimits.MAX_CONTENT_BYTES)
+                            .maxStringLength(InputLimits.MAX_CONTENT_BYTES)
                             .maxNumberLength(10)
                             .build()).build())
-            .enable(tools.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+            .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
             .build();
 
     @Autowired
@@ -44,8 +50,8 @@ public class UrlService {
     @Autowired
     private StringCompressionService stringCompressionService;
     @Autowired
-    private org.permmath.rendering.ApiWorkService work = new org.permmath.rendering.ApiWorkService(
-            org.permmath.rendering.ApiWorkProperties.defaults());
+    private ApiWorkService work = new ApiWorkService(
+            ApiWorkProperties.defaults());
 
     public String getImageUrl(
             @NotBlank String formula,
@@ -57,8 +63,10 @@ public class UrlService {
 
     public String encodeText(String text) throws IOException {
         return work.prepare(() -> {
-            if (text == null) throw new IllegalArgumentException("Text is required");
-            org.permmath.validation.InputLimits.text(text, org.permmath.validation.InputLimits.MAX_CONTENT_BYTES, "Text");
+            if (text == null) {
+                throw new IllegalArgumentException("Text is required");
+            }
+            InputLimits.text(text, InputLimits.MAX_CONTENT_BYTES, "Text");
             return encode(text, UTF_8);
         });
     }
@@ -89,7 +97,7 @@ public class UrlService {
                 throw new IllegalArgumentException("Descriptor must not be null");
             }
             return descriptor;
-        } catch (tools.jackson.core.JacksonException invalid) {
+        } catch (JacksonException invalid) {
             // Parser diagnostics may contain submitted content; do not expose/log them.
             throw new IllegalArgumentException("Invalid image descriptor");
         } catch (IOException invalid) {

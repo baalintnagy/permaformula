@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.io.IOException;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.permmath.rendering.cache.CaffeineImageStore;
@@ -39,10 +40,14 @@ class EndpointLoggingTests {
     void cacheLogsGenerationReuseAndFailureAndPreservesExceptions(CapturedOutput output) throws Exception {
         String key = "logging-test-image";
         cache.getOrGenerate(key, () -> "<svg>private-image-content</svg>");
-        cache.getOrGenerate(key, () -> { throw new AssertionError("Should reuse cached output"); });
+        cache.getOrGenerate(key, () -> {
+            throw new AssertionError("Should reuse cached output");
+        });
         var failure = new IOException("render failed");
         assertSame(failure, assertThrows(IOException.class,
-                () -> cache.getOrGenerate("logging-test-failure", () -> { throw failure; })));
+                () -> cache.getOrGenerate("logging-test-failure", () -> {
+                    throw failure;
+                })));
         assertThat(output.getOut()).contains("event=cache_miss key=" + key,
                 "event=cache_generated key=" + key, "event=cache_hit key=" + key,
                 "event=cache_generation_failed key=logging-test-failure errorType=IOException");

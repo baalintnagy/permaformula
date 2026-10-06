@@ -1,15 +1,22 @@
 package org.permmath.rendering;
 
 import static org.junit.jupiter.api.Assertions.*;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
 
 class StylesheetProxyTests {
@@ -17,7 +24,8 @@ class StylesheetProxyTests {
     @EnableConfigurationProperties(StylesheetFetchProperties.class)
     static class Settings { }
 
-    @Test void bindsRequiredProxyAndFailsStartupWithoutIt() {
+    @Test
+    void bindsRequiredProxyAndFailsStartupWithoutIt() {
         var runner = new ApplicationContextRunner().withUserConfiguration(Settings.class);
         runner.withPropertyValues("permmath.stylesheet-fetch.proxy-required=true").run(context ->
                 assertNotNull(context.getStartupFailure()));
@@ -26,20 +34,21 @@ class StylesheetProxyTests {
                     assertNull(context.getStartupFailure());
                     assertTrue(context.getBean(StylesheetFetchProperties.class).proxyRequired());
                 });
-        for (String value : java.util.List.of("https://proxy:3128", "http://user:pass@proxy:3128",
+        for (String value : List.of("https://proxy:3128", "http://user:pass@proxy:3128",
                 "http://proxy", "http://proxy:3128/path", "http://proxy:3128?x=1")) {
             assertThrows(IllegalArgumentException.class, () -> new StylesheetFetchProperties(true, URI.create(value)));
         }
     }
 
-    @Test void forcesHttpsConnectThroughProxyAndDoesNotFallbackOnDenial() throws Exception {
-        try (var listener = new ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress());
+    @Test
+    void forcesHttpsConnectThroughProxyAndDoesNotFallbackOnDenial() throws Exception {
+        try (var listener = new ServerSocket(0, 1, InetAddress.getLoopbackAddress());
              var tasks = Executors.newVirtualThreadPerTaskExecutor()) {
             listener.setSoTimeout(5000);
             var connection = tasks.submit(() -> {
                 try (var socket = listener.accept()) {
                     socket.setSoTimeout(5000);
-                    var reader = new java.io.BufferedReader(new java.io.InputStreamReader(socket.getInputStream(), StandardCharsets.US_ASCII));
+                    var reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.US_ASCII));
                     String request = reader.readLine();
                     while (!reader.readLine().isEmpty()) { }
                     socket.getOutputStream().write("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
@@ -53,10 +62,13 @@ class StylesheetProxyTests {
         }
     }
 
-    @Test void unreachableProxyFailsInsteadOfUsingDirectInternet() throws Exception {
+    @Test
+    void unreachableProxyFailsInsteadOfUsingDirectInternet() throws Exception {
         int port;
-        try (var listener = new ServerSocket(0)) { port = listener.getLocalPort(); }
+        try (var listener = new ServerSocket(0)) {
+            port = listener.getLocalPort();
+        }
         var properties = new StylesheetFetchProperties(true, URI.create("http://localhost:" + port));
-        assertThrows(java.io.IOException.class, () -> new StylesheetFetcher(properties).fetch("https://8.8.8.8/test.css"));
+        assertThrows(IOException.class, () -> new StylesheetFetcher(properties).fetch("https://8.8.8.8/test.css"));
     }
 }

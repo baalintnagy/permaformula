@@ -1,12 +1,14 @@
 package org.permmath.rendering;
 
-import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+
+import com.sun.net.httpserver.HttpServer;
 
 /** Loopback-only asset server so both engines load the same bundled MathJax. */
 final class RenderAssets implements AutoCloseable {
@@ -49,6 +51,11 @@ final class RenderAssets implements AutoCloseable {
         return "http://127.0.0.1:" + server.getAddress().getPort() + path;
     }
 
-    void remove(String url) { documents.remove(java.net.URI.create(url).getPath()); }
-    @Override public void close() { server.stop(0); }
+    void remove(String url) {
+        documents.remove(URI.create(url).getPath());
+    }
+    @Override
+    public void close() {
+        server.stop(0);
+    }
 }

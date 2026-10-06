@@ -1,12 +1,16 @@
 package org.permmath.rendering;
 
-import com.microsoft.playwright.*;
-import java.nio.charset.StandardCharsets;
 import java.io.IOException;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
-import java.net.URI;
+import java.util.Objects;
+
+import org.permmath.contract.ComplexityPolicy;
+
+import com.microsoft.playwright.*;
 
 /**
  * All methods are invoked on the service's single rendering thread.
@@ -18,14 +22,14 @@ final class ChromiumRenderer implements AutoCloseable {
     private final Browser browser;
 
     private final double timeout;
-    private final org.permmath.contract.ComplexityPolicy policy;
+    private final ComplexityPolicy policy;
 
     ChromiumRenderer(BrowserSettings properties) throws IOException {
-        this(properties, org.permmath.contract.ComplexityPolicy.CURRENT);
+        this(properties, ComplexityPolicy.CURRENT);
     }
 
-    ChromiumRenderer(BrowserSettings properties, org.permmath.contract.ComplexityPolicy policy) throws IOException {
-        this.policy = java.util.Objects.requireNonNull(policy);
+    ChromiumRenderer(BrowserSettings properties, ComplexityPolicy policy) throws IOException {
+        this.policy = Objects.requireNonNull(policy);
         var directory = properties.browserDirectory().toAbsolutePath().normalize();
         // Only executables in the configured browser installation are considered.
         playwright = Playwright.create(new Playwright.CreateOptions().setEnv(Map.of(

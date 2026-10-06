@@ -1,16 +1,21 @@
 package org.permmath.rendering.cache;
 
 import static org.junit.jupiter.api.Assertions.*;
+
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+
 import org.junit.jupiter.api.Test;
+import org.permmath.rendering.WorkDeadline;
 import org.springframework.util.unit.DataSize;
+import org.springframework.web.server.ResponseStatusException;
 
 class CaffeineImageStoreTests {
 
@@ -31,7 +36,7 @@ class CaffeineImageStoreTests {
         var ready = new CountDownLatch(8);
         var start = new CountDownLatch(1);
         try (var workers = Executors.newFixedThreadPool(8)) {
-            var results = new ArrayList<java.util.concurrent.Future<String>>();
+            var results = new ArrayList<Future<String>>();
             for (int i = 0; i < 8; i++) {
                 results.add(workers.submit(() -> {
                     ready.countDown();
@@ -120,19 +125,29 @@ class CaffeineImageStoreTests {
         try (var caller = Executors.newSingleThreadExecutor()) {
             var active = caller.submit(() -> store.getOrGenerate("same", () -> {
                 entered.countDown();
-                try { release.await(); } catch (InterruptedException interrupted) { throw new IOException(interrupted); }
+                try {
+                    release.await();
+                } catch (InterruptedException interrupted) {
+                    throw new IOException(interrupted);
+                }
                 return "done";
             }));
             try {
                 assertTrue(entered.await(2, TimeUnit.SECONDS));
-                try (var scope = org.permmath.rendering.WorkDeadline.open(Duration.ofMillis(100))) {
-                    assertEquals(504, assertThrows(org.springframework.web.server.ResponseStatusException.class,
-                            () -> store.getOrGenerate("same", () -> { throw new AssertionError("duplicate generation"); }))
+                try (var scope = WorkDeadline.open(Duration.ofMillis(100))) {
+                    assertEquals(504, assertThrows(ResponseStatusException.class,
+                            () -> store.getOrGenerate("same", () -> {
+                                throw new AssertionError("duplicate generation");
+                            }))
                             .getStatusCode().value());
                 }
-            } finally { release.countDown(); }
+            } finally {
+                release.countDown();
+            }
             assertEquals("done", active.get(2, TimeUnit.SECONDS));
-            assertEquals("done", store.getOrGenerate("same", () -> { throw new AssertionError("must remain cached"); }));
+            assertEquals("done", store.getOrGenerate("same", () -> {
+                throw new AssertionError("must remain cached");
+            }));
         }
     }
 }

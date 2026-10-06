@@ -11,7 +11,8 @@ final class WorkOverloadedException extends ResponseStatusException {
         super(HttpStatus.SERVICE_UNAVAILABLE, reason, cause);
     }
 
-    @Override public HttpHeaders getHeaders() {
+    @Override
+    public HttpHeaders getHeaders() {
         var headers = new HttpHeaders();
         headers.set("Retry-After", "1");
         headers.setCacheControl("no-store");

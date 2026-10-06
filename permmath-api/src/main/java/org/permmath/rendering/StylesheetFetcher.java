@@ -5,22 +5,40 @@ import java.net.InetAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
 import org.apache.hc.client5.http.DnsResolver;
+import org.apache.hc.client5.http.SystemDefaultDnsResolver;
+import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.config.ConnectionConfig;
 import org.apache.hc.client5.http.config.RequestConfig;
-import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
-import org.apache.hc.core5.http.ContentType;
+import org.apache.hc.client5.http.impl.routing.DefaultProxyRoutePlanner;
 import org.apache.hc.core5.http.ClassicHttpResponse;
-import org.apache.hc.core5.util.Timeout;
+import org.apache.hc.core5.http.ContentType;
+import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.io.CloseMode;
+import org.apache.hc.core5.util.Timeout;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import com.helger.css.writer.CSSWriter;
+import com.helger.css.writer.CSSWriterSettings;
 
 /**
  * Fetches CSS outside Chromium, with validated DNS used by the actual connection.
  */
-@org.springframework.stereotype.Component
+@Component
 final class StylesheetFetcher {
 
     static final int MAX_BYTES = 1024 * 1024;
@@ -49,7 +67,7 @@ final class StylesheetFetcher {
         this(StylesheetFetchProperties.direct());
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
+    @Autowired
     StylesheetFetcher(StylesheetFetchProperties properties) {
         this.properties = properties;
         downloader = this::download;
@@ -62,7 +80,7 @@ final class StylesheetFetcher {
 
     private static final class Budget {
 
-        final long deadline = System.nanoTime() + WorkDeadline.remainingNanos(java.time.Duration.ofSeconds(15));
+        final long deadline = System.nanoTime() + WorkDeadline.remainingNanos(Duration.ofSeconds(15));
 
         int resources;
 
@@ -76,19 +94,19 @@ final class StylesheetFetcher {
         if (refs.size() > MAX_REFS) {
             throw new IllegalArgumentException("Too many stylesheet references (maximum 8)");
         }
-        var result = new java.util.ArrayList<String>();
+        var result = new ArrayList<String>();
         var budget = new Budget();
         for (var ref : refs) {
-            result.add(expand(destination(ref), budget, new java.util.HashSet<>(), 0));
+            result.add(expand(destination(ref), budget, new HashSet<>(), 0));
         }
         return result;
     }
 
     String fetch(String ref) throws IOException {
-        return expand(destination(ref), new Budget(), new java.util.HashSet<>(), 0);
+        return expand(destination(ref), new Budget(), new HashSet<>(), 0);
     }
 
-    private String expand(URI uri, Budget budget, java.util.Set<URI> ancestors, int depth) throws IOException {
+    private String expand(URI uri, Budget budget, Set<URI> ancestors, int depth) throws IOException {
         checkDeadline(budget.deadline);
         if (depth > MAX_IMPORT_DEPTH || ++budget.resources > MAX_RESOURCES) {
             throw new IllegalArgumentException("Stylesheet import limit exceeded");
@@ -105,20 +123,20 @@ final class StylesheetFetcher {
             }
             var sheet = StylesheetPolicy.parse(downloaded.css());
             var output = new StringBuilder();
-            var writer = new com.helger.css.writer.CSSWriterSettings(true);
+            var writer = new CSSWriterSettings(true);
             for (var imported : sheet.getAllImportRules()) {
                 var location = destination(downloaded.uri().resolve(imported.getLocationString()).toString());
                 var css = expand(location, budget, ancestors, depth + 1);
                 if (imported.hasMediaQueries()) {
                     output.append("@media ").append(imported.getAllMediaQueries().stream()
-                            .map(query -> query.getAsCSSString(writer, 0)).collect(java.util.stream.Collectors.joining(",")))
+                            .map(query -> query.getAsCSSString(writer, 0)).collect(Collectors.joining(",")))
                             .append('{').append(css).append('}');
                 } else {
                     output.append(css);
                 }
             }
             sheet.removeAllImportRules();
-            output.append(new com.helger.css.writer.CSSWriter(writer).getCSSAsString(sheet));
+            output.append(new CSSWriter(writer).getCSSAsString(sheet));
             var result = StylesheetPolicy.stylesheet(output.toString());
             checkDeadline(budget.deadline);
             return result;
@@ -134,7 +152,7 @@ final class StylesheetFetcher {
     }
 
     private Download download(URI uri, long deadline) throws IOException {
-        try (var timer = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
+        try (var timer = Executors.newSingleThreadScheduledExecutor(
                 Thread.ofPlatform().daemon(true).name("stylesheet-deadline").factory())) {
             for (int redirects = 0; ; redirects++) {
                 // Proxied targets are resolved/validated by Squid at the actual connection boundary.
@@ -145,7 +163,7 @@ final class StylesheetFetcher {
                 }
                 var manager = PoolingHttpClientConnectionManagerBuilder.create()
                         .setDnsResolver(properties.proxy() == null ? new PublicDnsResolver()
-                                : org.apache.hc.client5.http.SystemDefaultDnsResolver.INSTANCE)
+                                : SystemDefaultDnsResolver.INSTANCE)
                         .setDefaultConnectionConfig(ConnectionConfig.custom().setConnectTimeout(Timeout.ofSeconds(5))
                                 .setSocketTimeout(Timeout.ofSeconds(5)).build()).build();
                 var clientBuilder = HttpClients.custom().setConnectionManager(manager)
@@ -153,15 +171,15 @@ final class StylesheetFetcher {
                         .disableContentCompression().setDefaultRequestConfig(RequestConfig.custom()
                                 .setResponseTimeout(Timeout.ofSeconds(5)).build());
                 if (properties.proxy() != null) clientBuilder.setRoutePlanner(
-                        new org.apache.hc.client5.http.impl.routing.DefaultProxyRoutePlanner(
-                                org.apache.hc.core5.http.HttpHost.create(properties.proxy())));
+                        new DefaultProxyRoutePlanner(
+                                HttpHost.create(properties.proxy())));
                 try (var client = clientBuilder.build()) {
                     var request = new HttpGet(uri);
                     var cancellation = timer.schedule(() -> {
                         request.cancel();
                         // Stop slow response bodies as well as connections.
                         client.close(CloseMode.IMMEDIATE);
-                    }, remaining, java.util.concurrent.TimeUnit.NANOSECONDS);
+                    }, remaining, TimeUnit.NANOSECONDS);
                     request.setHeader("Accept", "text/css");
                     request.setHeader("Accept-Encoding", "identity");
                     try (var response = client.executeOpen(null, request, null)) {
@@ -196,7 +214,7 @@ final class StylesheetFetcher {
                     || (uri.getPort() != -1 && uri.getPort() != 443) || ref.length() > 4096) {
                 throw new IllegalArgumentException("Stylesheets must use HTTPS on port 443 without credentials or fragments");
             }
-            var host = uri.getHost().toLowerCase(java.util.Locale.ROOT);
+            var host = uri.getHost().toLowerCase(Locale.ROOT);
             if (host.equals("localhost") || host.endsWith(".localhost")) {
                 throw new IllegalArgumentException("Stylesheet destination must be public");
             }
@@ -263,7 +281,7 @@ final class StylesheetFetcher {
             if (addresses.length == 0) {
                 throw new UnknownHostException("Stylesheet destination has no addresses");
             }
-            if (!java.util.Arrays.stream(addresses).allMatch(StylesheetFetcher::publicAddress)) {
+            if (!Arrays.stream(addresses).allMatch(StylesheetFetcher::publicAddress)) {
                 throw new UnknownHostException("Stylesheet destination is not a public address");
             }
             return addresses;

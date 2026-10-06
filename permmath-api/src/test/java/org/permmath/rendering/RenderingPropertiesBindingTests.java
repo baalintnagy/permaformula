@@ -1,6 +1,9 @@
 package org.permmath.rendering;
 
 import static org.junit.jupiter.api.Assertions.*;
+
+import java.time.Duration;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -8,11 +11,12 @@ import org.springframework.context.annotation.Configuration;
 
 class RenderingPropertiesBindingTests {
     private final ApplicationContextRunner runner = new ApplicationContextRunner().withUserConfiguration(Settings.class);
-    @Test void bindsIsolatedGrpcEndpointAndDefaultsToTlsForTcp() {
+    @Test
+    void bindsIsolatedGrpcEndpointAndDefaultsToTlsForTcp() {
         runner.run(context -> {
             var settings = context.getBean(RenderingProperties.class);
             assertFalse(settings.plaintext());
-            assertEquals(java.time.Duration.ofSeconds(45), settings.timeout());
+            assertEquals(Duration.ofSeconds(45), settings.timeout());
             assertNull(settings.socket());
         });
         runner.withPropertyValues("permmath.rendering.socket=/run/permmath/render.sock")

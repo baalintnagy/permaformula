@@ -1,21 +1,23 @@
 package org.permmath.rendering;
 
-import org.apache.commons.lang3.StringUtils;
+import static org.permmath.contract.ComplexityPolicy.Limit.*;
 
 import java.util.Locale;
 import java.util.Set;
+
+import org.apache.commons.lang3.StringUtils;
+import org.owasp.html.CssSchema;
+import org.permmath.contract.ComplexityPolicy;
+
 import com.helger.css.decl.*;
+import com.helger.css.handler.DoNothingCSSParseExceptionCallback;
 import com.helger.css.reader.CSSReader;
 import com.helger.css.reader.CSSReaderDeclarationList;
 import com.helger.css.reader.CSSReaderSettings;
-import com.helger.css.reader.errorhandler.DoNothingCSSParseErrorHandler;
 import com.helger.css.reader.errorhandler.DoNothingCSSInterpretErrorHandler;
-import com.helger.css.handler.DoNothingCSSParseExceptionCallback;
+import com.helger.css.reader.errorhandler.DoNothingCSSParseErrorHandler;
 import com.helger.css.writer.CSSWriter;
 import com.helger.css.writer.CSSWriterSettings;
-import org.owasp.html.CssSchema;
-import org.permmath.contract.ComplexityPolicy;
-import static org.permmath.contract.ComplexityPolicy.Limit.*;
 
 /**
  * Parsed presentation CSS, including variables, responsive rules and modern layout.
@@ -187,7 +189,9 @@ final class StylesheetPolicy {
                     if (!value.equalsIgnoreCase("auto-fill") && !value.equalsIgnoreCase("auto-fit")) {
                         try {
                             double repeats = Double.parseDouble(value);
-                            if (!Double.isFinite(repeats) || repeats > LIMITS.get(CSS_GRID_REPEAT)) PreparationComplexity.reject("CSS grid repetition");
+                            if (!Double.isFinite(repeats) || repeats > LIMITS.get(CSS_GRID_REPEAT)) {
+                                PreparationComplexity.reject("CSS grid repetition");
+                            }
                         } catch (NumberFormatException invalid) {
                             PreparationComplexity.reject("CSS grid repetition");
                         }

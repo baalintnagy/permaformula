@@ -1,15 +1,30 @@
 package org.permmath.rendering;
 
 import static org.junit.jupiter.api.Assertions.*;
+
 import java.io.StringReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import javax.xml.parsers.DocumentBuilderFactory;
-import org.xml.sax.InputSource;
+
 import org.junit.jupiter.api.Test;
+import org.permmath.contract.ComplexityPolicy;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.xml.sax.InputSource;
 
 class AsciiMathRendererTests {
-    @Test void configuredPolicyReachesGraalMathJaxAndRejectsExpandedTrees() throws Exception {
-        var policy = org.permmath.contract.ComplexityPolicy.load(new java.util.Properties(),
-                java.util.Map.of("PERMMATH_COMPLEXITY_MATH_NODES", "20"));
+    @Test
+    void configuredPolicyReachesGraalMathJaxAndRejectsExpandedTrees() throws Exception {
+        var policy = ComplexityPolicy.load(new Properties(),
+                Map.of("PERMMATH_COMPLEXITY_MATH_NODES", "20"));
         try (var renderer = new AsciiMathRenderer(policy)) {
             assertThrows(RuntimeException.class, () -> renderer.render("x+".repeat(30) + "x"));
             assertEquals("svg", parse(renderer.render("x")).getDocumentElement().getLocalName());
@@ -21,14 +36,14 @@ class AsciiMathRendererTests {
             var simple = parse(renderer.render("x^2"));
             var rendered = renderer.render("sum_(i=1)^n i^3=((n(n+1))/2)^2");
             var sum = parse(rendered);
-            java.nio.file.Files.writeString(java.nio.file.Path.of("target/formula.svg"), rendered);
+            Files.writeString(Path.of("target/formula.svg"), rendered);
             assertEquals("svg", sum.getDocumentElement().getLocalName());
             assertEquals("http://www.w3.org/2000/svg", sum.getDocumentElement().getNamespaceURI());
             assertTrue(sum.getElementsByTagNameNS("http://www.w3.org/2000/svg", "path").getLength() > 0);
             var uses = sum.getElementsByTagNameNS("http://www.w3.org/2000/svg", "use");
             assertTrue(uses.getLength() > 0);
             for (int i = 0; i < uses.getLength(); i++) {
-                var element = (org.w3c.dom.Element) uses.item(i);
+                var element = (Element) uses.item(i);
                 assertTrue(element.getAttributeNS("http://www.w3.org/1999/xlink", "href").startsWith("#"),
                         "Glyph references must be local to the returned SVG");
             }
@@ -56,19 +71,19 @@ class AsciiMathRendererTests {
     @Test
     void sharedRendererHandlesConcurrentRequests() throws Exception {
         try (var renderer = new AsciiMathRenderer();
-             var requests = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
-            var results = new java.util.ArrayList<java.util.concurrent.Future<String>>();
-            for (String formula : java.util.List.of("x^2", "sqrt(x)", "a+b", "sum_(i=1)^n i")) {
+             var requests = Executors.newVirtualThreadPerTaskExecutor()) {
+            var results = new ArrayList<Future<String>>();
+            for (String formula : List.of("x^2", "sqrt(x)", "a+b", "sum_(i=1)^n i")) {
                 results.add(requests.submit(() -> renderer.render(formula)));
             }
             for (var result : results) {
-                assertEquals("svg", parse(result.get(20, java.util.concurrent.TimeUnit.SECONDS))
+                assertEquals("svg", parse(result.get(20, TimeUnit.SECONDS))
                         .getDocumentElement().getLocalName());
             }
         }
     }
 
-    private static org.w3c.dom.Document parse(String svg) throws Exception {
+    private static Document parse(String svg) throws Exception {
         var factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
         factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -102,7 +103,8 @@ class SvgOutputPolicyTests {
         assertTrue(clean.contains("&lt;script&gt;"));
     }
 
-    @Test void independentlyRejectsExtremeViewportDimensions() throws Exception {
+    @Test
+    void independentlyRejectsExtremeViewportDimensions() throws Exception {
         assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize("<svg xmlns='http://www.w3.org/2000/svg' width='4000' height='32768'/>"));
         assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize("<svg xmlns='http://www.w3.org/2000/svg' width='1' height='Infinity'/>"));
         assertDoesNotThrow(() -> SvgOutputPolicy.sanitize("<svg xmlns='http://www.w3.org/2000/svg' width='1000' height='30000'/>"));

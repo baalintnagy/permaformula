@@ -1,13 +1,15 @@
 package org.permmath.renderer;
 
-import io.grpc.Context;
-import io.grpc.Status;
-import io.grpc.stub.StreamObserver;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+
 import org.permmath.contract.v1.*;
 import org.permmath.rendering.*;
+
+import io.grpc.Context;
+import io.grpc.Status;
+import io.grpc.stub.StreamObserver;
 
 public final class GrpcRendererService extends RendererGrpc.RendererImplBase {
 

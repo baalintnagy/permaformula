@@ -1,6 +1,7 @@
 package org.permmath.rendering;
 
 import java.time.Duration;
+
 import org.permmath.contract.v1.RenderRequest;
 import org.permmath.contract.v1.RenderResponse;
 

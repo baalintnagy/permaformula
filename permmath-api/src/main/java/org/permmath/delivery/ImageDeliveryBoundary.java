@@ -1,13 +1,20 @@
 package org.permmath.delivery;
 
-import com.google.common.net.InetAddresses;
+import java.util.List;
+
 import org.permmath.PermMathProperties;
 import org.permmath.ratelimit.ClientRateLimitProperties;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+import com.google.common.net.InetAddresses;
+
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.servers.Server;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -28,31 +35,40 @@ public class ImageDeliveryBoundary implements WebMvcConfigurer {
         }
     }
 
-    @Override public void addInterceptors(InterceptorRegistry registry) {
-        if (delivery.required()) registry.addInterceptor(new HandlerInterceptor() {
-            @Override public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
-                if (!(handler instanceof HandlerMethod method) || !method.hasMethodAnnotation(ImageDelivery.class)) return true;
-                String peer = request.getRemoteAddr();
-                var markers = request.getHeaders("X-Permmath-Image-Delivery");
-                if (InetAddresses.isInetAddress(peer)
-                        && clients.trustedProxies().contains(InetAddresses.toAddrString(InetAddresses.forString(peer)))
-                        && markers.hasMoreElements() && "1".equals(markers.nextElement()) && !markers.hasMoreElements()) {
-                    return true;
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        if (delivery.required()) {
+            registry.addInterceptor(new HandlerInterceptor() {
+                @Override
+                public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+                    if (!(handler instanceof HandlerMethod method)
+                        || !method.hasMethodAnnotation(ImageDelivery.class)) {
+                        return true;
+                    }
+                    String peer = request.getRemoteAddr();
+                    var markers = request.getHeaders("X-Permmath-Image-Delivery");
+                    if (InetAddresses.isInetAddress(peer)
+                            && clients.trustedProxies().contains(InetAddresses.toAddrString(InetAddresses.forString(peer)))
+                            && markers.hasMoreElements() && "1".equals(markers.nextElement()) && !markers.hasMoreElements()) {
+                        return true;
+                    }
+                    response.setStatus(HttpServletResponse.SC_TEMPORARY_REDIRECT);
+                    response.setHeader("Location", origins.imageHost() + request.getRequestURI()
+                            + (request.getQueryString() == null ? "" : "?" + request.getQueryString()));
+                    response.setHeader("Cache-Control", "no-store");
+                    return false;
                 }
-                response.setStatus(HttpServletResponse.SC_TEMPORARY_REDIRECT);
-                response.setHeader("Location", origins.imageHost() + request.getRequestURI()
-                        + (request.getQueryString() == null ? "" : "?" + request.getQueryString()));
-                response.setHeader("Cache-Control", "no-store");
-                return false;
-            }
-        });
+            });
+        }
     }
 
-    @org.springframework.context.annotation.Bean
-    io.swagger.v3.oas.models.OpenAPI deliveryOpenApi() {
-        var api = new io.swagger.v3.oas.models.OpenAPI();
+    @Bean
+    OpenAPI deliveryOpenApi() {
+        var api = new OpenAPI();
         // Protected deployments terminate TLS before nginx; do not infer a public API URL from internal HTTP.
-        if (delivery.required()) api.servers(java.util.List.of(new io.swagger.v3.oas.models.servers.Server().url(origins.host())));
+        if (delivery.required()) {
+            api.servers(List.of(new Server().url(origins.host())));
+        }
         return api;
     }
 }

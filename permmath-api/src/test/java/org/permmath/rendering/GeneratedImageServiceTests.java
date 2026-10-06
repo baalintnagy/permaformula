@@ -3,17 +3,26 @@ package org.permmath.rendering;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.Test;
 import org.permmath.PermMathProperties;
 import org.permmath.rendering.cache.CaffeineImageStore;
 import org.permmath.rendering.cache.ImageCacheProperties;
 import org.permmath.url.ImageDescriptor;
 import org.springframework.core.io.InputStreamResource;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.util.unit.DataSize;
+import org.springframework.web.server.ResponseStatusException;
+
 import tools.jackson.databind.json.JsonMapper;
 
 class GeneratedImageServiceTests {
@@ -22,7 +31,8 @@ class GeneratedImageServiceTests {
     private final ImageRendererService html = mock(ImageRendererService.class);
     private final FormulaSvgRenderer formula = mock(FormulaSvgRenderer.class);
 
-    @Test void rejectsComplexInputBeforeCallingEitherRenderer() throws Exception {
+    @Test
+    void rejectsComplexInputBeforeCallingEitherRenderer() throws Exception {
         var service = service(800);
         assertThrows(IllegalArgumentException.class, () -> service.getImg("x".repeat(262145)));
         assertThrows(IllegalArgumentException.class, () -> service.getImage(new ImageDescriptor("<div>".repeat(129), null, null, null)));
@@ -78,8 +88,8 @@ class GeneratedImageServiceTests {
         var service = service(800);
         var descriptor = new ImageDescriptor("x", null, null, null);
         for (int attempt = 0; attempt < 2; attempt++) {
-            assertThrows(java.io.IOException.class, () -> service.getImage(descriptor));
-            assertThrows(java.io.IOException.class, () -> service.getImg("x"));
+            assertThrows(IOException.class, () -> service.getImage(descriptor));
+            assertThrows(IOException.class, () -> service.getImg("x"));
         }
         verify(html, times(2)).getImage(any());
         verify(formula, times(2)).render("x");
@@ -107,25 +117,31 @@ class GeneratedImageServiceTests {
     void cachedImageRemainsAvailableWhileGenerationCapacityIsOccupied() throws Exception {
         var work = new ApiWorkService(new ApiWorkProperties(1, 1, 1, Duration.ofSeconds(5)));
         var service = service(800);
-        org.springframework.test.util.ReflectionTestUtils.setField(service, "work", work);
+        ReflectionTestUtils.setField(service, "work", work);
         when(formula.render("cached")).thenReturn("<svg xmlns='http://www.w3.org/2000/svg'><text>cached</text></svg>");
         String cached = service.getImg("cached");
-        var entered = new java.util.concurrent.CountDownLatch(1);
-        var release = new java.util.concurrent.CountDownLatch(1);
-        try (var caller = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        try (var caller = Executors.newSingleThreadExecutor()) {
             var active = caller.submit(() -> work.generate(() -> {
                 entered.countDown();
-                try { release.await(); } catch (InterruptedException interrupted) { throw new java.io.IOException(interrupted); }
+                try {
+                    release.await();
+                } catch (InterruptedException interrupted) {
+                    throw new IOException(interrupted);
+                }
                 return "done";
             }));
             try {
-                assertTrue(entered.await(2, java.util.concurrent.TimeUnit.SECONDS));
+                assertTrue(entered.await(2, TimeUnit.SECONDS));
                 assertEquals(cached, service.getImg("cached"));
-                assertEquals(503, assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                assertEquals(503, assertThrows(ResponseStatusException.class,
                         () -> service.getImg("uncached")).getStatusCode().value());
                 verify(formula, never()).render("uncached");
-            } finally { release.countDown(); }
-            active.get(2, java.util.concurrent.TimeUnit.SECONDS);
+            } finally {
+                release.countDown();
+            }
+            active.get(2, TimeUnit.SECONDS);
         }
     }
 

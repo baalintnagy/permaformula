@@ -3,18 +3,25 @@ package org.permmath.rendering;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
+
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.HostAccess;
+import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
+import org.permmath.contract.ComplexityPolicy;
 
 /** Browser-free ASCIIMath conversion using MathJax's lightweight DOM adapter. */
 public class AsciiMathRenderer implements AutoCloseable {
-    private final org.permmath.contract.ComplexityPolicy policy;
+    private final ComplexityPolicy policy;
     private Context context;
     private Value render;
 
-    public AsciiMathRenderer() { this(org.permmath.contract.ComplexityPolicy.CURRENT); }
-    AsciiMathRenderer(org.permmath.contract.ComplexityPolicy policy) { this.policy = Objects.requireNonNull(policy); }
+    public AsciiMathRenderer() {
+        this(ComplexityPolicy.CURRENT);
+    }
+    AsciiMathRenderer(ComplexityPolicy policy) {
+        this.policy = Objects.requireNonNull(policy);
+    }
 
     public synchronized String render(String formula) throws IOException {
         if (formula == null || formula.isBlank()) {
@@ -39,13 +46,16 @@ public class AsciiMathRenderer implements AutoCloseable {
         // Pass input as a value, never interpolate it into executable JavaScript.
         try {
             return render.execute(formula).asString();
-        } catch (org.graalvm.polyglot.PolyglotException invalid) {
-            if (invalid.isGuestException()) throw new IllegalArgumentException("Invalid math expression");
+        } catch (PolyglotException invalid) {
+            if (invalid.isGuestException()) {
+                throw new IllegalArgumentException("Invalid math expression");
+            }
             throw invalid;
         }
     }
 
-    @Override public synchronized void close() {
+    @Override
+    public synchronized void close() {
         if (context != null) {
             context.close();
             context = null;

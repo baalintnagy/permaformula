@@ -1,7 +1,7 @@
 package org.permmath.rendering;
 
 import static org.junit.jupiter.api.Assertions.*;
-import com.google.protobuf.ByteString;
+
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -9,9 +9,12 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.permmath.contract.v1.*;
+
+import com.google.protobuf.ByteString;
 
 @Timeout(15)
 class RenderWorkQueueTests {
@@ -26,7 +29,9 @@ class RenderWorkQueueTests {
         return new RenderQueueSettings(capacity, 64 * 1024 * 1024, wait);
     }
     static void await(CountDownLatch latch) throws RenderException {
-        try { assertTrue(latch.await(5, TimeUnit.SECONDS)); }
+        try {
+            assertTrue(latch.await(5, TimeUnit.SECONDS));
+        }
         catch (InterruptedException failure) {
             Thread.currentThread().interrupt();
             throw new RenderException(RenderException.Kind.CANCELLED, "cancelled", failure);
@@ -34,7 +39,9 @@ class RenderWorkQueueTests {
     }
     static void eventually(BooleanSupplier condition) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
-        while (!condition.getAsBoolean() && System.nanoTime() < deadline) Thread.sleep(5);
+        while (!condition.getAsBoolean() && System.nanoTime() < deadline) {
+            Thread.sleep(5);
+        }
         assertTrue(condition.getAsBoolean());
     }
     static RenderException.Kind failureKind(Future<?> future) throws Exception {
@@ -42,7 +49,8 @@ class RenderWorkQueueTests {
         return assertInstanceOf(RenderException.class, failure.getCause()).kind();
     }
 
-    @Test void fixedWorkerProcessesFifoAndWaitingConsumesTheOriginalDeadline() throws Exception {
+    @Test
+    void fixedWorkerProcessesFifoAndWaitingConsumesTheOriginalDeadline() throws Exception {
         var entered = new CountDownLatch(1); var release = new CountDownLatch(1);
         var order = new CopyOnWriteArrayList<String>();
         var secondBudget = new AtomicReference<Duration>();
@@ -50,7 +58,10 @@ class RenderWorkQueueTests {
                 var queue = new RenderWorkQueue(1, settings(2, Duration.ofSeconds(5)), (request, budget) -> {
                     assertTrue(Thread.currentThread().getName().startsWith("renderer-work-"));
                     order.add(request.getRequestId());
-                    if (request.getRequestId().equals("first")) { entered.countDown(); await(release); }
+                    if (request.getRequestId().equals("first")) {
+                        entered.countDown();
+                        await(release);
+                    }
                     else secondBudget.set(budget);
                     return response(request);
                 })) {
@@ -72,11 +83,14 @@ class RenderWorkQueueTests {
                 assertEquals(List.of("first", "second", "third"), order);
                 assertTrue(secondBudget.get().compareTo(Duration.ofMillis(9950)) < 0);
                 eventually(() -> queue.retainedBytes() == 0);
-            } finally { release.countDown(); }
+            } finally {
+                release.countDown();
+            }
         }
     }
 
-    @Test void queuedExpiryRemovesPayloadAndNeverExecutesOrInterruptsActiveJob() throws Exception {
+    @Test
+    void queuedExpiryRemovesPayloadAndNeverExecutesOrInterruptsActiveJob() throws Exception {
         var entered = new CountDownLatch(1); var release = new CountDownLatch(1); var executions = new AtomicInteger();
         try (var callers = Executors.newVirtualThreadPerTaskExecutor();
                 var queue = new RenderWorkQueue(1, settings(1, Duration.ofMillis(100)), (request, _) -> {
@@ -96,11 +110,14 @@ class RenderWorkQueueTests {
                 release.countDown();
                 first.get(3, TimeUnit.SECONDS); next.get(3, TimeUnit.SECONDS);
                 assertEquals(2, executions.get());
-            } finally { release.countDown(); }
+            } finally {
+                release.countDown();
+            }
         }
     }
 
-    @Test void requestDeadlineExpiresBeforeLongerQueueWait() throws Exception {
+    @Test
+    void requestDeadlineExpiresBeforeLongerQueueWait() throws Exception {
         var entered = new CountDownLatch(1); var release = new CountDownLatch(1);
         try (var callers = Executors.newVirtualThreadPerTaskExecutor();
                 var queue = new RenderWorkQueue(1, settings(1, Duration.ofSeconds(5)), (request, _) -> {
@@ -113,11 +130,15 @@ class RenderWorkQueueTests {
                 assertEquals(RenderException.Kind.QUEUE_DEADLINE, failureKind(expired));
                 assertEquals(0, queue.waitingJobs());
                 assertFalse(active.isDone());
-            } finally { release.countDown(); active.get(3, TimeUnit.SECONDS); }
+            } finally {
+                release.countDown();
+                active.get(3, TimeUnit.SECONDS);
+            }
         }
     }
 
-    @Test void cancelledQueuedCallerCannotExecuteLaterAndReleasesAdmission() throws Exception {
+    @Test
+    void cancelledQueuedCallerCannotExecuteLaterAndReleasesAdmission() throws Exception {
         var entered = new CountDownLatch(1); var release = new CountDownLatch(1); var executions = new AtomicInteger();
         var cancellation = new AtomicReference<RenderException.Kind>(); var callerDone = new CountDownLatch(1);
         try (var callers = Executors.newVirtualThreadPerTaskExecutor();
@@ -128,9 +149,15 @@ class RenderWorkQueueTests {
             try {
                 await(entered);
                 var cancelled = callers.submit(() -> {
-                    try { queue.execute(request("cancelled"), Duration.ofSeconds(5)); }
-                    catch (RenderException failure) { cancellation.set(failure.kind()); }
-                    finally { callerDone.countDown(); }
+                    try {
+                        queue.execute(request("cancelled"), Duration.ofSeconds(5));
+                    }
+                    catch (RenderException failure) {
+                        cancellation.set(failure.kind());
+                    }
+                    finally {
+                        callerDone.countDown();
+                    }
                 });
                 eventually(() -> queue.waitingJobs() == 1);
                 cancelled.cancel(true); await(callerDone);
@@ -139,18 +166,25 @@ class RenderWorkQueueTests {
                 release.countDown(); active.get(3, TimeUnit.SECONDS);
                 queue.execute(request("recovered"), Duration.ofSeconds(5));
                 assertEquals(2, executions.get());
-            } finally { release.countDown(); }
+            } finally {
+                release.countDown();
+            }
         }
     }
 
-    @Test void runningCancellationRetainsMemoryAndWorkerUntilActualExit() throws Exception {
+    @Test
+    void runningCancellationRetainsMemoryAndWorkerUntilActualExit() throws Exception {
         var entered = new CountDownLatch(1); var release = new CountDownLatch(1);
         var interrupted = new CountDownLatch(1);
         try (var callers = Executors.newVirtualThreadPerTaskExecutor();
                 var queue = new RenderWorkQueue(1, settings(0, Duration.ofSeconds(5)), (request, _) -> {
                     entered.countDown();
                     while (release.getCount() != 0) {
-                        try { release.await(); } catch (InterruptedException ignored) { interrupted.countDown(); }
+                        try {
+                            release.await();
+                        } catch (InterruptedException ignored) {
+                            interrupted.countDown();
+                        }
                     }
                     return response(request);
                 })) {
@@ -162,11 +196,14 @@ class RenderWorkQueueTests {
                         () -> queue.execute(request("not-yet"), Duration.ofSeconds(1))).kind());
                 release.countDown(); eventually(() -> queue.retainedBytes() == 0);
                 assertEquals("recovered", queue.execute(request("recovered"), Duration.ofSeconds(1)).getRequestId());
-            } finally { release.countDown(); }
+            } finally {
+                release.countDown();
+            }
         }
     }
 
-    @Test void byteBudgetIncludesRunningRequestsAndRejectsBeforeExecution() throws Exception {
+    @Test
+    void byteBudgetIncludesRunningRequestsAndRejectsBeforeExecution() throws Exception {
         var entered = new CountDownLatch(1); var release = new CountDownLatch(1);
         long weight = 1024L + 3L * request("same").getSerializedSize();
         try (var callers = Executors.newVirtualThreadPerTaskExecutor();
@@ -179,14 +216,20 @@ class RenderWorkQueueTests {
                 assertEquals(RenderException.Kind.OVERLOADED, assertThrows(RenderException.class,
                         () -> queue.execute(request("same"), Duration.ofSeconds(5))).kind());
                 assertEquals(0, queue.waitingJobs()); assertEquals(weight, queue.retainedBytes());
-            } finally { release.countDown(); first.get(3, TimeUnit.SECONDS); }
+            } finally {
+                release.countDown();
+                first.get(3, TimeUnit.SECONDS);
+            }
             eventually(() -> queue.retainedBytes() == 0);
         }
     }
 
-    @Test void invalidInputAndWorkerFailureReleaseAdmission() throws Exception {
+    @Test
+    void invalidInputAndWorkerFailureReleaseAdmission() throws Exception {
         try (var queue = new RenderWorkQueue(1, settings(1, Duration.ofSeconds(5)), (request, _) -> {
-            if (request.getRequestId().equals("fail")) throw new RenderException(RenderException.Kind.FAILED, "failure");
+            if (request.getRequestId().equals("fail")) {
+                throw new RenderException(RenderException.Kind.FAILED, "failure");
+            }
             return response(request);
         })) {
             assertEquals(RenderException.Kind.INVALID, assertThrows(RenderException.class,
@@ -199,7 +242,8 @@ class RenderWorkQueueTests {
         }
     }
 
-    @Test void shutdownRemovesQueuedRequestsAndWakesCallers() throws Exception {
+    @Test
+    void shutdownRemovesQueuedRequestsAndWakesCallers() throws Exception {
         var entered = new CountDownLatch(1);
         try (var callers = Executors.newVirtualThreadPerTaskExecutor();
                 var queue = new RenderWorkQueue(1, settings(1, Duration.ofSeconds(5)), (request, _) -> {
@@ -218,7 +262,8 @@ class RenderWorkQueueTests {
         }
     }
 
-    @Test void configurationIsValidatedAndPayloadBudgetTracksHeapHeadroom() {
+    @Test
+    void configurationIsValidatedAndPayloadBudgetTracksHeapHeadroom() {
         var defaults = RenderQueueSettings.fromEnvironment(Map.of());
         assertEquals(16, defaults.capacity()); assertEquals(Duration.ofSeconds(15), defaults.maxWait());
         assertEquals(Math.min(64L * 1024 * 1024, Runtime.getRuntime().maxMemory() / 4), defaults.effectiveRetainedBytes());

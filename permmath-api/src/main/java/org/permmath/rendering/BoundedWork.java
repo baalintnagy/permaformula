@@ -7,6 +7,7 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** No queue; slots are held until the actual thread exits, including after cancellation. */
 final class BoundedWork {
@@ -26,7 +27,7 @@ final class BoundedWork {
         if (!slots.tryAcquire()) {
             throw new WorkOverloadedException(name + " capacity is occupied", null);
         }
-        var ran = new java.util.concurrent.atomic.AtomicBoolean();
+        var ran = new AtomicBoolean();
         var task = new FutureTask<T>(() -> {
             ran.set(true);
             try (var scope = WorkDeadline.at(deadline)) {
@@ -39,7 +40,13 @@ final class BoundedWork {
             }
         });
         Thread worker = Thread.ofPlatform().daemon(true).name("api-" + name).unstarted(() -> {
-            try { task.run(); } finally { if (!ran.get()) slots.release(); }
+            try {
+                task.run();
+            } finally {
+                if (!ran.get()) {
+                    slots.release();
+                }
+            }
         });
         try {
             worker.start();
@@ -57,9 +64,15 @@ final class BoundedWork {
             Thread.currentThread().interrupt();
             throw WorkDeadline.timedOut();
         } catch (ExecutionException failed) {
-            if (failed.getCause() instanceof IOException checked) throw checked;
-            if (failed.getCause() instanceof RuntimeException runtime) throw runtime;
-            if (failed.getCause() instanceof Error error) throw error;
+            if (failed.getCause() instanceof IOException checked) {
+                throw checked;
+            }
+            if (failed.getCause() instanceof RuntimeException runtime) {
+                throw runtime;
+            }
+            if (failed.getCause() instanceof Error error) {
+                throw error;
+            }
             throw new IOException("API work failed", failed.getCause());
         }
     }

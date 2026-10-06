@@ -1,20 +1,28 @@
 package org.permmath;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import org.hamcrest.Matchers;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.permmath.compression.StringCompressionService;
+import org.permmath.rendering.RenderGatewayTestConfiguration;
+import org.permmath.url.ImageDescriptor;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
+import tools.jackson.databind.json.JsonMapper;
+
 @SpringBootTest
-@org.springframework.context.annotation.Import(org.permmath.rendering.RenderGatewayTestConfiguration.class)
+@Import(RenderGatewayTestConfiguration.class)
 @AutoConfigureMockMvc
 class PermMathApplicationTests {
 
@@ -67,15 +75,15 @@ class PermMathApplicationTests {
     void imageSwaggerExampleContainsOnlyASimpleFormula() throws Exception {
         String json = mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
+        var mapper = JsonMapper.builder().build();
         var parameters = mapper.readTree(json).at("/paths/~1image/get/parameters");
         var parameter = parameters.get(0);
-        org.junit.jupiter.api.Assertions.assertEquals("ubcq", parameter.get("name").asString());
-        var decoded = new org.permmath.compression.StringCompressionService()
+        Assertions.assertEquals("ubcq", parameter.get("name").asString());
+        var decoded = new StringCompressionService()
                 .decompress(parameter.get("example").asString());
-        var descriptor = mapper.readValue(decoded, org.permmath.url.ImageDescriptor.class);
-        org.junit.jupiter.api.Assertions.assertEquals(
-                new org.permmath.url.ImageDescriptor("`x^2`", 220, null, null), descriptor);
+        var descriptor = mapper.readValue(decoded, ImageDescriptor.class);
+        Assertions.assertEquals(
+                new ImageDescriptor("`x^2`", 220, null, null), descriptor);
     }
 
     @Test
@@ -124,7 +132,7 @@ class PermMathApplicationTests {
         mvc.perform(get("/img").param("formula", "sqrt(x^2 + y^2)"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith("image/svg+xml"))
-                .andExpect(content().string(org.hamcrest.Matchers.startsWith("<svg")));
+                .andExpect(content().string(Matchers.startsWith("<svg")));
     }
 
     @Test
@@ -154,7 +162,7 @@ class PermMathApplicationTests {
                 .andExpect(jsonPath("$.paths['/decode']").doesNotExist())
                 .andExpect(jsonPath("$.paths['/image-cq']").doesNotExist())
                 .andExpect(jsonPath("$.paths['/decode-cq']").doesNotExist())
-                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("compressUrlQuery"))));
+                .andExpect(content().string(Matchers.not(Matchers.containsString("compressUrlQuery"))));
     }
 
 }

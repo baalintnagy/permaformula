@@ -3,21 +3,24 @@ package org.permmath.compression;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Base64;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.permmath.validation.InputLimits;
 
 class StringCompressionServiceTests {
 
     @Test
     void decompressionStopsAtByteLimitIncludingConcatenatedMembers() throws Exception {
-        int limit = org.permmath.validation.InputLimits.MAX_JSON_BYTES;
+        int limit = InputLimits.MAX_JSON_BYTES;
         String boundary = "x".repeat(limit);
         assertEquals(boundary, service.decompress(service.compress(boundary)));
-        var bytes = new java.io.ByteArrayOutputStream();
+        var bytes = new ByteArrayOutputStream();
         // Two legal members must not each receive a separate expansion allowance.
         bytes.write(Base64.getDecoder().decode(service.compress(boundary)));
         bytes.write(Base64.getDecoder().decode(service.compress("x")));
@@ -27,9 +30,9 @@ class StringCompressionServiceTests {
 
     @Test
     void encodedAndCompressedLimitsAreIndependent() {
-        int limit = org.permmath.validation.InputLimits.MAX_COMPRESSED_BYTES;
+        int limit = InputLimits.MAX_COMPRESSED_BYTES;
         assertThrows(IllegalArgumentException.class, () -> service.decompress(
-                "!".repeat(org.permmath.validation.InputLimits.MAX_ENCODED_CHARS + 1)));
+                "!".repeat(InputLimits.MAX_ENCODED_CHARS + 1)));
         String oversized = Base64.getEncoder().encodeToString(new byte[limit + 1]);
         assertThrows(IllegalArgumentException.class, () -> service.decompress(oversized));
     }
@@ -37,7 +40,7 @@ class StringCompressionServiceTests {
     @Test
     void compressionCountsUtf8Bytes() {
         assertThrows(IllegalArgumentException.class, () -> service.compress(
-                "漢".repeat(org.permmath.validation.InputLimits.MAX_JSON_BYTES / 3 + 1)));
+                "漢".repeat(InputLimits.MAX_JSON_BYTES / 3 + 1)));
     }
 
     private final StringCompressionService service = new StringCompressionService();
@@ -68,7 +71,7 @@ class StringCompressionServiceTests {
     @Test
     void truncatedGzipIsRejected() throws Exception {
         byte[] bytes = Base64.getDecoder().decode(service.compress("valid content"));
-        String truncated = Base64.getEncoder().encodeToString(java.util.Arrays.copyOf(bytes, bytes.length - 1));
+        String truncated = Base64.getEncoder().encodeToString(Arrays.copyOf(bytes, bytes.length - 1));
         assertThrows(IOException.class, () -> service.decompress(truncated));
     }
 }

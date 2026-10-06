@@ -34,7 +34,8 @@ class PermMathPropertiesTests {
                 });
     }
 
-    @Test void imageOriginIsIndependentAndTrailingSlashIsNormalized() {
+    @Test
+    void imageOriginIsIndependentAndTrailingSlashIsNormalized() {
         runner.withPropertyValues("permmath.image-host=https://math-images.example.net/").run(context -> {
             assertThat(context).hasNotFailed();
             var properties = context.getBean(PermMathProperties.class);

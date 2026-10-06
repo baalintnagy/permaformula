@@ -1,17 +1,21 @@
 package org.permmath.delivery;
 
 import static org.junit.jupiter.api.Assertions.*;
+
 import java.nio.file.Path;
 import java.util.Map;
-import com.microsoft.playwright.BrowserType;
-import com.microsoft.playwright.Playwright;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+
+import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.Playwright;
 
 /** Opt-in integration check against the separate running Compose smoke deployment. */
 @EnabledIfSystemProperty(named = "delivery.tests", matches = "true")
 class ImageDeliveryBrowserTests {
-    @Test void anonymousSwaggerFetchesFollowImageRedirectsButCredentialedReadsAreDenied() {
+    @Test
+    void anonymousSwaggerFetchesFollowImageRedirectsButCredentialedReadsAreDenied() {
         String api = System.getProperty("delivery.api-url", "http://localhost:5017");
         String images = System.getProperty("delivery.image-url", "http://localhost:5018");
         try (var playwright = Playwright.create(new Playwright.CreateOptions().setEnv(Map.of(

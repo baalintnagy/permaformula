@@ -1,6 +1,7 @@
 package org.permmath.rendering;
 
 import java.time.Duration;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -18,7 +19,9 @@ public final class WorkDeadline implements AutoCloseable {
         return at(System.nanoTime() + timeout.toNanos());
     }
 
-    static WorkDeadline at(long deadline) { return new WorkDeadline(deadline); }
+    static WorkDeadline at(long deadline) {
+        return new WorkDeadline(deadline);
+    }
 
     static long deadline(Duration fallback) {
         Long value = CURRENT.get();
@@ -38,7 +41,12 @@ public final class WorkDeadline implements AutoCloseable {
         return new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "API request deadline exceeded");
     }
 
-    @Override public void close() {
-        if (previous == null) CURRENT.remove(); else CURRENT.set(previous);
+    @Override
+    public void close() {
+        if (previous == null) {
+            CURRENT.remove();
+        } else {
+            CURRENT.set(previous);
+        }
     }
 }

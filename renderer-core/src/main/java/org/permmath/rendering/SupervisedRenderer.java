@@ -1,12 +1,16 @@
 package org.permmath.rendering;
 
-import com.google.protobuf.CodedInputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Map;
 import java.util.concurrent.*;
+
+import org.permmath.contract.ComplexityPolicy;
 import org.permmath.contract.v1.RenderRequest;
 import org.permmath.contract.v1.RenderResponse;
+
+import com.google.protobuf.CodedInputStream;
 
 /**
  * Admission and process deadlines are independent of the RPC transport and browser page.
@@ -40,8 +44,8 @@ public final class SupervisedRenderer implements RenderJobExecutor {
                     settings.browserDirectory().toAbsolutePath().toString(), Long.toString(budget.toMillis()),
                     Boolean.toString(settings.chromiumSandbox()));
             process.environment().clear();
-            process.environment().putAll(org.permmath.contract.ComplexityPolicy.CURRENT.workerEnvironment());
-            process.environment().putAll(java.util.Map.of("HOME", System.getProperty("java.io.tmpdir"),
+            process.environment().putAll(ComplexityPolicy.CURRENT.workerEnvironment());
+            process.environment().putAll(Map.of("HOME", System.getProperty("java.io.tmpdir"),
                     "TMPDIR", System.getProperty("java.io.tmpdir"), "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1"));
             process.redirectError(ProcessBuilder.Redirect.INHERIT);
             return run(process, request, budget);
@@ -80,8 +84,8 @@ public final class SupervisedRenderer implements RenderJobExecutor {
                     throw new RenderException(RenderException.Kind.INVALID, "Invalid rendering content");
                 }
                 if (process.exitValue() != 0 || !request.getRequestId().equals(response.getRequestId())
-                        || response.getSvg().isEmpty() || response.getSvg().size() > org.permmath.contract.ComplexityPolicy.CURRENT
-                                .get(org.permmath.contract.ComplexityPolicy.Limit.SVG_BYTES)) {
+                        || response.getSvg().isEmpty() || response.getSvg().size() > ComplexityPolicy.CURRENT
+                                .get(ComplexityPolicy.Limit.SVG_BYTES)) {
                     throw new RenderException(RenderException.Kind.FAILED, "Invalid render process result");
                 }
                 return response;

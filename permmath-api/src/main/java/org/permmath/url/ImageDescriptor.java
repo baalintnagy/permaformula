@@ -5,9 +5,12 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY;
 import java.util.List;
 import java.util.Objects;
 
-import jakarta.validation.constraints.NotBlank;
+import org.permmath.validation.InputLimits;
 import org.permmath.validation.ValidImageWidth;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
+
+import jakarta.validation.constraints.NotBlank;
 
 @JsonInclude(NON_EMPTY)
 public record ImageDescriptor(
@@ -18,7 +21,7 @@ public record ImageDescriptor(
 
     public ImageDescriptor {
         Objects.requireNonNull(forumla, "forumla");
-        org.permmath.validation.InputLimits.descriptor(forumla, imageWidth, styleRefs, style);
+        InputLimits.descriptor(forumla, imageWidth, styleRefs, style);
         styleRefs = styleRefs == null ? null : List.copyOf(styleRefs);
     }
 }

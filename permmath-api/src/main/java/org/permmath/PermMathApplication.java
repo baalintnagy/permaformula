@@ -1,15 +1,25 @@
 package org.permmath;
 
+import org.boava.exception.LocalExceptionHandler;
+import org.permmath.delivery.ImageDeliveryProperties;
+import org.permmath.ratelimit.ClientRateLimitProperties;
+import org.permmath.rendering.ApiWorkProperties;
+import org.permmath.rendering.RenderingProperties;
+import org.permmath.rendering.StylesheetFetchProperties;
+import org.permmath.rendering.cache.ImageCacheProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Import;
-import org.boava.exception.LocalExceptionHandler;
 
-@EnableConfigurationProperties({PermMathProperties.class, org.permmath.rendering.RenderingProperties.class,
-        org.permmath.rendering.cache.ImageCacheProperties.class, org.permmath.rendering.ApiWorkProperties.class,
-        org.permmath.rendering.StylesheetFetchProperties.class, org.permmath.ratelimit.ClientRateLimitProperties.class,
-        org.permmath.delivery.ImageDeliveryProperties.class})
+@EnableConfigurationProperties({
+    PermMathProperties.class,
+    RenderingProperties.class,
+    ImageCacheProperties.class,
+    ApiWorkProperties.class,
+    StylesheetFetchProperties.class,
+    ClientRateLimitProperties.class,
+    ImageDeliveryProperties.class })
 @SpringBootApplication
 @Import(LocalExceptionHandler.class)
 public class PermMathApplication {

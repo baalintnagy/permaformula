@@ -1,16 +1,20 @@
 package org.permmath.renderer;
 
 import static org.junit.jupiter.api.Assertions.*;
-import com.google.protobuf.ByteString;
-import io.grpc.*;
-import io.grpc.inprocess.*;
+
 import java.time.Duration;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+
 import org.junit.jupiter.api.Test;
 import org.permmath.contract.v1.*;
 import org.permmath.rendering.*;
+
+import com.google.protobuf.ByteString;
+
+import io.grpc.*;
+import io.grpc.inprocess.*;
 
 class GrpcRendererServiceTests {
 
@@ -19,8 +23,12 @@ class GrpcRendererServiceTests {
         var entered = new CountDownLatch(1); var release = new CountDownLatch(1); var restarts = new AtomicInteger();
         try (var queue = new RenderWorkQueue(1, new RenderQueueSettings(1, 1_000_000, Duration.ofMillis(150)), (request, _) -> {
                     entered.countDown();
-                    try { assertTrue(release.await(5, TimeUnit.SECONDS)); }
-                    catch (InterruptedException failure) { throw new RenderException(RenderException.Kind.CANCELLED, "active interrupted"); }
+                    try {
+                        assertTrue(release.await(5, TimeUnit.SECONDS));
+                    }
+                    catch (InterruptedException failure) {
+                        throw new RenderException(RenderException.Kind.CANCELLED, "active interrupted");
+                    }
                     return RenderResponse.newBuilder().setRequestId(request.getRequestId()).setSvg(ByteString.copyFromUtf8("<svg/>")).build();
                 });
                 var fixture = new Fixture(queue, _ -> restarts.incrementAndGet());
@@ -36,7 +44,9 @@ class GrpcRendererServiceTests {
                 assertEquals("active", active.get(2, TimeUnit.SECONDS).getRequestId());
                 assertEquals("next", stub.render(validRequest("next")).getRequestId());
                 assertEquals(0, restarts.get());
-            } finally { release.countDown(); }
+            } finally {
+                release.countDown();
+            }
         }
     }
 
@@ -46,8 +56,12 @@ class GrpcRendererServiceTests {
         var restarts = new AtomicInteger(); var executions = new AtomicInteger();
         try (var queue = new RenderWorkQueue(1, new RenderQueueSettings(1, 1_000_000, Duration.ofSeconds(2)), (request, _) -> {
                     executions.incrementAndGet(); entered.countDown();
-                    try { assertTrue(release.await(5, TimeUnit.SECONDS)); }
-                    catch (InterruptedException failure) { throw new RenderException(RenderException.Kind.CANCELLED, "active interrupted"); }
+                    try {
+                        assertTrue(release.await(5, TimeUnit.SECONDS));
+                    }
+                    catch (InterruptedException failure) {
+                        throw new RenderException(RenderException.Kind.CANCELLED, "active interrupted");
+                    }
                     return RenderResponse.newBuilder().setRequestId(request.getRequestId()).setSvg(ByteString.copyFromUtf8("<svg/>")).build();
                 });
                 var fixture = new Fixture(queue, _ -> restarts.incrementAndGet());
@@ -62,7 +76,9 @@ class GrpcRendererServiceTests {
                 release.countDown(); active.get(2, TimeUnit.SECONDS);
                 assertEquals("next", stub.render(validRequest("next")).getRequestId());
                 assertEquals(2, executions.get()); assertEquals(0, restarts.get());
-            } finally { release.countDown(); }
+            } finally {
+                release.countDown();
+            }
         }
     }
 

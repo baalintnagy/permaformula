@@ -5,8 +5,10 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.*;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
-import org.owasp.validator.html.*;
+
 import org.owasp.validator.css.CssScanner;
+import org.owasp.validator.html.*;
+
 import com.microsoft.playwright.*;
 
 public class AntiSamyTrial {

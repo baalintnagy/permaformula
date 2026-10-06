@@ -1,6 +1,7 @@
 package org.permmath.rendering;
 
 import java.net.URI;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
@@ -8,7 +9,9 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 @ConfigurationProperties("permmath.stylesheet-fetch")
 public record StylesheetFetchProperties(@DefaultValue("false") boolean proxyRequired, URI proxy) {
     public StylesheetFetchProperties {
-        if (proxyRequired && proxy == null) throw new IllegalArgumentException("Stylesheet egress proxy is required");
+        if (proxyRequired && proxy == null) {
+            throw new IllegalArgumentException("Stylesheet egress proxy is required");
+        }
         if (proxy != null && (!"http".equalsIgnoreCase(proxy.getScheme()) || proxy.getHost() == null
                 || proxy.getPort() < 1 || proxy.getPort() > 65535 || proxy.getRawUserInfo() != null
                 || proxy.getRawQuery() != null || proxy.getRawFragment() != null
@@ -17,5 +20,7 @@ public record StylesheetFetchProperties(@DefaultValue("false") boolean proxyRequ
         }
     }
 
-    static StylesheetFetchProperties direct() { return new StylesheetFetchProperties(false, null); }
+    static StylesheetFetchProperties direct() {
+        return new StylesheetFetchProperties(false, null);
+    }
 }

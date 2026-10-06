@@ -1,5 +1,7 @@
 package org.permmath.rendering;
 
+import static org.permmath.contract.ComplexityPolicy.Limit.*;
+
 import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
@@ -9,10 +11,10 @@ import java.util.ArrayDeque;
 import java.util.Set;
 import javax.xml.XMLConstants;
 import javax.xml.stream.*;
+
 import org.apache.commons.lang3.StringUtils;
 import org.owasp.html.FilterUrlByProtocolAttributePolicy;
 import org.permmath.contract.ComplexityPolicy;
-import static org.permmath.contract.ComplexityPolicy.Limit.*;
 
 /** API-side output boundary. XML and CSS are parsed by StAX and ph-css, URLs by OWASP. */
 public final class SvgOutputPolicy {
@@ -69,16 +71,30 @@ public final class SvgOutputPolicy {
     }
 
     private static double dimension(String value) throws IOException {
-        if (value == null) return 0;
+        if (value == null) {
+            return 0;
+        }
         double factor = 1;
-        if (value.endsWith("ex")) { factor = LIMITS.get(EX_PIXELS); value = value.substring(0, value.length() - 2); }
-        else if (value.endsWith("em")) { factor = LIMITS.get(EM_PIXELS); value = value.substring(0, value.length() - 2); }
-        else if (value.endsWith("px")) value = value.substring(0, value.length() - 2);
+        if (value.endsWith("ex")) {
+            factor = LIMITS.get(EX_PIXELS);
+            value = value.substring(0, value.length() - 2);
+        }
+        else if (value.endsWith("em")) {
+            factor = LIMITS.get(EM_PIXELS);
+            value = value.substring(0, value.length() - 2);
+        }
+        else if (value.endsWith("px")) {
+            value = value.substring(0, value.length() - 2);
+        }
         try {
             double result = Double.parseDouble(value) * factor;
-            if (!Double.isFinite(result) || result <= 0) throw rejected();
+            if (!Double.isFinite(result) || result <= 0) {
+                throw rejected();
+            }
             return result;
-        } catch (NumberFormatException invalid) { throw rejected(); }
+        } catch (NumberFormatException invalid) {
+            throw rejected();
+        }
     }
 
     static String sanitize(String svg) throws IOException {
