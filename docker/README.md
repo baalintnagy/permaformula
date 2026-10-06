@@ -13,8 +13,12 @@ The Maven build verifies all four modules. Docker builds separate targets:
 
 ## Image delivery origins
 
-The API listener is nginx port 8080: public `/url`, `/decode`, Swagger UI and
+The API listener is nginx port 8080: public `/url`, `/url-encode`, Swagger UI and
 OpenAPI remain available. `/url` returns links on the configured image origin.
+`/url-encode?text=...` returns a UTF-8 encoded query value as plain text, with
+4 MiB input / 12 MiB maximum encoded output, bounded preparation/deadlines,
+request quotas and no-store/nosniff/no-referrer headers. `/decode` is removed
+and returns 404 through both listeners; image-only routes remain unchanged.
 Existing `/image` and `/img` API URLs redirect with HTTP 307 and preserve the raw
 query. Other API routes fail 404 rather than passing arbitrary paths upstream.
 The image listener is nginx port 8081: only exact `/image` and `/img` routes allow

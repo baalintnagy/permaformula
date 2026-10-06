@@ -36,6 +36,6 @@ Assert-Status $cached 200
 if (!$cached.Headers.ContainsKey('Content-Security-Policy')) { throw 'Cached SVG lost its CSP' }
 Assert-Status (Get-Response '/url?formula=x' @{'X-Forwarded-For'='198.51.100.6'}) 200
 Assert-Status (Get-Response '/url?formula=y' @{'X-Forwarded-For'='198.51.100.7'}) 200
-Assert-Limited (Get-Response '/decode?ubcq=malformed' @{'X-Forwarded-For'='198.51.100.8'})
+Assert-Limited (Get-Response '/url-encode?text=x' @{'X-Forwarded-For'='198.51.100.8'})
 Assert-Limited (Get-Response '/url?formula=z' @{'X-Forwarded-For'='198.51.100.9'})
 Write-Output 'nginx overwrites spoofed identities; request/render quotas return 429 with Retry-After; cached SVG remains available after render quota exhaustion.'

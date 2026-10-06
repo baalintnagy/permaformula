@@ -10,7 +10,6 @@ import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.permmath.rendering.GeneratedImageService;
 import org.permmath.rendering.SvgOutputPolicy;
-import org.permmath.url.ImageDescriptor;
 import org.permmath.url.UrlService;
 import org.permmath.validation.ValidImageWidth;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -84,14 +83,18 @@ public class PermMathController {
 
     }
 
-    @Operation(summary = "Decode a compressed image descriptor",
-            description = "Base64-decodes and GZIP-decompresses ubcq, then returns the JSON descriptor without rendering. "
-                    + "The response contains forumla (historical spelling), and any imageWidth, styleRefs and style options.")
-    @GetMapping(path = "/decode", produces = { APPLICATION_JSON_VALUE })
-    public ImageDescriptor getDecode(
-            @Parameter(description = "Compressed descriptor from the ubcq parameter of a /url permalink. Supply the payload, not the full permalink.")
-            @NotBlank @RequestParam String ubcq) throws IOException {
-        return urlService.decodeUbcq(ubcq);
+    @Operation(summary = "URL-encode text as a UTF-8 query value",
+            description = "Uses Java form/query-component encoding: spaces become + and reserved characters are percent-encoded. "
+                    + "Accepts empty text and up to 4 MiB of UTF-8 input. Returns plain text; supply the original text in Swagger.")
+    @GetMapping(path = "/url-encode", produces = TEXT_PLAIN_VALUE)
+    public ResponseEntity<String> getUrlEncode(
+            @Parameter(description = "Text to encode as one query parameter value", example = "x + y = 50%")
+            @RequestParam String text) throws IOException {
+        return ok().contentType(new org.springframework.http.MediaType("text", "plain", java.nio.charset.StandardCharsets.UTF_8))
+                .header("Cache-Control", "no-store")
+                .header("X-Content-Type-Options", "nosniff")
+                .header("Referrer-Policy", "no-referrer")
+                .body(urlService.encodeText(text));
     }
 
     private static ResponseEntity<String> svgResponse(String svg) {

@@ -97,7 +97,7 @@ try {
     # Fixture response has no body; next byte must be EOF after keepalive timeout.
     if ($alive.GetStream().ReadByte() -ne -1) { throw 'Idle keepalive did not close' }
     $slow = Connect $api
-    Send $slow "GET /decode HTTP/1.1`r`nHost: api.example.test`r`n`r`n"
+    Send $slow "GET /url-encode HTTP/1.1`r`nHost: api.example.test`r`n`r`n"
     Assert-Match (Read-Headers $slow) '^HTTP/1.1 200' 'Large response failed'
     # Stop reading long enough to fill the TCP buffers and hit send_timeout.
     Start-Sleep -Seconds 5

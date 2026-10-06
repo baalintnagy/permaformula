@@ -8,7 +8,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.net.URI;
@@ -36,6 +35,59 @@ class PermMathControllerTests {
     private MockMvc mvc;
     private UrlService urlService;
     private GeneratedImageService renderer;
+
+    @Test
+    void encodingPreservesTextWithoutRenderingOrCompression() throws Exception {
+        var compression = mock(StringCompressionService.class);
+        ReflectionTestUtils.setField(urlService, "stringCompressionService", compression);
+        mvc.perform(get("/url-encode").param("text", "α + 50% & x/y?#=\n\t<script>"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("text/plain;charset=UTF-8"))
+                .andExpect(content().string("%CE%B1+%2B+50%25+%26+x%2Fy%3F%23%3D%0A%09%3Cscript%3E"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Cache-Control", "no-store"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Referrer-Policy", "no-referrer"));
+        org.mockito.Mockito.verifyNoInteractions(renderer, compression);
+    }
+
+    @Test
+    void encodingAllowsEmptyTextAndDecodesTheIncomingQueryOnlyOnce() throws Exception {
+        mvc.perform(get("/url-encode").param("text", "")).andExpect(status().isOk()).andExpect(content().string(""));
+        mvc.perform(get("/url-encode").param("text", "  ")).andExpect(content().string("++"));
+        mvc.perform(get(URI.create("/url-encode?text=%252F%20%2B%20%F0%9F%98%80")))
+                .andExpect(status().isOk()).andExpect(content().string("%252F+%2B+%F0%9F%98%80"));
+        org.mockito.Mockito.verifyNoInteractions(renderer);
+    }
+
+    @Test
+    void encodingBoundsUtf8InputAndWorstCaseOutputExpansion() throws Exception {
+        int maximum = org.permmath.validation.InputLimits.MAX_CONTENT_BYTES;
+        var result = mvc.perform(get("/url-encode").param("text", "%".repeat(maximum)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertEquals(3 * maximum, result.length());
+        assertTrue(result.startsWith("%25") && result.endsWith("%25"));
+        for (var text : List.of("x".repeat(maximum + 1), "漢".repeat(maximum / 3 + 1))) {
+            mvc.perform(get("/url-encode").param("text", text)).andExpect(status().isBadRequest());
+        }
+        org.mockito.Mockito.verifyNoInteractions(renderer);
+    }
+
+    @Test
+    void removedDecodeRoutesAreNotAvailable() throws Exception {
+        for (String path : List.of("/decode", "/decode/", "/decode;ignored", "/decode-cq")) {
+            mvc.perform(get(path).param("ubcq", "bad")).andExpect(status().isNotFound());
+        }
+        org.mockito.Mockito.verifyNoInteractions(renderer);
+    }
+
+    @Test
+    void encodingHonoursTheExistingRequestDeadline() throws Exception {
+        try (var deadline = org.permmath.rendering.WorkDeadline.open(java.time.Duration.ofNanos(1))) {
+            mvc.perform(get("/url-encode").param("text", "x")).andExpect(status().isGatewayTimeout());
+        }
+        mvc.perform(get("/url-encode").param("text", "x")).andExpect(status().isOk());
+        org.mockito.Mockito.verifyNoInteractions(renderer);
+    }
 
     @BeforeEach
     void setUp() {
@@ -75,22 +127,6 @@ class PermMathControllerTests {
                 .andExpect(content().string(urlService.getImageUrl("x", 640, null, null)));
     }
 
-    @Test
-    void decodeCompressedPayloadPreservesFormulaAndStyles() throws Exception {
-        String formula = "x + y = 50%";
-        String style = "width: 50%; color: red;";
-        String imageUrl = urlService.getImageUrl(formula, 640,
-                List.of("https://example.com/style.css?q=a+b%20c"), style);
-        String query = URI.create(imageUrl).getRawQuery();
-
-        mvc.perform(get(URI.create("/decode?" + query)))
-                .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith("application/json"))
-                .andExpect(jsonPath("$.forumla").value(formula))
-                .andExpect(jsonPath("$.imageWidth").value(640))
-                .andExpect(jsonPath("$.style").value(style))
-                .andExpect(jsonPath("$.styleRefs[0]").value("https://example.com/style.css?q=a+b%20c"));
-    }
 
     @Test
     void generatedLinksPassTheSameContentToRenderer() throws Exception {
@@ -145,7 +181,7 @@ class PermMathControllerTests {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = { "/url", "/image", "/decode", "/img" })
+    @ValueSource(strings = { "/url", "/image", "/url-encode", "/img" })
     void missingRequiredInputReturnsBadRequest(String endpoint) throws Exception {
         mvc.perform(get(endpoint)).andExpect(status().isBadRequest());
     }
@@ -163,7 +199,7 @@ class PermMathControllerTests {
     }
 
     @Test
-    void urlAndDecodeReturn503BeforePreparationWhenCapacityIsOccupied() throws Exception {
+    void urlAndEncodingReturn503BeforePreparationWhenCapacityIsOccupied() throws Exception {
         var work = new org.permmath.rendering.ApiWorkService(new org.permmath.rendering.ApiWorkProperties(
                 1, 1, 1, java.time.Duration.ofSeconds(5)));
         ReflectionTestUtils.setField(urlService, "work", work);
@@ -178,7 +214,7 @@ class PermMathControllerTests {
             try {
                 assertTrue(entered.await(2, java.util.concurrent.TimeUnit.SECONDS));
                 mvc.perform(get("/url").param("formula", "x")).andExpect(status().isServiceUnavailable());
-                mvc.perform(get("/decode").param("ubcq", "%%%"))
+                mvc.perform(get("/url-encode").param("text", "x"))
                         .andExpect(status().isServiceUnavailable());
             } finally { release.countDown(); }
             active.get(2, java.util.concurrent.TimeUnit.SECONDS);
@@ -203,7 +239,7 @@ class PermMathControllerTests {
         var timedMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new org.boava.exception.LocalExceptionHandler())
                 .addFilters(new org.permmath.rendering.ApiDeadlineFilter(properties)).build();
-        timedMvc.perform(get("/decode").param("ubcq", "valid-but-stalled"))
+        timedMvc.perform(get("/image").param("ubcq", "valid-but-stalled"))
                 .andExpect(status().isGatewayTimeout());
         org.junit.jupiter.api.Assertions.assertNotNull(worker.get());
         worker.get().join(2000);
@@ -211,9 +247,8 @@ class PermMathControllerTests {
         timedMvc.perform(get("/url").param("formula", "x")).andExpect(status().isOk());
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = { "/image", "/decode" })
-    void compressedEndpointsRejectMalformedAndInvalidDescriptorsBeforeRendering(String endpoint) throws Exception {
+    @Test
+    void imageRejectsMalformedAndInvalidDescriptorsBeforeRendering() throws Exception {
         for (String json : List.of("null", "{}", "{\"forumla\":\" \"}",
                 "{\"forumla\":\"x\",\"imageWidth\":4001}",
                 "{\"forumla\":\"x\",\"styleRefs\":[\"\"]}",
@@ -222,24 +257,23 @@ class PermMathControllerTests {
                 "{\"forumla\":\"" + "x".repeat(org.permmath.validation.InputLimits.MAX_CONTENT_BYTES + 1) + "\"}",
                 "{\"forumla\":\"x\"} {}",
                 "{\"forumla\":" + "[".repeat(20) + "0" + "]".repeat(20) + "}")) {
-            mvc.perform(get(endpoint).param("ubcq", new StringCompressionService().compress(json)))
+            mvc.perform(get("/image").param("ubcq", new StringCompressionService().compress(json)))
                     .andExpect(status().isBadRequest());
         }
         for (String payload : List.of("%%%", "AQIDBA==")) {
-            mvc.perform(get(endpoint).param("ubcq", payload)).andExpect(status().isBadRequest());
+            mvc.perform(get("/image").param("ubcq", payload)).andExpect(status().isBadRequest());
         }
         org.mockito.Mockito.verifyNoInteractions(renderer);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = { "/image", "/decode" })
-    void compressionBombReturnsBadRequestWithoutRendering(String endpoint) throws Exception {
+    @Test
+    void compressionBombReturnsBadRequestWithoutRendering() throws Exception {
         var bytes = new java.io.ByteArrayOutputStream();
         try (var gzip = new java.util.zip.GZIPOutputStream(bytes)) {
             gzip.write("x".repeat(org.permmath.validation.InputLimits.MAX_JSON_BYTES + 1)
                     .getBytes(StandardCharsets.UTF_8));
         }
-        mvc.perform(get(endpoint).param("ubcq", java.util.Base64.getEncoder().encodeToString(bytes.toByteArray())))
+        mvc.perform(get("/image").param("ubcq", java.util.Base64.getEncoder().encodeToString(bytes.toByteArray())))
                 .andExpect(status().isBadRequest());
         org.mockito.Mockito.verifyNoInteractions(renderer);
     }

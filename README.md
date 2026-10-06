@@ -15,13 +15,31 @@ MathRenderAPI generates SVG images from compressed formula and styled HTML descr
 | `GET /url?formula=...` | Generate a compressed permalink. Optional `imageWidth`, `style`, and repeated external HTTPS `styleRefs` parameters. |
 | `GET /image?ubcq=...` | Render compressed styled HTML with backtick-delimited ASCIIMath as SVG. |
 | `GET /img?formula=...` | Render an uncompressed plain ASCIIMath formula as standalone SVG, without a browser. |
-| `GET /decode?ubcq=...` | Decode a compressed payload into its JSON descriptor. |
+| `GET /url-encode?text=...` | Encode text as a UTF-8 query parameter value and return plain text. |
 
-`/image` and `/decode` use `ubcq`: a GZIP-compressed UTF-8 JSON image descriptor,
+`/image` uses `ubcq`: a GZIP-compressed UTF-8 JSON image descriptor,
 Base64-encoded and URL-encoded. `/url` always generates this format, including
 for short formulas. The `compressUrlQuery` option and uncompressed input modes
-have been removed. `/image` and `/decode` require `ubcq`; the former
-`/image-cq` and `/decode-cq` route names are no longer available.
+have been removed. `/image` requires `ubcq`. The public `/decode` endpoint and
+the former `/image-cq` and `/decode-cq` route names are no longer available.
+
+### Query-value encoding: `/url-encode`
+
+```sh
+curl --get --data-urlencode 'text=x + y = 50%' http://localhost:8086/url-encode
+# x+%2B+y+%3D+50%25
+```
+
+Java's `URLEncoder` applies UTF-8 form/query-value encoding: spaces become `+`,
+literal `+` becomes `%2B`, and reserved characters and non-ASCII bytes are escaped.
+The result represents one query parameter value, so URL delimiters in the input
+are escaped too. Supply original text in Swagger or use normal query encoding
+when calling the endpoint; the servlet decodes the incoming parameter once.
+Empty text is accepted; missing `text` returns 400. Input is capped at the existing
+4 MiB content limit measured in UTF-8, bounding encoded output to 12 MiB. Normal
+ingress request-line/header limits also apply. The operation uses bounded API
+preparation and the request deadline/quotas. It returns `text/plain;charset=UTF-8`
+with no-store, nosniff and no-referrer headers and uses no rendering quota or cache.
 
 ### Formula-only SVG: `/img`
 
@@ -43,7 +61,7 @@ URL-encoded, including literal `+` characters.
 
 Formula, HTML, CSS and stylesheet references are preserved without whitespace
 normalization. The historical `forumla` JSON spelling remains in compressed
-payloads for `/image` and `/decode`.
+payloads for `/image`.
 
 This endpoint runs bundled MathJax 3.2.2 with its lightweight DOM adapter in
 GraalJS in a disposable JVM inside the separate renderer service. It launches no browser and needs no
@@ -74,7 +92,7 @@ Generate a permalink with /url, then request the returned link to render it.
 to the dedicated image origin: the API defaults to `http://localhost:5000`, images
 to `http://localhost:5001`. Existing API `/image` and `/img` links redirect there.
 The image listener exposes only those two endpoints and strips cookies and
-authorization; `/url`, `/decode` and Swagger stay on the API listener.
+authorization; `/url`, `/url-encode` and Swagger stay on the API listener.
 
 Configure `permmath.host` for the API origin and `permmath.image-host` for the image
 origin (`PERMMATH_HOST` / `PERMMATH_IMAGE_HOST`). Origins must be HTTP(S), without
@@ -368,8 +386,8 @@ Limits count UTF-8 bytes and preserve accepted content and whitespace:
 
 The JSON decoder limits nesting to eight, tokens to 128, property names to 64
 characters, string tokens to 4,194,304 characters and numbers to ten characters.
-It rejects trailing JSON. Descriptor validation also applies to `/decode` and
-before cache identity generation. Malformed Base64, GZIP or JSON returns HTTP 400.
+It rejects trailing JSON. Descriptor validation applies before image rendering
+and cache identity generation. Malformed Base64, GZIP or JSON returns HTTP 400.
 Decompression enforces one total expansion budget, including concatenated GZIP members.
 Existing permalinks exceeding these limits are rejected. JSON escaping counts toward
 the serialized JSON budget. Web-server/proxy URL limits may be lower and reject a

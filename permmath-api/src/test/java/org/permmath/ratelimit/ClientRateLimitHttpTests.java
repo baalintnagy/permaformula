@@ -32,12 +32,21 @@ class ClientRateLimitHttpTests {
         return get(path).with(request -> { request.setRemoteAddr(ip); return request; });
     }
 
-    @Test void requestLimitRunsBeforeDecodingAndCannotBeBypassedBySpoofedHeaders() throws Exception {
+    @Test void encodingSpendsRequestAllowanceButLeavesRenderAllowanceAvailable() throws Exception {
+        mvc.perform(client("/url-encode", "203.0.113.90").param("text", "x + y"))
+                .andExpect(status().isOk()).andExpect(content().string("x+%2B+y"));
+        verifyNoInteractions(renderer, htmlRenderer);
+        mvc.perform(client("/img", "203.0.113.90").param("formula", "encoding-quota-render"))
+                .andExpect(status().isOk());
+        verify(renderer).render("encoding-quota-render");
+    }
+
+    @Test void requestLimitRunsBeforeInputValidationAndCannotBeBypassedBySpoofedHeaders() throws Exception {
         for (int i = 0; i < 3; i++) {
-            mvc.perform(client("/decode", "203.0.113.10").param("ubcq", "malformed")
+            mvc.perform(client("/url-encode", "203.0.113.10")
                     .header("X-Forwarded-For", "198.51.100." + i)).andExpect(status().isBadRequest());
         }
-        mvc.perform(client("/decode", "203.0.113.10").param("ubcq", "malformed"))
+        mvc.perform(client("/url-encode", "203.0.113.10"))
                 .andExpect(status().isTooManyRequests()).andExpect(header().string("Retry-After", "20"))
                 .andExpect(header().string("Cache-Control", "no-store"));
         verifyNoInteractions(renderer);

@@ -77,7 +77,11 @@ class SupervisedRendererTests {
 
         public static void main(String[] args) throws Exception {
             var request = RenderRequest.parseFrom(System.in);
-            Files.writeString(Path.of(args[1]), Long.toString(ProcessHandle.current().pid()));
+            // Publish a complete PID; existence alone must not expose a partially written file.
+            var pid = Path.of(args[1]);
+            var pendingPid = pid.resolveSibling(pid.getFileName() + ".tmp");
+            Files.writeString(pendingPid, Long.toString(ProcessHandle.current().pid()));
+            Files.move(pendingPid, pid, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             if (args[0].equals("hang")) {
                 Thread.sleep(60_000);
             }

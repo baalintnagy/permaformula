@@ -55,6 +55,14 @@ public class UrlService {
         return work.prepare(() -> createImageUrl(formula, imageWidth, styleRefs, style));
     }
 
+    public String encodeText(String text) throws IOException {
+        return work.prepare(() -> {
+            if (text == null) throw new IllegalArgumentException("Text is required");
+            org.permmath.validation.InputLimits.text(text, org.permmath.validation.InputLimits.MAX_CONTENT_BYTES, "Text");
+            return encode(text, UTF_8);
+        });
+    }
+
     private String createImageUrl(String formula, Integer imageWidth, List<String> styleRefs, String style) throws IOException {
 
         var imageJson = objectMapper.writeValueAsString(

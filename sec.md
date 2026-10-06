@@ -97,7 +97,7 @@ Both `/image` and `/img` return restrictive sandbox CSP, `X-Content-Type-Options
 
 Compose now supplies a dedicated anonymous image listener. `permmath.image-host`
 controls generated permalink origins independently of the public API host.
-`/url`, `/decode` and Swagger remain publicly available on the API listener;
+`/url`, `/url-encode` and Swagger remain publicly available on the API listener;
 existing API `/image` and `/img` URLs redirect with HTTP 307 and preserve raw queries.
 Only those two image routes allow GET/HEAD/OPTIONS on the image listener; other
 routes/methods fail closed. Native nginx strips Cookie/Authorization/Proxy-Authorization
@@ -166,7 +166,7 @@ to 128, property names to 64 characters, strings to 4,194,304 characters and
 numbers to ten characters; trailing JSON is rejected. Malformed payloads return
 HTTP 400 without including parser diagnostics in the public exception.
 
-Shared descriptor construction validation applies to `/url`, `/image`, `/decode`
+Shared descriptor construction validation applies to `/url`, `/image`
 and HTML cache identities: nonblank content up to 4 MiB, inline CSS up to 1 MiB,
 eight nonblank stylesheet references up to 2 KiB each, and width 220–4000.
 `/img` validates a nonblank formula up to 256 KiB before rendering/cache identity
@@ -175,6 +175,15 @@ Oversized existing permalinks are intentionally rejected. Proxy/server query
 limits may be smaller. Tests cover byte boundaries, concatenated-member expansion,
 compression bombs, malformed descriptors, endpoint rejection and no renderer call
 on invalid inputs. Admission is implemented under 13; parsing/layout complexity budgets are implemented under 12.
+
+The public `/decode` endpoint has been removed. Its bounded decompression/JSON
+implementation remains necessary internally for `/image`. `/url-encode?text=...`
+uses Java's UTF-8 URLEncoder on the servlet-decoded parameter, with the existing
+4 MiB content byte cap (at most 12 MiB encoded output). It accepts empty input
+and requires the parameter. It uses preparation admission, the unchanged 60s
+request deadline and request quotas, and returns plain text with no-store,
+nosniff and no-referrer. No renderer, generation quota or SVG cache is involved.
+nginx exposes it only on the API listener; removed decode routes return 404.
 
 ### 12. Expensive layout, math and parsing — structural budgets implemented
 
@@ -455,3 +464,30 @@ requires reviewing preprocessing memory and shared client quotas. The input-rete
 budget is conservative accounting, not a proof of total heap consumption. HTTP client
 disconnects do not guarantee immediate servlet cancellation; the propagated API/RPC
 deadlines still bound waiting. Non-cooperative API parsing remains a separate issue.
+
+## URL encoding and decode-endpoint cleanup verification
+
+The public decode controller, OpenAPI operation and nginx proxy route are removed;
+its bounded internal descriptor decoder remains in use by /image. GET /url-encode
+accepts a required text parameter and applies Java UTF-8 query-value encoding,
+preserving empty input and escaping literal plus/percent/reserved characters.
+Existing preparation admission, request quotas, deadlines and input byte bounds
+apply. README, container documentation and smoke fixtures now use the new route.
+
+Browser-enabled Maven verification passed: 205 tests, 203 passed and two opt-in
+UI/delivery tests skipped. Coverage includes raw-query decoding exactly once,
+Unicode/whitespace, the 4 MiB UTF-8 input and 12 MiB worst-case output boundary,
+missing/oversized inputs, removed routes/OpenAPI, preparation overload/deadline
+recovery and independent request/render quotas. Compressed-image decompression,
+JSON validation and bomb rejection remain covered through /image. Linux image
+verification caught and fixed a PID-file publication race in the existing process
+cancellation test fixture; atomic publication then passed on Windows and Linux.
+
+The rebuilt API/ingress passed native Docker checks for encoding/plain-text headers,
+removed decode routes, image-origin routing/CORS/credential isolation, concurrent
+uncached renderer queueing, quota/spoof resistance and cached-SVG availability.
+The updated ingress smoke test also passed large request-line, body, connection,
+header/body/keepalive and slow-reader bounds. Compose and whitespace validation
+passed. Temporary probe containers, networks and the test deployment were removed.
+Renderer isolation, queue limits, cache budgets, container sizes and production
+origin/network requirements were preserved; no production deployment was performed.

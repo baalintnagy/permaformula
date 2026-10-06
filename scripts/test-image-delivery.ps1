@@ -51,7 +51,7 @@ try {
     Assert-Status $redirect 307
     if ((Header $redirect 'Location') -ne "$ImageUrl/img?formula=x%5E2") { throw 'Legacy redirect lost origin/query' }
     Assert-Svg (Get-Response "$ImageUrl/img?formula=x%5E2" $credentials)
-    foreach ($path in @('/url?formula=x', '/decode?ubcq=bad', '/swagger-ui/index.html', '/v3/api-docs', '/img;ignored?formula=x', '/')) {
+    foreach ($path in @('/url?formula=x', '/url-encode?text=x', '/decode?ubcq=bad', '/swagger-ui/index.html', '/v3/api-docs', '/img;ignored?formula=x', '/')) {
         Assert-Status (Get-Response "$ImageUrl$path") 404
     }
     Assert-Status (Get-Response "$BaseUrl/img;ignored?formula=x" $credentials) 404
@@ -62,6 +62,13 @@ try {
         throw 'Image CORS must allow only anonymous reads from the configured API origin'
     }
     Assert-Status (Get-Response "$BaseUrl/swagger-ui/index.html") 200
+    Assert-Status (Get-Response "$BaseUrl/decode?ubcq=bad") 404
+    $encoded = Get-Response "$BaseUrl/url-encode?text=x%20%2B%20%25%20%CE%B1"
+    Assert-Status $encoded 200
+    if ((Text $encoded) -ne 'x+%2B+%25+%CE%B1' -or $encoded.Content.Headers.ContentType.MediaType -ne 'text/plain' -or
+            (Header $encoded 'Cache-Control') -ne 'no-store' -or (Header $encoded 'X-Content-Type-Options') -ne 'nosniff') {
+        throw 'URL encoding or plain-text security headers failed'
+    }
     Write-Output 'Public /url returns image-origin links; API redirects preserve queries; image routes and SVG headers/CORS are restricted.'
 
     $image = (docker inspect "${ProjectName}-ingress-1" | ConvertFrom-Json)[0].Config.Image

@@ -59,7 +59,8 @@ class PermMathApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.openapi").value("3.0.1"))
                 .andExpect(jsonPath("$.paths['/img'].get.responses['200'].content['image/svg+xml']").exists())
-                .andExpect(jsonPath("$.paths['/decode']").exists());
+                .andExpect(jsonPath("$.paths['/url-encode'].get.responses['200'].content['text/plain']").exists())
+                .andExpect(jsonPath("$.paths['/decode']").doesNotExist());
     }
 
     @Test
@@ -88,12 +89,12 @@ class PermMathApplicationTests {
 
     @Test
     void invalidCompressedInputReturnsBusinessRuleProblem() throws Exception {
-        mvc.perform(get("/decode").param("ubcq", "%%%"))
+        mvc.perform(get("/image").param("ubcq", "%%%"))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.errorType").value("BUSINESS_RULE_VIOLATION"))
-                .andExpect(jsonPath("$.instance").value("/decode"))
+                .andExpect(jsonPath("$.instance").value("/image"))
                 .andExpect(jsonPath("$.id").isString())
                 .andExpect(jsonPath("$.timestamp").isNumber());
     }
@@ -143,13 +144,14 @@ class PermMathApplicationTests {
     @Test
     void renamedRoutesRequireCompressedInputAndOldRoutesAreRemoved() throws Exception {
         mvc.perform(get("/image").param("formula", "x")).andExpect(status().isBadRequest());
-        mvc.perform(get("/decode").param("url", "http://localhost/image?formula=x")).andExpect(status().isBadRequest());
+        mvc.perform(get("/decode").param("url", "http://localhost/image?formula=x")).andExpect(status().isNotFound());
         mvc.perform(get("/image-cq")).andExpect(status().isNotFound());
         mvc.perform(get("/decode-cq")).andExpect(status().isNotFound());
         mvc.perform(get("/img").param("ubcq", "legacy-payload")).andExpect(status().isBadRequest());
         mvc.perform(get("/v3/api-docs"))
                 .andExpect(jsonPath("$.paths['/image']").exists())
-                .andExpect(jsonPath("$.paths['/decode']").exists())
+                .andExpect(jsonPath("$.paths['/url-encode']").exists())
+                .andExpect(jsonPath("$.paths['/decode']").doesNotExist())
                 .andExpect(jsonPath("$.paths['/image-cq']").doesNotExist())
                 .andExpect(jsonPath("$.paths['/decode-cq']").doesNotExist())
                 .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("compressUrlQuery"))));
