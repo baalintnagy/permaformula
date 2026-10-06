@@ -157,3 +157,25 @@ from the render document's origin (CORS); a fetch failure fails the export.
 ### Installation
 
 1. Clone the repository:
+
+### Logging
+
+The endpoint aspect logs controller completion at INFO with the HTTP method, path,
+handler, status and duration. Failures are logged at WARN with the exception type;
+the exception handler determines the final error response. Requests rejected before
+controller invocation are handled by Spring MVC and its exception handler.
+Formula parameters, compressed payloads and SVG bodies are not included.
+
+The image cache logs initialization, misses (`cache_miss`), successful generation
+(`cache_generated`) and hits (`cache_hit`) at INFO. Generation failures use WARN;
+removal causes use DEBUG. Hits include both cached output and output shared from
+another concurrent request, identified by `source=cached_or_shared`.
+
+Enable detailed endpoint and cache logging with:
+
+```yaml
+logging:
+    level:
+        org.permmath.logging: DEBUG
+        org.permmath.rendering.cache: DEBUG
+```
