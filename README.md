@@ -12,7 +12,7 @@ MathRenderAPI generates SVG images from compressed formula and styled HTML descr
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /url?formula=...` | Generate a compressed permalink. Optional `imageWidth`, `style`, and repeated `styleRefs` parameters. |
+| `GET /url?formula=...` | Generate a compressed permalink. Optional `imageWidth`, `style`, and repeated external HTTPS `styleRefs` parameters. |
 | `GET /image?ubcq=...` | Render compressed styled HTML with backtick-delimited ASCIIMath as SVG. |
 | `GET /img?formula=...` | Render an uncompressed plain ASCIIMath formula as standalone SVG, without a browser. |
 | `GET /decode?ubcq=...` | Decode a compressed payload into its JSON descriptor. |
@@ -90,13 +90,12 @@ it is not a hard limit on total JVM memory or in-flight rendering. Caffeine evic
 entries to stay within the budget. Images larger than the budget are returned but
 not retained. Each cache hit resets the full configured TTL (60 days by default).
 Entries expire after that duration without access.
-External CSS and image resources are captured during generation; changes to those
-resources become visible after eviction, expiry or restart.
+External stylesheets are fetched and sanitized during generation. Changes at the same URL become visible after eviction, expiry or restart.
 
 Keys are SHA-256 hashes of a versioned rendering identity and the effective
 descriptor, independent of the compressed URL spelling. HTML keys include the
 resolved width. Formula-only keys depend on the exact formula text.
-Stylesheet order is preserved. Bump the rendering identity version in
+The HTML cache identity includes the security policy version. Bump the rendering identity version in
 `GeneratedImageService` when a template, MathJax bundle, browser version or export
 change affects output before introducing persistent storage.
 
@@ -138,17 +137,14 @@ launch a browser. The Dockerfile installs Linux Chromium and its dependencies;
 no graphical display or virtual framebuffer is required.
 
 Rendering waits for MathJax, fonts, and images, with a configurable timeout
-(`permmath.rendering.timeout`, default `30s`). User HTML and external stylesheets
-are currently accepted, as in the original design.
+(`permmath.rendering.timeout`, default `30s`). User HTML is sanitized with a presentation element/attribute allowlist. External and inline CSS are parsed with ph-css and filtered by a presentation property/function allowlist. CSS variables, responsive media rules, supports rules, cascade layers and nested styles are retained. External stylesheets retain their application order; inline CSS follows them. Submitted images, SVG, links, scripts, forms and embedded documents are removed.
 
 The `/image` response type is `image/svg+xml` instead of
 `image/jpeg`; existing compressed permalinks resolve to SVG without changing their
 payload. HTML SVG exports use `foreignObject` with computed styles embedded,
 and keep MathJax formulas as vector paths. They are intended for browsers;
 SVG tools that do not support `foreignObject` should use `/img` for individual
-formulas. Ordinary HTML text still uses the viewer's fonts. Referenced images
-and CSS background images are embedded as data URLs and must permit fetching
-from the render document's origin (CORS); a fetch failure fails the export.
+formulas. Ordinary HTML text still uses the viewer's fonts. External stylesheets are fetched by a controlled HTTP client, with HTTPS on port 443, normal TLS certificate/hostname verification, and public IP addresses only. The connection uses the validated DNS addresses, so it cannot re-resolve an unchecked address. Every redirect is validated; HTTP downgrades, credentials and private/loopback/link-local/reserved destinations are rejected. CSS imports use the same fetcher and resolve relative to the final stylesheet URL. Limits are 8 top-level references, 16 fetched resources including imports, 3 redirects per resource, 3 import levels, 1 MiB per response, 4 MiB combined decoded CSS, and a shared 15-second fetch deadline. Responses must be `text/css`; compressed responses are rejected (requests ask for identity encoding). CSS resource URLs, external fonts, executable expressions and unknown at-rules are removed. Browser contexts block service workers, WebSockets and all requests except the current document and bundled rendering scripts. A restrictive CSP supplies another boundary. Deployment still requires OS-level egress restrictions and browser isolation; these application checks do not replace them.
 
 ### Prerequisites
 

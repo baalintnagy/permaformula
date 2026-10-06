@@ -41,7 +41,7 @@ public class GeneratedImageService {
                 Objects.requireNonNullElse(descriptor.imageWidth(), defaults.defaultImageWidth()),
                 Objects.requireNonNullElse(descriptor.styleRefs(), List.of()),
                 Objects.requireNonNullElse(descriptor.style(), ""));
-        return store.getOrGenerate(key("html-svg-v1", effective), () -> {
+        return store.getOrGenerate(key("html-svg-v3:presentation-policy-2", effective), () -> {
             try (var input = htmlRenderer.getImage(effective).getInputStream()) {
                 return new String(input.readAllBytes(), StandardCharsets.UTF_8);
             }

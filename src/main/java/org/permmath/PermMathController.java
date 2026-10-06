@@ -57,10 +57,10 @@ public class PermMathController {
             @NotBlank @RequestParam String formula,
             @Parameter(description = "HTML layout width in CSS pixels, from 220 to 4000. Defaults to the configured width (800 by default).", example = "800")
             @Nullable @ValidImageWidth @RequestParam(required = false) Integer imageWidth,
-            @Parameter(description = "External stylesheet URLs in application order. Repeat this parameter for multiple stylesheets. Used by /image.",
+            @Parameter(description = "External HTTPS stylesheet URLs in application order. Fetched with SSRF checks and sanitized before rendering. Repeat for multiple stylesheets.",
                     example = "[\"https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css\"]")
             @Nullable @RequestParam(required = false) List<@NotBlank String> styleRefs,
-            @Parameter(description = "Inline CSS stylesheet applied after external stylesheets. Used by /image.",
+            @Parameter(description = "Presentation CSS stylesheet. Unsupported rules and properties are removed by /image.",
                     example = "\n    body {\n        padding:0; \n        margin:0; \n        border:0;\n    }\n\t.div-root {\n        padding: 20px; \n        font-family: Arial, sans-serif; \n        -webkit-font-smoothing: antialiased; \n        -moz-osx-font-smoothing: grayscale; \n        background-color: #303030; \n        color: white;\n    }\n    .example-formula {\n        font-size:18px;\n    }\n    .num-sys-formula {\n        color: rgb(207, 123, 123); \n        font-size:25px;\n    }\n    .fourier-formula {\n        color: rgb(59, 201, 212); \n        font-size:25px;\n    }\n")
             @Nullable @RequestParam(required = false) String style) throws IOException {
         return urlService.getImageUrl(formula, imageWidth, styleRefs, style);

@@ -36,14 +36,9 @@ public class ImageRendererService implements AutoCloseable {
     }
 
     public InputStreamResource getImage(@Valid @NotNull ImageDescriptor descriptor) throws IOException {
+        var html = RenderContentPolicy.document(template, descriptor);
         var task = worker.submit(() -> {
             if (assets == null) assets = new RenderAssets();
-            var links = descriptor.styleRefs() == null ? "" : descriptor.styleRefs().stream()
-                    .map(ref -> "<link rel=\"stylesheet\" href=\"%s\">".formatted(escapeAttribute(ref)))
-                    .collect(java.util.stream.Collectors.joining("\n"));
-            var html = template.replace("_*{STYLE_REFS}*_", links)
-                    .replace("_*{STYLE}*_", Objects.requireNonNullElse(descriptor.style(), ""))
-                    .replace("_*{FORMULA}*_", descriptor.forumla());
             var url = assets.add(html);
             int width = Objects.requireNonNullElse(descriptor.imageWidth(), properties.defaultImageWidth());
             try {
@@ -65,10 +60,6 @@ public class ImageRendererService implements AutoCloseable {
             task.cancel(true);
             throw new IOException("Rendering timed out", e);
         }
-    }
-
-    private static String escapeAttribute(String value) {
-        return value.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;");
     }
 
     @PreDestroy

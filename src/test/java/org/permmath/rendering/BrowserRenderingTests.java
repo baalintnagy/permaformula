@@ -14,6 +14,36 @@ import org.permmath.url.ImageDescriptor;
 @EnabledIfSystemProperty(named = "rendering.tests", matches = "true")
 class BrowserRenderingTests {
     @Test
+    void hostileContentCannotExecuteOrContactLoopback() throws Exception {
+        var hits = new java.util.concurrent.atomic.AtomicInteger();
+        var tripwire = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        tripwire.createContext("/", exchange -> {
+            hits.incrementAndGet();
+            exchange.sendResponseHeaders(204, -1);
+            exchange.close();
+        });
+        tripwire.start();
+        var target = "http://127.0.0.1:" + tripwire.getAddress().getPort() + "/";
+        try (var renderer = new ImageRendererService(new PermMathProperties("http://localhost:8086", 800, 2000),
+                new RenderingProperties(Path.of(".runtime/browsers"), Duration.ofSeconds(30)))) {
+            var input = "<div onclick='alert(1)'>Safe `x^2`</div>"
+                    + "<script>window.renderSvg='FORGED';window.renderState='ready';fetch('" + target + "')</script>"
+                    + "<img src='" + target + "' onerror='window.renderSvg=\"FORGED\"'>"
+                    + "<iframe src='" + target + "'></iframe>";
+            try (var image = renderer.getImage(new ImageDescriptor(input, 320, null,
+                    "@import url('" + target + "'); div {color:red;background-image:url('" + target + "')}"))
+                    .getInputStream()) {
+                var svg = new String(image.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                assertEquals("svg", parse(svg).getDocumentElement().getLocalName());
+                assertTrue(svg.contains("Safe"));
+                assertFalse(svg.contains("FORGED"));
+                assertFalse(svg.contains("onclick"));
+                assertEquals(0, hits.get());
+            }
+        } finally { tripwire.stop(0); }
+    }
+
+    @Test
     void rendersOriginalStyledHtmlExample() throws Exception {
         var method = org.permmath.PermMathController.class.getMethod("getUrl", String.class,
                 Integer.class, List.class, String.class);
@@ -48,22 +78,13 @@ class BrowserRenderingTests {
     }
 
     @Test
-    void plainHtmlAndExternalStylesRenderWithoutLeakingBetweenRequests() throws Exception {
-        var cssServer = com.sun.net.httpserver.HttpServer.create(
-                new java.net.InetSocketAddress("127.0.0.1", 0), 0);
-        cssServer.createContext("/style.css", exchange -> {
-            var css = "body {margin:0; background:rgb(180,30,30);} div {height:150px;}".getBytes();
-            exchange.getResponseHeaders().set("Content-Type", "text/css");
-            exchange.sendResponseHeaders(200, css.length);
-            exchange.getResponseBody().write(css);
-            exchange.close();
-        });
-        cssServer.start();
+    void inlineStylesRenderWithoutLeakingAndPrivateStylesAreRejected() throws Exception {
         var settings = new RenderingProperties(Path.of(".runtime/browsers"), Duration.ofSeconds(30));
         try (var renderer = new ImageRendererService(
                 new PermMathProperties("http://localhost:8086", 800, 2000), settings)) {
-            String ref = "http://127.0.0.1:" + cssServer.getAddress().getPort() + "/style.css";
-            var first = renderer.getImage(new ImageDescriptor("<div>Plain HTML</div>", 320, List.of(ref), null));
+            String ref = "http://127.0.0.1:1/style.css";
+            assertThrows(IllegalArgumentException.class, () -> renderer.getImage(new ImageDescriptor("<div>Plain HTML</div>", 320, List.of(ref), null)));
+            var first = renderer.getImage(new ImageDescriptor("<div>Plain HTML</div>", 320, null, "body {margin:0; background:rgb(180,30,30);} div {height:150px;}"));
             try (var input = first.getInputStream()) {
                 var svg = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
                 var image = parse(svg).getDocumentElement();
@@ -80,7 +101,7 @@ class BrowserRenderingTests {
                 assertTrue(svg.contains("background-color:rgb(30, 30, 180)"));
                 assertFalse(svg.contains("<script"));
             }
-        } finally { cssServer.stop(0); }
+        }
     }
     private static org.w3c.dom.Document parse(String svg) throws Exception {
         var factory = DocumentBuilderFactory.newInstance();
