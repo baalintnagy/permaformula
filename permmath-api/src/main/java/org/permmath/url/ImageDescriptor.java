@@ -18,6 +18,7 @@ public record ImageDescriptor(
 
     public ImageDescriptor {
         Objects.requireNonNull(forumla, "forumla");
+        org.permmath.validation.InputLimits.descriptor(forumla, imageWidth, styleRefs, style);
         styleRefs = styleRefs == null ? null : List.copyOf(styleRefs);
     }
 }

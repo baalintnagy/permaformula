@@ -15,6 +15,16 @@ import org.springframework.util.unit.DataSize;
 class CaffeineImageStoreTests {
 
     @Test
+    void cacheBudgetLeavesHeapHeadroomAndHonorsSmallerConfiguration() {
+        var properties = new ImageCacheProperties(DataSize.ofMegabytes(128), Duration.ofHours(1));
+        assertEquals(DataSize.ofMegabytes(64).toBytes(),
+                properties.effectiveMaximumBytes(DataSize.ofMegabytes(256).toBytes()));
+        assertEquals(DataSize.ofMegabytes(128).toBytes(),
+                properties.effectiveMaximumBytes(DataSize.ofMegabytes(1024).toBytes()));
+        assertThrows(IllegalArgumentException.class, () -> properties.effectiveMaximumBytes(0));
+    }
+
+    @Test
     void concurrentRequestsShareOneGeneration() throws Exception {
         var store = store(65536, new AtomicLong());
         var calls = new AtomicInteger();

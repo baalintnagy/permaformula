@@ -25,10 +25,11 @@ public class CaffeineImageStore implements GeneratedImageStore {
     }
 
     CaffeineImageStore(ImageCacheProperties properties, Ticker ticker) {
+        long effectiveBytes = properties.effectiveMaximumBytes(Runtime.getRuntime().maxMemory());
         cache = // Conservative UTF-16 content estimate plus key and per-entry overhead.
-        Caffeine.newBuilder().maximumWeight(properties.maximumSize().toBytes()).weigher((String key, String svg) -> (int) Math.min(Integer.MAX_VALUE, 2L * (key.length() + svg.length()) + 256)).expireAfterAccess(properties.expireAfterAccess()).removalListener((String key, String svg, com.github.benmanes.caffeine.cache.RemovalCause cause) -> log.debug("event=cache_removed key={} cause={}", key, cause)).ticker(ticker).recordStats().build();
-        log.info("event=cache_initialized maximumBytes={} expireAfterAccess={}",
-                properties.maximumSize().toBytes(), properties.expireAfterAccess());
+        Caffeine.newBuilder().maximumWeight(effectiveBytes).weigher((String key, String svg) -> (int) Math.min(Integer.MAX_VALUE, 2L * (key.length() + svg.length()) + 256)).expireAfterAccess(properties.expireAfterAccess()).removalListener((String key, String svg, com.github.benmanes.caffeine.cache.RemovalCause cause) -> log.debug("event=cache_removed key={} cause={}", key, cause)).ticker(ticker).recordStats().build();
+        log.info("event=cache_initialized configuredBytes={} effectiveBytes={} expireAfterAccess={}",
+                properties.maximumSize().toBytes(), effectiveBytes, properties.expireAfterAccess());
     }
 
     @Override

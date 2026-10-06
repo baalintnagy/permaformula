@@ -81,9 +81,11 @@ one generation. Errors are not cached. Entries disappear on service restart.
 ```yaml
 permmath:
     image-cache:
-        maximum-size: 1GB
+        maximum-size: 128MB
         expire-after-access: 60d
 ```
+
+The effective cache budget is the smaller of the configured maximum (128 MiB by default) and 25% of the JVM maximum heap. Startup logs report both configured and effective budgets. This reserves heap headroom for request processing; it does not bound concurrent work.
 
 The memory budget uses an estimate of SVG string storage, keys and entry overhead;
 it is not a hard limit on total JVM memory or in-flight rendering. Caffeine evicts
@@ -152,7 +154,7 @@ The renderer binds to loopback port 9090. The API defaults to TLS for TCP; see [
 
 Opt-in browser tests run with `mvn verify '-Drendering.tests=true'` after installation. The styled example fetches Bootstrap from its public HTTPS CDN; comparison images go into module `target/rendering` directories. Normal tests do not launch Chromium.
 
-Both HTML and formula rendering use gRPC with request IDs and deadlines. Occupied renderer capacity returns HTTP 503; a deadline returns 504. Each job uses fresh execution state. Content/output are bounded at 8 MiB. `RenderGateway` separates API generation from the transport, and `RenderJobExecutor` separates rendering from gRPC. A future RabbitMQ consumer can reuse the contract/core; new async endpoints and pending indicator images remain future work.
+Both HTML and formula rendering use gRPC with request IDs and deadlines. Occupied renderer capacity returns HTTP 503; a deadline returns 504. Each job uses fresh execution state. Content/output are bounded at 16 MiB. `RenderGateway` separates API generation from the transport, and `RenderJobExecutor` separates rendering from gRPC. A future RabbitMQ consumer can reuse the contract/core; new async endpoints and pending indicator images remain future work.
 
 Rendering waits for MathJax, fonts, and images, with a configurable timeout
 (`permmath.rendering.timeout`, default `30s`). User HTML is sanitized with a presentation element/attribute allowlist. External and inline CSS are parsed with ph-css and filtered by a presentation property/function allowlist. CSS variables, responsive media rules, supports rules, cascade layers and nested styles are retained. External stylesheets retain their application order; inline CSS follows them. Submitted images, SVG, links, scripts, forms and embedded documents are removed.
@@ -180,7 +182,7 @@ SVG before caching or serving it, using secure JDK StAX XML parsing, OWASP URL
 filtering and ph-css. The presentation policy preserves computed styles,
 foreignObject, MathML, glyph paths, local fragment references and HTTPS links.
 Active elements, unsafe links, external resources, DTDs and XML entities are
-rejected; unsupported CSS declarations are removed. Output is limited to 8 MiB,
+rejected; unsupported CSS declarations are removed. Output is limited to 16 MiB,
 depth 128 and 20,000 elements. Both cache identities include the output-policy
 version. `/image` and `/img` send sandbox CSP, `nosniff` and `no-referrer` headers.
 
@@ -226,3 +228,31 @@ logging:
         org.permmath.logging: DEBUG
         org.permmath.rendering.cache: DEBUG
 ```
+
+## Input limits
+
+All four endpoints reject invalid or oversized application payloads with HTTP 400.
+Limits count UTF-8 bytes and preserve accepted content and whitespace:
+
+| Input | Limit |
+|---|---|
+| `/img` plain formula | 256 KiB, nonblank |
+| Descriptor HTML/content (`forumla`) | 4 MiB, nonblank |
+| Inline stylesheet | 1 MiB |
+| Stylesheet references | Eight, nonblank, 2 KiB each |
+| Image width | 220–4000, when supplied |
+| Decompressed/serialized descriptor JSON | 8 MiB |
+| Compressed descriptor | 8 MiB + 16 KiB |
+| Base64 descriptor | 11,206,656 characters |
+
+The JSON decoder limits nesting to eight, tokens to 128, property names to 64
+characters, string tokens to 4,194,304 characters and numbers to ten characters.
+It rejects trailing JSON. Descriptor validation also applies to `/decode` and
+before cache identity generation. Malformed Base64, GZIP or JSON returns HTTP 400.
+Decompression enforces one total expansion budget, including concatenated GZIP members.
+Existing permalinks exceeding these limits are rejected. JSON escaping counts toward
+the serialized JSON budget. Web-server/proxy URL limits may be lower and reject a
+request before these application limits apply.
+
+These limits bound individual inputs. Concurrent API preparation/fetching and
+HTML/CSS/math complexity still require separate admission and complexity controls.

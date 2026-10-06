@@ -46,7 +46,8 @@ class PermMathControllerTests {
         ReflectionTestUtils.setField(controller, "urlService", urlService);
         renderer = mock(GeneratedImageService.class);
         ReflectionTestUtils.setField(controller, "generatedImageService", renderer);
-        mvc = MockMvcBuilders.standaloneSetup(controller).build();
+        mvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new org.boava.exception.LocalExceptionHandler()).build();
     }
 
     @Test
@@ -157,5 +158,54 @@ class PermMathControllerTests {
                     URLDecoder.decode(parts[1], StandardCharsets.UTF_8));
         });
         return request;
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "/image", "/decode" })
+    void compressedEndpointsRejectMalformedAndInvalidDescriptorsBeforeRendering(String endpoint) throws Exception {
+        for (String json : List.of("null", "{}", "{\"forumla\":\" \"}",
+                "{\"forumla\":\"x\",\"imageWidth\":4001}",
+                "{\"forumla\":\"x\",\"styleRefs\":[\"\"]}",
+                "{\"forumla\":\"x\",\"styleRefs\":[" + String.join(",", java.util.Collections.nCopies(9, "\"a.css\"")) + "]}",
+                "{\"forumla\":\"x\",\"style\":\"" + "s".repeat(org.permmath.validation.InputLimits.MAX_STYLE_BYTES + 1) + "\"}",
+                "{\"forumla\":\"" + "x".repeat(org.permmath.validation.InputLimits.MAX_CONTENT_BYTES + 1) + "\"}",
+                "{\"forumla\":\"x\"} {}",
+                "{\"forumla\":" + "[".repeat(20) + "0" + "]".repeat(20) + "}")) {
+            mvc.perform(get(endpoint).param("ubcq", new StringCompressionService().compress(json)))
+                    .andExpect(status().isBadRequest());
+        }
+        for (String payload : List.of("%%%", "AQIDBA==")) {
+            mvc.perform(get(endpoint).param("ubcq", payload)).andExpect(status().isBadRequest());
+        }
+        org.mockito.Mockito.verifyNoInteractions(renderer);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "/image", "/decode" })
+    void compressionBombReturnsBadRequestWithoutRendering(String endpoint) throws Exception {
+        var bytes = new java.io.ByteArrayOutputStream();
+        try (var gzip = new java.util.zip.GZIPOutputStream(bytes)) {
+            gzip.write("x".repeat(org.permmath.validation.InputLimits.MAX_JSON_BYTES + 1)
+                    .getBytes(StandardCharsets.UTF_8));
+        }
+        mvc.perform(get(endpoint).param("ubcq", java.util.Base64.getEncoder().encodeToString(bytes.toByteArray())))
+                .andExpect(status().isBadRequest());
+        org.mockito.Mockito.verifyNoInteractions(renderer);
+    }
+
+    @Test
+    void directEndpointsRejectOversizedUtf8ContentAndStyles() throws Exception {
+        mvc.perform(get("/img").param("formula", "漢".repeat(org.permmath.validation.InputLimits.MAX_FORMULA_BYTES / 3 + 1)))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/url").param("formula", "x".repeat(
+                org.permmath.validation.InputLimits.MAX_CONTENT_BYTES + 1)))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/url").param("formula", "x").param("style", "x".repeat(
+                org.permmath.validation.InputLimits.MAX_STYLE_BYTES + 1)))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/url").param("formula", "x").param("styleRefs",
+                java.util.Collections.nCopies(9, "https://example.com/a.css").toArray(String[]::new)))
+                .andExpect(status().isBadRequest());
+        org.mockito.Mockito.verifyNoInteractions(renderer);
     }
 }

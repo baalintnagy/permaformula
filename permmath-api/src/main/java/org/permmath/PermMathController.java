@@ -42,6 +42,7 @@ public class PermMathController {
     public ResponseEntity<String> getImg(
             @Parameter(description = "Plain ASCIIMath formula, URL-encoded as a query parameter", example = "sqrt(x^2 + y^2)")
             @NotBlank @RequestParam String formula) throws IOException {
+        org.permmath.validation.InputLimits.formula(formula);
         return svgResponse(generatedImageService.getImg(formula));
     }
 

@@ -57,6 +57,7 @@ public class GeneratedImageService {
     }
 
     public String getImg(@NotBlank String formula) throws IOException {
+        org.permmath.validation.InputLimits.formula(formula);
         if (!StringUtils.isNotBlank(formula)) {
             throw new IllegalArgumentException("Formula must not be blank");
         }
