@@ -84,7 +84,9 @@ public final class RendererServiceMain {
                 finalWorkers.shutdownGracefully();
             }
         }));
-        System.err.println("event=renderer_ready transport=" + (socket == null ? "tcp" : "unix"));
+        // Eclipse launch groups observe stdout for their readiness expression.
+        System.out.println("event=renderer_ready transport=" + (socket == null ? "tcp" : "unix"));
+        System.out.flush();
         server.awaitTermination();
     }
 }

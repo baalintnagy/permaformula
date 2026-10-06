@@ -187,6 +187,17 @@ The subsequent increase to 256 KiB formulas, 4 MiB HTML, 1 MiB inline CSS, 8 MiB
 
 ## Recommended next work
 
+API admission/deadline verification passed with browser testing enabled:
+134 tests, 133 passed and one opt-in Swagger UI test skipped. Tests cover overload
+before input preparation, decoding timeouts, slot retention for non-cooperative
+work, recovery after cancellation, cache-hit availability during generation
+overload, duplicate wait deadlines and remaining-budget propagation into gRPC.
+Both browser suites, including external Bootstrap styles, passed. A subsequent
+renderer startup regression passed with the readiness marker on stdout, allowing
+Eclipse launch groups to proceed to API startup.
+
+## Recommended next work
+
 1. Maintain decompression and endpoint validation regressions (11); individual payload limits are implemented.
 2. Bound DOM/CSS/math complexity and rendered height (12). API preparation/fetch admission, request deadlines and output caps are implemented; non-cooperative API work may need process isolation (13).
 3. Verify isolated renderer controls on production hosts and add independent API-fetcher egress controls (3–6).

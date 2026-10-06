@@ -154,6 +154,12 @@ The renderer binds to loopback port 9090. The API defaults to TLS for TCP; see [
 
 Opt-in browser tests run with `mvn verify '-Drendering.tests=true'` after installation. The styled example fetches Bootstrap from its public HTTPS CDN; comparison images go into module `target/rendering` directories. Normal tests do not launch Chromium.
 
+Eclipse launch groups can start the renderer first, wait for standard output
+matching `event=renderer_ready transport=tcp`, then launch the API with
+`PERMMATH_RENDERING_PLAINTEXT=true`. The readiness marker is written and flushed
+on stdout after the gRPC listener starts. After changing the renderer, stop the
+existing launch group and launch it again so the marker is emitted by the new process.
+
 Both HTML and formula rendering use gRPC with request IDs and deadlines. Occupied renderer capacity returns HTTP 503; a deadline returns 504. Each job uses fresh execution state. Content/output are bounded at 16 MiB. `RenderGateway` separates API generation from the transport, and `RenderJobExecutor` separates rendering from gRPC. A future RabbitMQ consumer can reuse the contract/core; new async endpoints and pending indicator images remain future work.
 
 API work also uses immediate admission with no queue:
