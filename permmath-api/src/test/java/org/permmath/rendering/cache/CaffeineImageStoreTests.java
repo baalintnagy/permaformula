@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.util.unit.DataSize;
 
 class CaffeineImageStoreTests {
+
     @Test
     void concurrentRequestsShareOneGeneration() throws Exception {
         var store = store(65536, new AtomicLong());
@@ -21,17 +22,21 @@ class CaffeineImageStoreTests {
         var start = new CountDownLatch(1);
         try (var workers = Executors.newFixedThreadPool(8)) {
             var results = new ArrayList<java.util.concurrent.Future<String>>();
-            for (int i = 0; i < 8; i++) results.add(workers.submit(() -> {
-                ready.countDown();
-                assertTrue(start.await(5, TimeUnit.SECONDS));
-                return store.getOrGenerate("same", () -> {
-                    calls.incrementAndGet();
-                    return "<svg/>";
-                });
-            }));
+            for (int i = 0; i < 8; i++) {
+                results.add(workers.submit(() -> {
+                    ready.countDown();
+                    assertTrue(start.await(5, TimeUnit.SECONDS));
+                    return store.getOrGenerate("same", () -> {
+                        calls.incrementAndGet();
+                        return "<svg/>";
+                    });
+                }));
+            }
             assertTrue(ready.await(5, TimeUnit.SECONDS));
             start.countDown();
-            for (var result : results) assertEquals("<svg/>", result.get(5, TimeUnit.SECONDS));
+            for (var result : results) {
+                assertEquals("<svg/>", result.get(5, TimeUnit.SECONDS));
+            }
         }
         assertEquals(1, calls.get());
         assertEquals(1, store.stats().loadSuccessCount());
@@ -41,10 +46,12 @@ class CaffeineImageStoreTests {
     void failuresAreNotCachedAndCheckedExceptionsArePreserved() throws Exception {
         var store = store(65536, new AtomicLong());
         var failure = new IOException("render failed");
-        assertSame(failure, assertThrows(IOException.class,
-                () -> store.getOrGenerate("key", () -> { throw failure; })));
-        assertThrows(IllegalArgumentException.class,
-                () -> store.getOrGenerate("key", () -> { throw new IllegalArgumentException("bad formula"); }));
+        assertSame(failure, assertThrows(IOException.class, () -> store.getOrGenerate("key", () -> {
+            throw failure;
+        })));
+        assertThrows(IllegalArgumentException.class, () -> store.getOrGenerate("key", () -> {
+            throw new IllegalArgumentException("bad formula");
+        }));
         assertEquals("success", store.getOrGenerate("key", () -> "success"));
     }
 

@@ -17,12 +17,16 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class EndpointLoggingAspect {
+
     private static final Logger log = LoggerFactory.getLogger(EndpointLoggingAspect.class);
+
 
     @Around("@within(org.springframework.web.bind.annotation.RestController) && execution(public * org.permmath..*(..))")
     public Object logEndpoint(ProceedingJoinPoint invocation) throws Throwable {
         var attributes = RequestContextHolder.getRequestAttributes();
-        if (!(attributes instanceof ServletRequestAttributes servlet)) return invocation.proceed();
+        if (!(attributes instanceof ServletRequestAttributes servlet)) {
+            return invocation.proceed();
+        }
         var request = servlet.getRequest();
         var method = request.getMethod();
         var path = request.getRequestURI();

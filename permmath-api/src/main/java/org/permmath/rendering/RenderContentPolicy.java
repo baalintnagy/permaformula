@@ -7,8 +7,11 @@ import org.owasp.html.HtmlPolicyBuilder;
 import org.owasp.html.PolicyFactory;
 import org.permmath.url.ImageDescriptor;
 
-/** Presentation-only input: no submitted URLs, scripts or embedded documents. */
+/**
+ * Presentation-only input: no submitted URLs, scripts or embedded documents.
+ */
 final class RenderContentPolicy {
+
     private static final PolicyFactory HTML = new HtmlPolicyBuilder()
             .allowElements("div", "span", "p", "br", "hr", "h1", "h2", "h3", "h4", "h5", "h6",
                     "b", "strong", "i", "em", "u", "s", "sub", "sup", "pre", "code", "blockquote",
@@ -24,6 +27,7 @@ final class RenderContentPolicy {
         return document(template, descriptor, new StylesheetFetcher().fetchAll(descriptor.styleRefs()));
     }
 
+
     static String document(String template, ImageDescriptor descriptor, java.util.List<String> externalCss) throws IOException {
         var document = Jsoup.parse(template);
         document.outputSettings().prettyPrint(false);
@@ -35,13 +39,13 @@ final class RenderContentPolicy {
                         + "connect-src 'none'; frame-src 'none'; worker-src 'none'; "
                         + "object-src 'none'; base-uri 'none'; form-action 'none'");
         // DataNode preserves the stylesheet's text boundary; never substitute user text into a template.
-        for (var sheet : externalCss) document.head().appendElement("style").appendChild(new DataNode(css(sheet)));
+        externalCss.forEach(sheet -> document.head().appendElement("style").appendChild(new DataNode(css(sheet))));
         document.head().appendElement("style").appendChild(new DataNode(css(descriptor.style())));
         document.body().html(HTML.sanitize(descriptor.forumla()));
         return document.outerHtml();
     }
 
-    static String css(String source) throws IOException {
+    static String css(String source) {
         return StylesheetPolicy.stylesheet(source);
     }
 }

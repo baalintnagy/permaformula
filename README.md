@@ -124,6 +124,15 @@ The project is a Maven reactor with four modules:
 
 Run `mvn verify` with JDK 25 to build and test all modules. Docker is the recommended way to run both services: `docker compose up --build -d`.
 
+Java and XML use four spaces for indentation, as configured in `.editorconfig`.
+Always use braces for Java `if`, `else` and loop bodies. Prefer streams, predicates
+and method references for collection transformations and checks when they preserve
+evaluation order, short-circuiting and exception handling. Keep explicit loops for
+resource management, checked exceptions and indexed mutation. Use
+`StringUtils.isNotBlank` for null-safe blank checks where Commons Lang is available.
+The Maven build enables compiler lint warnings, excluding annotation-processor
+claim checks for runtime framework annotations.
+
 For Windows development, install Chromium with `./scripts/install-rendering.ps1`, then build runtime dependencies:
 
 ```powershell

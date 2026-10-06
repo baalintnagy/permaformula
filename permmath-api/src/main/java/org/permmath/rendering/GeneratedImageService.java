@@ -1,5 +1,7 @@
 package org.permmath.rendering;
 
+import org.apache.commons.lang3.StringUtils;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -20,11 +22,17 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 @Validated
 public class GeneratedImageService {
+
     private final GeneratedImageStore store;
+
     private final ImageRendererService htmlRenderer;
+
     private final FormulaSvgRenderer formulaRenderer;
+
     private final PermMathProperties defaults;
+
     private final ObjectMapper mapper;
+
 
     public GeneratedImageService(GeneratedImageStore store, ImageRendererService htmlRenderer,
             FormulaSvgRenderer formulaRenderer, PermMathProperties defaults,
@@ -49,7 +57,9 @@ public class GeneratedImageService {
     }
 
     public String getImg(@NotBlank String formula) throws IOException {
-        if (formula == null || formula.isBlank()) throw new IllegalArgumentException("Formula must not be blank");
+        if (!StringUtils.isNotBlank(formula)) {
+            throw new IllegalArgumentException("Formula must not be blank");
+        }
         var identity = new ImageDescriptor(formula, null, null, null);
         return store.getOrGenerate(key("formula-svg-v1:mathjax-3.2.2", identity),
                 () -> formulaRenderer.render(formula));
@@ -61,6 +71,8 @@ public class GeneratedImageService {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(identity.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
+        }
     }
 }

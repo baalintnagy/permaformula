@@ -12,7 +12,9 @@ import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.apache.hc.core5.http.message.BasicClassicHttpResponse;
 
 class StylesheetFetcherTests {
-    @Test void checksEveryRedirectIncludingRelativeLocationsAndDowngrades() throws Exception {
+
+    @Test
+    void checksEveryRedirectIncludingRelativeLocationsAndDowngrades() throws Exception {
         var current = java.net.URI.create("https://example.com/css/main.css");
         try (var response = new BasicClassicHttpResponse(302)) {
             response.setHeader("Location", "theme.css");
@@ -26,13 +28,14 @@ class StylesheetFetcherTests {
         }
     }
 
-    @Test void expandsRelativeImportsFromFinalRedirectDestinationAndKeepsOrder() throws Exception {
+    @Test
+    void expandsRelativeImportsFromFinalRedirectDestinationAndKeepsOrder() throws Exception {
         var requested = new java.util.ArrayList<String>();
         var fetcher = new StylesheetFetcher((uri, deadline) -> {
             requested.add(uri.toString());
-            if (uri.getPath().equals("/main.css")) return new StylesheetFetcher.Download(
-                    java.net.URI.create("https://example.com/css/final.css"),
-                    "@import 'base.css' screen; p {color:blue}");
+            if (uri.getPath().equals("/main.css")) {
+                return new StylesheetFetcher.Download(java.net.URI.create("https://example.com/css/final.css"), "@import 'base.css' screen; p {color:blue}");
+            }
             return new StylesheetFetcher.Download(uri, "p {color:red; background-image:url(https://evil.example/x)}");
         });
         var css = fetcher.fetch("https://example.com/main.css");
@@ -43,7 +46,8 @@ class StylesheetFetcherTests {
         assertFalse(css.contains("evil.example"));
     }
 
-    @Test void blocksUnsafeImportsCyclesAndExcessiveImportDepth() {
+    @Test
+    void blocksUnsafeImportsCyclesAndExcessiveImportDepth() {
         var unsafe = new StylesheetFetcher((uri, deadline) -> new StylesheetFetcher.Download(uri,
                 "@import 'https://127.0.0.1/private.css';"));
         assertThrows(IllegalArgumentException.class, () -> unsafe.fetch("https://example.com/main.css"));
@@ -54,7 +58,8 @@ class StylesheetFetcherTests {
         assertThrows(IllegalArgumentException.class, () -> deep.fetch("https://example.com/main.css"));
     }
 
-    @Test void rejectsUnsafeSchemesCredentialsAndPorts() {
+    @Test
+    void rejectsUnsafeSchemesCredentialsAndPorts() {
         for (var url : List.of("http://example.com/x.css", "file:///tmp/x.css", "data:text/css,body{}",
                 "https://user:pass@example.com/x.css", "https://example.com:8080/x.css", "https://example.com/x.css#fragment")) {
             assertThrows(IllegalArgumentException.class, () -> StylesheetFetcher.destination(url), url);
@@ -62,7 +67,8 @@ class StylesheetFetcherTests {
         assertEquals("example.com", StylesheetFetcher.destination("https://example.com/x.css?v=1").getHost());
     }
 
-    @Test void blocksPrivateReservedAndTransitionAddresses() throws Exception {
+    @Test
+    void blocksPrivateReservedAndTransitionAddresses() throws Exception {
         for (var value : List.of("0.0.0.0", "10.1.2.3", "127.0.0.1", "169.254.169.254", "172.16.0.1",
                 "192.168.1.1", "100.64.0.1", "192.0.0.1", "192.0.2.1", "198.18.0.1", "198.51.100.1",
                 "203.0.113.1", "224.0.0.1", "255.255.255.255", "::", "::1", "fc00::1", "fe80::1",
@@ -76,16 +82,18 @@ class StylesheetFetcherTests {
         assertTrue(StylesheetFetcher.publicAddress(InetAddress.getByName("2606:4700:4700::1111")));
     }
 
-    @Test void rejectsMixedDnsAnswersAndUsesValidatedAddressSnapshot() throws Exception {
+    @Test
+    void rejectsMixedDnsAnswersAndUsesValidatedAddressSnapshot() throws Exception {
         var publicAddress = InetAddress.getByName("8.8.8.8");
-        var snapshot = new InetAddress[]{publicAddress};
+        var snapshot = new InetAddress[] { publicAddress };
         assertSame(snapshot, StylesheetFetcher.PublicDnsResolver.validate(snapshot));
         assertThrows(UnknownHostException.class, () -> StylesheetFetcher.PublicDnsResolver.validate(
                 new InetAddress[]{publicAddress, InetAddress.getByName("127.0.0.1")}));
         assertThrows(UnknownHostException.class, () -> new StylesheetFetcher.PublicDnsResolver().resolve("localhost"));
     }
 
-    @Test void acceptsCssAndRejectsWrongTypesCompressedResponsesAndErrors() throws Exception {
+    @Test
+    void acceptsCssAndRejectsWrongTypesCompressedResponsesAndErrors() throws Exception {
         try (var response = response("body {color:red}", "text/css; charset=UTF-8")) {
             assertEquals("body {color:red}", StylesheetFetcher.readCss(response));
         }
@@ -101,7 +109,8 @@ class StylesheetFetcherTests {
         }
     }
 
-    @Test void boundsResponseWhileStreamingEvenWithoutContentLength() throws Exception {
+    @Test
+    void boundsResponseWhileStreamingEvenWithoutContentLength() throws Exception {
         try (var response = new BasicClassicHttpResponse(200)) {
             response.setEntity(new InputStreamEntity(new ByteArrayInputStream(new byte[StylesheetFetcher.MAX_BYTES + 1]),
                     -1, ContentType.create("text/css")));

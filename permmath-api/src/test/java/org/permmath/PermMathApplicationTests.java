@@ -22,9 +22,9 @@ class PermMathApplicationTests {
     private MockMvc mvc;
 
 
-	@Test
-	void contextLoads() {
-	}
+    @Test
+    void contextLoads() {
+    }
 
     @ParameterizedTest
     @ValueSource(ints = { 219, 4001 })

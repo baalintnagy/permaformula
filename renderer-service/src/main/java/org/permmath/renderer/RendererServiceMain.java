@@ -2,6 +2,7 @@ package org.permmath.renderer;
 
 import io.grpc.netty.shaded.io.grpc.netty.*;
 import io.grpc.netty.shaded.io.netty.channel.EventLoopGroup;
+import io.grpc.netty.shaded.io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.grpc.netty.shaded.io.netty.channel.epoll.*;
 import io.grpc.netty.shaded.io.netty.channel.unix.DomainSocketAddress;
 import io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth;
@@ -16,10 +17,13 @@ import org.permmath.contract.v1.RendererGrpc;
 import org.permmath.rendering.*;
 
 public final class RendererServiceMain {
+
     public static void main(String[] args) throws Exception {
         var env = System.getenv();
         var timeout = Duration.ofSeconds(Long.parseLong(env.getOrDefault("RENDERER_TIMEOUT_SECONDS", "30")));
-        if (timeout.isZero() || timeout.isNegative()) throw new IllegalArgumentException("Renderer timeout must be positive");
+        if (timeout.isZero() || timeout.isNegative()) {
+            throw new IllegalArgumentException("Renderer timeout must be positive");
+        }
         var settings = new BrowserSettings(Path.of(env.getOrDefault("PLAYWRIGHT_BROWSERS_PATH", ".runtime/browsers")),
                 timeout, Boolean.parseBoolean(env.getOrDefault("RENDERER_CHROMIUM_SANDBOX", "true")));
         var jobs = new SupervisedRenderer(settings, Integer.parseInt(env.getOrDefault("RENDERER_CONCURRENCY", "1")));
@@ -34,9 +38,12 @@ public final class RendererServiceMain {
         EventLoopGroup boss = null, workers = null;
         Path socket = env.containsKey("RENDERER_SOCKET") ? Path.of(env.get("RENDERER_SOCKET")) : null;
         if (socket != null) {
-            if (!Epoll.isAvailable()) throw new IllegalStateException("Unix gRPC transport requires Linux epoll");
+            if (!Epoll.isAvailable()) {
+                throw new IllegalStateException("Unix gRPC transport requires Linux epoll");
+            }
             Files.deleteIfExists(socket);
-            boss = new EpollEventLoopGroup(1); workers = new EpollEventLoopGroup(1);
+            boss = new MultiThreadIoEventLoopGroup(1, EpollIoHandler.newFactory());
+            workers = new MultiThreadIoEventLoopGroup(1, EpollIoHandler.newFactory());
             builder = NettyServerBuilder.forAddress(new DomainSocketAddress(socket.toString()))
                     .channelType(EpollServerDomainSocketChannel.class).bossEventLoopGroup(boss).workerEventLoopGroup(workers);
         } else {
@@ -60,12 +67,22 @@ public final class RendererServiceMain {
         health.setStatus(RendererGrpc.SERVICE_NAME, ServingStatus.SERVING);
         var server = builder.executor(calls).maxInboundMessageSize(RenderLimits.MAX_MESSAGE_BYTES)
                 .maxConcurrentCallsPerConnection(8).addService(rpc).addService(health.getHealthService()).build().start();
-        if (socket != null) Files.setPosixFilePermissions(socket, PosixFilePermissions.fromString("rw-rw----"));
-        var finalBoss = boss; var finalWorkers = workers;
+        if (socket != null) {
+            Files.setPosixFilePermissions(socket, PosixFilePermissions.fromString("rw-rw----"));
+        }
+        var finalBoss = boss;
+        var finalWorkers = workers;
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            health.enterTerminalState(); server.shutdownNow(); calls.shutdownNow(); restarts.shutdownNow();
-            if (finalBoss != null) finalBoss.shutdownGracefully();
-            if (finalWorkers != null) finalWorkers.shutdownGracefully();
+            health.enterTerminalState();
+            server.shutdownNow();
+            calls.shutdownNow();
+            restarts.shutdownNow();
+            if (finalBoss != null) {
+                finalBoss.shutdownGracefully();
+            }
+            if (finalWorkers != null) {
+                finalWorkers.shutdownGracefully();
+            }
         }));
         System.err.println("event=renderer_ready transport=" + (socket == null ? "tcp" : "unix"));
         server.awaitTermination();

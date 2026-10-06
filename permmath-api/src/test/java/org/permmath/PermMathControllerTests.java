@@ -135,11 +135,11 @@ class PermMathControllerTests {
         URI uri = URI.create(link);
         MockHttpServletRequestBuilder request = get(uri.getPath());
         // MockMvc's URI overload does not apply servlet form-query decoding to '+'.
-        for (String parameter : uri.getRawQuery().split("&")) {
+        java.util.Arrays.stream(uri.getRawQuery().split("&")).forEach(parameter -> {
             String[] parts = parameter.split("=", 2);
             request.param(URLDecoder.decode(parts[0], StandardCharsets.UTF_8),
                     URLDecoder.decode(parts[1], StandardCharsets.UTF_8));
-        }
+        });
         return request;
     }
 }

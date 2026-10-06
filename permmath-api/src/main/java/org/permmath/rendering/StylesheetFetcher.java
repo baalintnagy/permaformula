@@ -17,30 +17,56 @@ import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.util.Timeout;
 import org.apache.hc.core5.io.CloseMode;
 
-/** Fetches CSS outside Chromium, with validated DNS used by the actual connection. */
+/**
+ * Fetches CSS outside Chromium, with validated DNS used by the actual connection.
+ */
 final class StylesheetFetcher {
+
     static final int MAX_BYTES = 1024 * 1024;
+
     static final int MAX_REFS = 8;
+
     static final int MAX_REDIRECTS = 3;
+
     static final int MAX_RESOURCES = 16;
+
     static final int MAX_IMPORT_DEPTH = 3;
 
-    record Download(URI uri, String css) {}
-    @FunctionalInterface interface Downloader { Download get(URI uri, long deadline) throws IOException; }
+    record Download(URI uri, String css) {
+    }
+
+    @FunctionalInterface
+    interface Downloader {
+
+        Download get(URI uri, long deadline) throws IOException;
+    }
+
     private final Downloader downloader;
 
-    StylesheetFetcher() { downloader = this::download; }
-    StylesheetFetcher(Downloader downloader) { this.downloader = downloader; }
+    StylesheetFetcher() {
+        downloader = this::download;
+    }
+
+    StylesheetFetcher(Downloader downloader) {
+        this.downloader = downloader;
+    }
 
     private static final class Budget {
+
         final long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(15);
+
         int resources;
+
         int bytes;
     }
 
     List<String> fetchAll(List<String> refs) throws IOException {
-        if (refs == null) return List.of();
-        if (refs.size() > MAX_REFS) throw new IllegalArgumentException("Too many stylesheet references (maximum 8)");
+        if (refs == null) {
+            return List.of();
+        }
+        if (refs.size() > MAX_REFS) {
+            throw new IllegalArgumentException("Too many stylesheet references (maximum 8)");
+        }
         var result = new java.util.ArrayList<String>();
         var budget = new Budget();
         for (var ref : refs) {
@@ -57,11 +83,15 @@ final class StylesheetFetcher {
         if (depth > MAX_IMPORT_DEPTH || ++budget.resources > MAX_RESOURCES) {
             throw new IllegalArgumentException("Stylesheet import limit exceeded");
         }
-        if (!ancestors.add(uri)) throw new IllegalArgumentException("Cyclic stylesheet imports");
+        if (!ancestors.add(uri)) {
+            throw new IllegalArgumentException("Cyclic stylesheet imports");
+        }
         try {
             var downloaded = downloader.get(uri, budget.deadline);
             budget.bytes += downloaded.css().getBytes(StandardCharsets.UTF_8).length;
-            if (budget.bytes > 4 * MAX_BYTES) throw new IllegalArgumentException("Combined stylesheets exceed 4 MiB");
+            if (budget.bytes > 4 * MAX_BYTES) {
+                throw new IllegalArgumentException("Combined stylesheets exceed 4 MiB");
+            }
             var sheet = StylesheetPolicy.parse(downloaded.css());
             var output = new StringBuilder();
             var writer = new com.helger.css.writer.CSSWriterSettings(true);
@@ -72,12 +102,16 @@ final class StylesheetFetcher {
                     output.append("@media ").append(imported.getAllMediaQueries().stream()
                             .map(query -> query.getAsCSSString(writer, 0)).collect(java.util.stream.Collectors.joining(",")))
                             .append('{').append(css).append('}');
-                } else output.append(css);
+                } else {
+                    output.append(css);
+                }
             }
             sheet.removeAllImportRules();
             output.append(new com.helger.css.writer.CSSWriter(writer).getCSSAsString(sheet));
             return StylesheetPolicy.stylesheet(output.toString());
-        } finally { ancestors.remove(uri); }
+        } finally {
+            ancestors.remove(uri);
+        }
     }
 
     private Download download(URI uri, long deadline) throws IOException {
@@ -85,7 +119,9 @@ final class StylesheetFetcher {
                 Thread.ofPlatform().daemon(true).name("stylesheet-deadline").factory())) {
             for (int redirects = 0; ; redirects++) {
                 long remaining = deadline - System.nanoTime();
-                if (remaining <= 0) throw new IOException("Stylesheet fetching timed out");
+                if (remaining <= 0) {
+                    throw new IOException("Stylesheet fetching timed out");
+                }
                 var manager = PoolingHttpClientConnectionManagerBuilder.create()
                         .setDnsResolver(new PublicDnsResolver())
                         .setDefaultConnectionConfig(ConnectionConfig.custom().setConnectTimeout(Timeout.ofSeconds(5))
@@ -97,7 +133,8 @@ final class StylesheetFetcher {
                     var request = new HttpGet(uri);
                     var cancellation = timer.schedule(() -> {
                         request.cancel();
-                        client.close(CloseMode.IMMEDIATE); // Stop slow response bodies as well as connections.
+                        // Stop slow response bodies as well as connections.
+                        client.close(CloseMode.IMMEDIATE);
                     }, remaining, java.util.concurrent.TimeUnit.NANOSECONDS);
                     request.setHeader("Accept", "text/css");
                     request.setHeader("Accept-Encoding", "identity");
@@ -114,7 +151,9 @@ final class StylesheetFetcher {
                             // can drain an unbounded redirect, error or oversized body for connection reuse.
                             client.close(CloseMode.IMMEDIATE);
                         }
-                    } finally { cancellation.cancel(false); }
+                    } finally {
+                        cancellation.cancel(false);
+                    }
                 }
             }
         }
@@ -137,10 +176,14 @@ final class StylesheetFetcher {
                     if (!publicAddress(InetAddress.getByName(host))) {
                         throw new IllegalArgumentException("Stylesheet destination must be public");
                     }
-                } catch (UnknownHostException invalid) { throw new IllegalArgumentException("Invalid stylesheet address", invalid); }
+                } catch (UnknownHostException invalid) {
+                    throw new IllegalArgumentException("Invalid stylesheet address", invalid);
+                }
             }
             return uri;
-        } catch (NullPointerException e) { throw new IllegalArgumentException("Missing stylesheet URL", e); }
+        } catch (NullPointerException e) {
+            throw new IllegalArgumentException("Missing stylesheet URL", e);
+        }
     }
 
     static URI redirect(URI current, ClassicHttpResponse response, int redirects) {
@@ -164,23 +207,35 @@ final class StylesheetFetcher {
         if (type == null || !"text/css".equalsIgnoreCase(type.getMimeType())) {
             throw new IllegalArgumentException("Stylesheet response must have Content-Type text/css");
         }
-        if (entity.getContentLength() > MAX_BYTES) throw new IllegalArgumentException("Stylesheet exceeds 1 MiB");
+        if (entity.getContentLength() > MAX_BYTES) {
+            throw new IllegalArgumentException("Stylesheet exceeds 1 MiB");
+        }
         // Caller closes the connection and response; closing an HTTP stream here may drain its remainder.
         var bytes = entity.getContent().readNBytes(MAX_BYTES + 1);
-        if (bytes.length > MAX_BYTES) throw new IllegalArgumentException("Stylesheet exceeds 1 MiB");
+        if (bytes.length > MAX_BYTES) {
+            throw new IllegalArgumentException("Stylesheet exceeds 1 MiB");
+        }
         return new String(bytes, type.getCharset(StandardCharsets.UTF_8));
     }
 
     static final class PublicDnsResolver implements DnsResolver {
-        @Override public InetAddress[] resolve(String host) throws UnknownHostException {
+
+        @Override
+        public InetAddress[] resolve(String host) throws UnknownHostException {
             return validate(InetAddress.getAllByName(host));
         }
-        @Override public String resolveCanonicalHostname(String host) { return host; }
+
+        @Override
+        public String resolveCanonicalHostname(String host) {
+            return host;
+        }
 
         static InetAddress[] validate(InetAddress[] addresses) throws UnknownHostException {
-            if (addresses.length == 0) throw new UnknownHostException("Stylesheet destination has no addresses");
-            for (var address : addresses) {
-                if (!publicAddress(address)) throw new UnknownHostException("Stylesheet destination is not a public address");
+            if (addresses.length == 0) {
+                throw new UnknownHostException("Stylesheet destination has no addresses");
+            }
+            if (!java.util.Arrays.stream(addresses).allMatch(StylesheetFetcher::publicAddress)) {
+                throw new UnknownHostException("Stylesheet destination is not a public address");
             }
             return addresses;
         }

@@ -8,10 +8,15 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.net.URI;
 
-/** All methods are invoked on the service's single rendering thread. */
+/**
+ * All methods are invoked on the service's single rendering thread.
+ */
 final class ChromiumRenderer implements AutoCloseable {
+
     private final Playwright playwright;
+
     private final Browser browser;
+
     private final double timeout;
 
     ChromiumRenderer(BrowserSettings properties) throws IOException {
@@ -50,20 +55,32 @@ final class ChromiumRenderer implements AutoCloseable {
     }
 
     static boolean allowedRequest(String documentUrl, String requestedUrl, String method, String type) {
-        if (!"GET".equals(method)) return false;
+        if (!"GET".equals(method)) {
+            return false;
+        }
         try {
             var document = URI.create(documentUrl);
             var request = URI.create(requestedUrl);
-            if (!"http".equals(request.getScheme()) || request.getRawUserInfo() != null
-                    || !document.getHost().equals(request.getHost()) || document.getPort() != request.getPort()
-                    || request.getRawQuery() != null || request.getRawFragment() != null) return false;
-            if ("document".equals(type)) return documentUrl.equals(requestedUrl);
-            if (!"script".equals(type)) return false;
+            if (!"http".equals(request.getScheme()) || request.getRawUserInfo() != null || !document.getHost().equals(request.getHost()) || document.getPort() != request.getPort() || request.getRawQuery() != null || request.getRawFragment() != null) {
+                return false;
+            }
+            if ("document".equals(type)) {
+                return documentUrl.equals(requestedUrl);
+            }
+            if (!"script".equals(type)) {
+                return false;
+            }
             var path = request.getRawPath();
             return "/export-svg.js".equals(path)
                     || (path.matches("/mathjax/[a-zA-Z0-9_/-]+\\.js") && !path.contains(".."));
-        } catch (IllegalArgumentException e) { return false; }
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
-    @Override public void close() { browser.close(); playwright.close(); }
+    @Override
+    public void close() {
+        browser.close();
+        playwright.close();
+    }
 }
