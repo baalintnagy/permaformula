@@ -33,7 +33,7 @@ public final class SupervisedRenderer implements RenderJobExecutor {
         }
         try {
             var process = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-                    "--enable-native-access=ALL-UNNAMED", "-Xmx512m", "-XX:+ExitOnOutOfMemoryError",
+                    "--enable-native-access=ALL-UNNAMED", "-Xmx1024m", "-XX:+ExitOnOutOfMemoryError",
                     "-Djava.io.tmpdir=" + System.getProperty("java.io.tmpdir"),
                     "-cp", System.getProperty("java.class.path"), RenderJobMain.class.getName(),
                     settings.browserDirectory().toAbsolutePath().toString(), Long.toString(budget.toMillis()),

@@ -7,7 +7,7 @@ import org.springframework.util.unit.DataSize;
 
 @ConfigurationProperties("permmath.image-cache")
 public record ImageCacheProperties(
-        @DefaultValue("128MB") DataSize maximumSize,
+        @DefaultValue("256MB") DataSize maximumSize,
         @DefaultValue("60d") Duration expireAfterAccess) {
     public ImageCacheProperties {
         if (maximumSize.toBytes() <= 0 || expireAfterAccess.isNegative() || expireAfterAccess.isZero()) {

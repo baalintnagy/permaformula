@@ -81,11 +81,11 @@ one generation. Errors are not cached. Entries disappear on service restart.
 ```yaml
 permmath:
     image-cache:
-        maximum-size: 128MB
+        maximum-size: 256MB
         expire-after-access: 60d
 ```
 
-The effective cache budget is the smaller of the configured maximum (128 MiB by default) and 25% of the JVM maximum heap. Startup logs report both configured and effective budgets. This reserves heap headroom for request processing; it does not bound concurrent work.
+The effective cache budget is the smaller of the configured maximum (256 MiB by default) and 25% of the JVM maximum heap. Startup logs report both configured and effective budgets. This reserves heap headroom for request processing; it does not bound concurrent work.
 
 The memory budget uses an estimate of SVG string storage, keys and entry overhead;
 it is not a hard limit on total JVM memory or in-flight rendering. Caffeine evicts

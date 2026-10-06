@@ -16,9 +16,9 @@ services:
       - render-socket:/run/permmath
     tmpfs:
       - /tmp:rw,exec,nosuid,nodev,size=512m,mode=1777
-    shm_size: 256m
-    mem_limit: 1536m
-    memswap_limit: 1536m
+    shm_size: 512m
+    mem_limit: 3g
+    memswap_limit: 3g
     cpus: 2.0
     pids_limit: 256
     ulimits:
@@ -50,8 +50,8 @@ services:
       - render-socket:/run/permmath:ro
     tmpfs:
       - /tmp:rw,exec,nosuid,nodev,size=512m,mode=1777
-    mem_limit: 1g
-    memswap_limit: 1g
+    mem_limit: 2g
+    memswap_limit: 2g
     cpus: 2.0
     pids_limit: 256
     ulimits:

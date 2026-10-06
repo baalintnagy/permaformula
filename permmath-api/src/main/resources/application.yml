@@ -9,7 +9,7 @@ springdoc:
 permmath:
     host: "http://localhost:8086"
     image-cache:
-        maximum-size: 128MB
+        maximum-size: 256MB
         expire-after-access: 60d
     rendering:
         target: localhost:9090

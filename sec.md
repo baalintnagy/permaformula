@@ -140,13 +140,13 @@ HTML sanitization, external fetching and CSS parsing still run in the API before
 
 ### 14. Cache abuse and persistence — partially mitigated
 
-Caffeine has a configurable weight budget (128 MiB by default, capped at 25% of JVM maximum heap), estimates string/key memory, shares generation for identical keys and does not cache failed generations. HTML keys include `presentation-policy-3`; both HTML and formula keys now also include `svg-output-policy-1`, with updated format versions. Expiry is 60 days **after access**, so repeated hits can extend residency.
+Caffeine has a configurable weight budget (256 MiB by default, capped at 25% of JVM maximum heap), estimates string/key memory, shares generation for identical keys and does not cache failed generations. HTML keys include `presentation-policy-3`; both HTML and formula keys now also include `svg-output-policy-1`, with updated format versions. Expiry is 60 days **after access**, so repeated hits can extend residency.
 
 Renderer admission, 16 MiB output caps and final validation before storage bound artifact size and reject unsafe output, but unique cache misses still cause unbounded API preparation pressure; cache weight does not cap transient API allocations. Add miss rate/admission limits. External stylesheet contents can change without a URL/key change; define refresh/TTL semantics if freshness matters. Current storage is in-memory; future persistence would require purge/quarantine support.
 
 ### 15. Formula-only renderer abuse — supervised isolation and output policy implemented
 
-AsciiMathRenderer passes formula as a value and disables Java host access/class lookup. It now runs in a fresh disposable JVM inside the renderer container. Formula input/output are capped at 16 MiB, job heap at 512 MiB, and the supervisor terminates stalled jobs under the RPC/service deadline. Container limits cover native allocations. /img still launches neither Chromium nor external CSS fetching.
+AsciiMathRenderer passes formula as a value and disables Java host access/class lookup. It now runs in a fresh disposable JVM inside the renderer container. Formula input/output are capped at 16 MiB, job heap at 1 GiB, and the supervisor terminates stalled jobs under the RPC/service deadline. Container limits cover native allocations. /img still launches neither Chromium nor external CSS fetching.
 
 This removes unbounded formula execution from the API process. The common API-side SVG policy applies to `/img` as well as styled HTML, and its GraalJS bundle now uses MathJax safe filtering. API admission and complexity still need work (12–13); individual inputs are bounded (11). The TeX-link probe targeted styled HTML; it is not evidence of that exact payload working in ASCIIMath-only /img.
 

@@ -34,7 +34,7 @@ RUN groupadd --gid 10001 permmath \
     && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /tmp/permmath --shell /usr/sbin/nologin permmath
 COPY --from=build --chmod=0444 /build/permmath-api/target/permmath-api-1.0.jar /app/service.jar
 COPY --chmod=0555 docker/entrypoint.sh /usr/local/bin/permmath-entrypoint
-ENV PORT=5000 PERMMATH_RENDERING_SOCKET=/run/permmath/render.sock PERMMATH_IMAGE_CACHE_MAXIMUM_SIZE=128MB
+ENV PORT=5000 PERMMATH_RENDERING_SOCKET=/run/permmath/render.sock PERMMATH_IMAGE_CACHE_MAXIMUM_SIZE=256MB
 USER 10001:10001
 EXPOSE 5000
 ENTRYPOINT ["/usr/local/bin/permmath-entrypoint"]
