@@ -15,12 +15,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
+import com.google.common.hash.Hashing;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import tools.jackson.databind.ObjectMapper;
-
-import com.google.common.hash.Hashing;
 
 @Service
 @Validated
@@ -82,7 +82,9 @@ public class GeneratedImageService {
         // Stable versioned content identity, also suitable for filenames or database keys.
         var identity = format + ":" + ComplexityPolicy.CURRENT.fingerprint()
                 + "\n" + mapper.writeValueAsString(descriptor);
-        return Hashing.sha256().hashString(identity, StandardCharsets.UTF_8).toString();
+        return Hashing.sha256()
+            .hashString(identity, StandardCharsets.UTF_8)
+            .toString();
     }
 
     private record Prepared(ImageDescriptor descriptor, String key) { }

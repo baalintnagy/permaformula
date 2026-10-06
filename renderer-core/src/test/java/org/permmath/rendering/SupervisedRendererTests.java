@@ -1,7 +1,7 @@
 package org.permmath.rendering;
 
-import static org.junit.jupiter.api.Assertions.*;
 import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.file.*;
 import java.time.Duration;
@@ -41,8 +41,11 @@ class SupervisedRendererTests {
         assertEquals(RenderException.Kind.DEADLINE, assertThrows(RenderException.class,
                 () -> SupervisedRenderer.run(child("hang"), request(), Duration.ofSeconds(2))).kind());
         long pid = Long.parseLong(Files.readString(temp.resolve("pid")));
-        await().pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(20)).atMost(Duration.ofSeconds(1))
-                .until(() -> ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false), alive -> !alive);
+        await()
+            .pollDelay(Duration.ZERO)
+            .pollInterval(Duration.ofMillis(20))
+            .atMost(Duration.ofSeconds(1))
+            .until(() -> ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false), alive -> !alive);
         assertFalse(SupervisedRenderer.run(child("ok"), request(), Duration.ofSeconds(10)).getSvg().isEmpty());
     }
 
@@ -53,16 +56,22 @@ class SupervisedRendererTests {
                 var callers = Executors.newVirtualThreadPerTaskExecutor()) {
             var hanging = request().toBuilder().setRequestId("hang").build();
             var active = callers.submit(() -> queue.execute(hanging, Duration.ofSeconds(10)));
-            await().pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(10)).atMost(Duration.ofSeconds(5))
-                    .until(() -> Files.exists(temp.resolve("pid")));
+            await()
+                .pollDelay(Duration.ZERO)
+                .pollInterval(Duration.ofMillis(10))
+                .atMost(Duration.ofSeconds(5))
+                .until(() -> Files.exists(temp.resolve("pid")));
             long pid = Long.parseLong(Files.readString(temp.resolve("pid")));
             assertTrue(ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false));
             active.cancel(true);
-            await().pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(10)).atMost(Duration.ofSeconds(5))
-                    .untilAsserted(() -> {
-                        assertEquals(0, queue.retainedBytes());
-                        assertFalse(ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false));
-                    });
+            await()
+                .pollDelay(Duration.ZERO)
+                .pollInterval(Duration.ofMillis(10))
+                .atMost(Duration.ofSeconds(5))
+                .untilAsserted(() -> {
+                    assertEquals(0, queue.retainedBytes());
+                    assertFalse(ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false));
+                });
             assertFalse(queue.execute(request().toBuilder().setRequestId("ok").build(), Duration.ofSeconds(5)).getSvg().isEmpty());
         }
     }
@@ -86,8 +95,11 @@ class SupervisedRendererTests {
             if (args[0].equals("hang")) {
                 Thread.sleep(60_000);
             }
-            RenderResponse.newBuilder().setRequestId(args[0].equals("wrong-id") ? "wrong" : request.getRequestId())
-                    .setSvg(ByteString.copyFromUtf8("<svg/>" )).build().writeTo(System.out);
+            RenderResponse.newBuilder()
+                .setRequestId(args[0].equals("wrong-id") ? "wrong" : request.getRequestId())
+                .setSvg(ByteString.copyFromUtf8("<svg/>"))
+                .build()
+                .writeTo(System.out);
         }
     }
 }

@@ -81,8 +81,9 @@ public class CaffeineImageStore implements GeneratedImageStore {
         log.info("event=cache_hit key={} source=cached_or_shared", key);
         try {
             // A waiter's timeout must never complete or cancel the shared future.
-            return completion.get(completion.isDone() ? 0 : WorkDeadline.remainingNanos(Duration.ofSeconds(60)),
-                    TimeUnit.NANOSECONDS);
+            return completion.get(
+                completion.isDone() ? 0 : WorkDeadline.remainingNanos(Duration.ofSeconds(60)),
+                TimeUnit.NANOSECONDS);
         } catch (TimeoutException timeout) {
             throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT,
                     "Waiting for image exceeded request deadline");
@@ -90,8 +91,9 @@ public class CaffeineImageStore implements GeneratedImageStore {
             Thread.currentThread().interrupt();
             throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "Image wait interrupted");
         } catch (ExecutionException failed) {
-            Throwable cause = failed.getCause() instanceof GenerationFailure generation ? generation.original
-                    : failed.getCause();
+            Throwable cause = failed.getCause() instanceof GenerationFailure generation
+                ? generation.original
+                : failed.getCause();
             if (cause instanceof IOException checked) {
                 throw checked;
             }
@@ -117,10 +119,12 @@ public class CaffeineImageStore implements GeneratedImageStore {
     }
 
     public CacheStats stats() {
-        return cache.synchronous().stats();
+        return cache.synchronous()
+            .stats();
     }
 
     void cleanUp() {
-        cache.synchronous().cleanUp();
+        cache.synchronous()
+            .cleanUp();
     }
 }

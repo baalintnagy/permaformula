@@ -1,13 +1,13 @@
 package org.permmath.rendering.cache;
 
-import static org.junit.jupiter.api.Assertions.*;
 import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -42,7 +42,9 @@ class CaffeineImageStoreTests {
                 var waiter = callers.submit(() -> store.getOrGenerate("failed", () -> {
                     throw new AssertionError("Must share the active generation");
                 }));
-                await().atMost(Duration.ofSeconds(2)).until(() -> store.stats().hitCount() == 1);
+                await()
+                    .atMost(Duration.ofSeconds(2))
+                    .until(() -> store.stats().hitCount() == 1);
                 release.countDown();
                 assertSame(failure, assertThrows(ExecutionException.class,
                         () -> owner.get(2, TimeUnit.SECONDS)).getCause());

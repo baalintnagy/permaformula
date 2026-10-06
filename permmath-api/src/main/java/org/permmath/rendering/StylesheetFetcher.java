@@ -29,6 +29,7 @@ import org.apache.hc.core5.http.ContentType;
 import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.io.CloseMode;
 import org.apache.hc.core5.util.Timeout;
+import org.permmath.validation.InputLimits;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -125,7 +126,7 @@ final class StylesheetFetcher {
         try {
             var downloaded = downloader.get(uri, budget.deadline);
             checkDeadline(budget.deadline);
-            budget.bytes += org.permmath.validation.InputLimits.utf8Length(downloaded.css());
+            budget.bytes += InputLimits.utf8Length(downloaded.css());
             if (budget.bytes > 4 * MAX_BYTES) {
                 throw new IllegalArgumentException("Combined stylesheets exceed 4 MiB");
             }

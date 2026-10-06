@@ -22,8 +22,11 @@ import org.springframework.test.web.servlet.MockMvc;
 @AutoConfigureMockMvc
 @ExtendWith(OutputCaptureExtension.class)
 class EndpointLoggingTests {
-    @Autowired private MockMvc mvc;
-    @Autowired private CaffeineImageStore cache;
+    @Autowired
+    private MockMvc mvc;
+
+    @Autowired
+    private CaffeineImageStore cache;
 
     @Test
     void aspectLogsSuccessAndValidationFailureWithoutPayloads(CapturedOutput output) throws Exception {
