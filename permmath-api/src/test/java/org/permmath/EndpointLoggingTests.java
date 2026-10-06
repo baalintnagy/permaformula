@@ -43,7 +43,8 @@ class EndpointLoggingTests {
         cache.getOrGenerate(key, () -> {
             throw new AssertionError("Should reuse cached output");
         });
-        var failure = new IOException("render failed");
+        var failure = new IOException("private-generation-failure-content",
+                new IllegalArgumentException("private-generation-cause-content"));
         assertSame(failure, assertThrows(IOException.class,
                 () -> cache.getOrGenerate("logging-test-failure", () -> {
                     throw failure;
@@ -51,6 +52,7 @@ class EndpointLoggingTests {
         assertThat(output.getOut()).contains("event=cache_miss key=" + key,
                 "event=cache_generated key=" + key, "event=cache_hit key=" + key,
                 "event=cache_generation_failed key=logging-test-failure errorType=IOException");
-        assertThat(output.getOut()).doesNotContain("private-image-content");
+        assertThat(output.getAll()).doesNotContain("private-image-content", "private-generation-failure-content",
+                "private-generation-cause-content");
     }
 }

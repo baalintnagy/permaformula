@@ -125,7 +125,7 @@ final class StylesheetFetcher {
         try {
             var downloaded = downloader.get(uri, budget.deadline);
             checkDeadline(budget.deadline);
-            budget.bytes += downloaded.css().getBytes(StandardCharsets.UTF_8).length;
+            budget.bytes += org.permmath.validation.InputLimits.utf8Length(downloaded.css());
             if (budget.bytes > 4 * MAX_BYTES) {
                 throw new IllegalArgumentException("Combined stylesheets exceed 4 MiB");
             }

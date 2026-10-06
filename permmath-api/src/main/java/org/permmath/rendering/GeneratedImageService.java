@@ -2,9 +2,6 @@ package org.permmath.rendering;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 
@@ -22,6 +19,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import tools.jackson.databind.ObjectMapper;
+
+import com.google.common.hash.Hashing;
 
 @Service
 @Validated
@@ -83,12 +82,7 @@ public class GeneratedImageService {
         // Stable versioned content identity, also suitable for filenames or database keys.
         var identity = format + ":" + ComplexityPolicy.CURRENT.fingerprint()
                 + "\n" + mapper.writeValueAsString(descriptor);
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(identity.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException(impossible);
-        }
+        return Hashing.sha256().hashString(identity, StandardCharsets.UTF_8).toString();
     }
 
     private record Prepared(ImageDescriptor descriptor, String key) { }

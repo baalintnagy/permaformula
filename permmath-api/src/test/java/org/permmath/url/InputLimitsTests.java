@@ -10,6 +10,14 @@ import org.permmath.validation.InputLimits;
 
 class InputLimitsTests {
     @Test
+    void utf8BoundsPreserveSupplementaryCharactersAndMalformedSurrogateReplacement() {
+        assertDoesNotThrow(() -> InputLimits.text("\uD83D\uDE00", 4, "Text"));
+        assertThrows(IllegalArgumentException.class, () -> InputLimits.text("\uD83D\uDE00", 3, "Text"));
+        assertDoesNotThrow(() -> InputLimits.text("\uD800x\uDC00", 3, "Text"));
+        assertThrows(IllegalArgumentException.class, () -> InputLimits.text("\uD800x\uDC00", 2, "Text"));
+    }
+
+    @Test
     void descriptorAcceptsBoundariesAndRejectsOversizedFields() {
         assertDoesNotThrow(() -> new ImageDescriptor("x".repeat(InputLimits.MAX_CONTENT_BYTES),
                 4000, Collections.nCopies(8, "r".repeat(InputLimits.MAX_REF_BYTES)),

@@ -1,10 +1,8 @@
 package org.permmath.rendering.cache;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -17,7 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.github.benmanes.caffeine.cache.Ticker;
@@ -28,9 +26,7 @@ public class CaffeineImageStore implements GeneratedImageStore {
 
     private static final Logger log = LoggerFactory.getLogger(CaffeineImageStore.class);
 
-    private final Cache<String, String> cache;
-    private final ConcurrentHashMap<String, CompletableFuture<String>> loading
-            = new ConcurrentHashMap<>();
+    private final AsyncCache<String, String> cache;
 
     @Autowired
     public CaffeineImageStore(ImageCacheProperties properties) {
@@ -49,93 +45,82 @@ public class CaffeineImageStore implements GeneratedImageStore {
                 log.debug("event=cache_removed key={} cause={}", key, cause))
             .ticker(ticker)
             .recordStats()
-            .build();
+            .buildAsync();
         log.info("event=cache_initialized configuredBytes={} effectiveBytes={} expireAfterAccess={}",
                 properties.maximumSize().toBytes(), effectiveBytes, properties.expireAfterAccess());
     }
 
     @Override
     public String getOrGenerate(String key, Generator generator) throws IOException {
-        String cached = cache.getIfPresent(key);
-        if (cached != null) {
-            log.info("event=cache_hit key={} source=cached", key);
-            return cached;
-        }
-        var completion = new CompletableFuture<String>();
-        var pending = loading.putIfAbsent(key, completion);
-        if (pending != null) {
+        boolean[] owner = { false };
+        // Publish through Caffeine before running the loader, outside its atomic mapping function.
+        var completion = cache.get(key, (_, _) -> {
+            owner[0] = true;
+            return new CompletableFuture<String>();
+        });
+        if (owner[0]) {
+            // Keep the initiating request's deadline and client context on this thread.
+            // The generator itself owns bounded execution and cancellation of its actual worker.
+            long started = System.nanoTime();
+            log.info("event=cache_miss key={}", key);
             try {
-                return pending.get(WorkDeadline.remainingNanos(Duration.ofSeconds(60)),
-                        TimeUnit.NANOSECONDS);
-            } catch (TimeoutException timeout) {
-                throw new ResponseStatusException(
-                        HttpStatus.GATEWAY_TIMEOUT, "Waiting for image exceeded request deadline");
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                throw new ResponseStatusException(
-                        HttpStatus.GATEWAY_TIMEOUT, "Image wait interrupted");
-            } catch (ExecutionException failed) {
-                if (failed.getCause() instanceof IOException checked) {
-                    throw checked;
-                }
-                if (failed.getCause() instanceof RuntimeException runtime) {
-                    throw runtime;
-                }
-                if (failed.getCause() instanceof Error error) {
-                    throw error;
-                }
-                throw new IOException("Image generation failed", failed.getCause());
+                String output = generator.generate();
+                log.info("event=cache_generated key={} svgChars={} durationMs={}",
+                        key, output.length(), TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
+                completion.complete(output);
+                return output;
+            } catch (IOException | RuntimeException | Error failure) {
+                log.warn("event=cache_generation_failed key={} errorType={} durationMs={}",
+                        key, failure.getClass().getSimpleName(),
+                        TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
+                // Caffeine logs failed async loads. Keep submitted content out of those diagnostics.
+                completion.completeExceptionally(new GenerationFailure(failure));
+                throw failure;
             }
         }
+        log.info("event=cache_hit key={} source=cached_or_shared", key);
         try {
-            String result = load(key, generator);
-            completion.complete(result);
-            return result;
-        } catch (IOException | RuntimeException | Error failed) {
-            completion.completeExceptionally(failed);
-            throw failed;
-        } finally {
-            loading.remove(key, completion);
+            // A waiter's timeout must never complete or cancel the shared future.
+            return completion.get(completion.isDone() ? 0 : WorkDeadline.remainingNanos(Duration.ofSeconds(60)),
+                    TimeUnit.NANOSECONDS);
+        } catch (TimeoutException timeout) {
+            throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT,
+                    "Waiting for image exceeded request deadline");
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "Image wait interrupted");
+        } catch (ExecutionException failed) {
+            Throwable cause = failed.getCause() instanceof GenerationFailure generation ? generation.original
+                    : failed.getCause();
+            if (cause instanceof IOException checked) {
+                throw checked;
+            }
+            if (cause instanceof RuntimeException runtime) {
+                throw runtime;
+            }
+            if (cause instanceof Error error) {
+                throw error;
+            }
+            throw new IOException("Image generation failed", cause);
         }
     }
 
-    private String load(String key, Generator generator) throws IOException {
-        // cache.get keeps lookup and generation atomic. Other callers may reuse an in-flight load.
-        boolean[] generated = { false };
-        try {
-            var svg = cache.get(key, _ -> {
-                generated[0] = true;
-                long started = System.nanoTime();
-                log.info("event=cache_miss key={}", key);
-                try {
-                    var output = generator.generate();
-                    log.info("event=cache_generated key={} svgChars={} durationMs={}",
-                            key, output.length(), TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
-                    return output;
-                } catch (IOException | RuntimeException failure) {
-                    log.warn("event=cache_generation_failed key={} errorType={} durationMs={}",
-                            key, failure.getClass().getSimpleName(),
-                            TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
-                    if (failure instanceof IOException checked) {
-                        throw new UncheckedIOException(checked);
-                    }
-                    throw (RuntimeException) failure;
-                }
-            });
-            if (!generated[0]) {
-                log.info("event=cache_hit key={} source=cached_or_shared", key);
-            }
-            return svg;
-        } catch (UncheckedIOException failure) {
-            throw failure.getCause();
+    /** Preserve the original for waiters without exposing its message/cause to library logging. */
+    private static final class GenerationFailure extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+        private final Throwable original;
+
+        GenerationFailure(Throwable original) {
+            super("Image generation failed", null, false, false);
+            this.original = original;
         }
     }
 
     public CacheStats stats() {
-        return cache.stats();
+        return cache.synchronous().stats();
     }
 
     void cleanUp() {
-        cache.cleanUp();
+        cache.synchronous().cleanUp();
     }
 }

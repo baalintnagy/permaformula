@@ -1,6 +1,7 @@
 package org.permmath.rendering;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.awaitility.Awaitility.await;
 
 import java.time.Duration;
 import java.util.List;
@@ -8,7 +9,6 @@ import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BooleanSupplier;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -28,7 +28,7 @@ class RenderWorkQueueTests {
     static RenderQueueSettings settings(int capacity, Duration wait) {
         return new RenderQueueSettings(capacity, 64 * 1024 * 1024, wait);
     }
-    static void await(CountDownLatch latch) throws RenderException {
+    static void awaitLatch(CountDownLatch latch) throws RenderException {
         try {
             assertTrue(latch.await(5, TimeUnit.SECONDS));
         }
@@ -37,13 +37,7 @@ class RenderWorkQueueTests {
             throw new RenderException(RenderException.Kind.CANCELLED, "cancelled", failure);
         }
     }
-    static void eventually(BooleanSupplier condition) throws InterruptedException {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
-        while (!condition.getAsBoolean() && System.nanoTime() < deadline) {
-            Thread.sleep(5);
-        }
-        assertTrue(condition.getAsBoolean());
-    }
+
     static RenderException.Kind failureKind(Future<?> future) throws Exception {
         var failure = assertThrows(ExecutionException.class, () -> future.get(3, TimeUnit.SECONDS));
         return assertInstanceOf(RenderException.class, failure.getCause()).kind();
@@ -60,18 +54,20 @@ class RenderWorkQueueTests {
                     order.add(request.getRequestId());
                     if (request.getRequestId().equals("first")) {
                         entered.countDown();
-                        await(release);
+                        awaitLatch(release);
                     }
                     else secondBudget.set(budget);
                     return response(request);
                 })) {
             var first = callers.submit(() -> queue.execute(request("first"), Duration.ofSeconds(10)));
             try {
-                await(entered);
+                awaitLatch(entered);
                 var second = callers.submit(() -> queue.execute(request("second"), Duration.ofSeconds(10)));
-                eventually(() -> queue.waitingJobs() == 1);
+                await().pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(5)).atMost(Duration.ofSeconds(3))
+                        .until(() -> queue.waitingJobs() == 1);
                 var third = callers.submit(() -> queue.execute(request("third"), Duration.ofSeconds(10)));
-                eventually(() -> queue.waitingJobs() == 2);
+                await().pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(5)).atMost(Duration.ofSeconds(3))
+                        .until(() -> queue.waitingJobs() == 2);
                 assertEquals(RenderException.Kind.OVERLOADED, assertThrows(RenderException.class,
                         () -> queue.execute(request("full"), Duration.ofSeconds(1))).kind());
                 assertEquals(List.of("first"), order);
@@ -82,7 +78,8 @@ class RenderWorkQueueTests {
                 assertEquals("third", third.get(3, TimeUnit.SECONDS).getRequestId());
                 assertEquals(List.of("first", "second", "third"), order);
                 assertTrue(secondBudget.get().compareTo(Duration.ofMillis(9950)) < 0);
-                eventually(() -> queue.retainedBytes() == 0);
+                await().pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(5)).atMost(Duration.ofSeconds(3))
+                        .until(() -> queue.retainedBytes() == 0);
             } finally {
                 release.countDown();
             }
@@ -94,11 +91,11 @@ class RenderWorkQueueTests {
         var entered = new CountDownLatch(1); var release = new CountDownLatch(1); var executions = new AtomicInteger();
         try (var callers = Executors.newVirtualThreadPerTaskExecutor();
                 var queue = new RenderWorkQueue(1, settings(1, Duration.ofMillis(100)), (request, _) -> {
-                    executions.incrementAndGet(); entered.countDown(); await(release); return response(request);
+                    executions.incrementAndGet(); entered.countDown(); awaitLatch(release); return response(request);
                 })) {
             var first = callers.submit(() -> queue.execute(request("active"), Duration.ofSeconds(5)));
             try {
-                await(entered); long activeBytes = queue.retainedBytes();
+                awaitLatch(entered); long activeBytes = queue.retainedBytes();
                 var expired = callers.submit(() -> queue.execute(request("expired"), Duration.ofSeconds(5)));
                 assertEquals(RenderException.Kind.QUEUE_DEADLINE, failureKind(expired));
                 assertEquals(0, queue.waitingJobs());
@@ -106,7 +103,8 @@ class RenderWorkQueueTests {
                 assertFalse(first.isDone());
                 // Capacity released by expiry accepts another job while the original is still active.
                 var next = callers.submit(() -> queue.execute(request("next"), Duration.ofSeconds(5)));
-                eventually(() -> queue.waitingJobs() == 1);
+                await().pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(5)).atMost(Duration.ofSeconds(3))
+                        .until(() -> queue.waitingJobs() == 1);
                 release.countDown();
                 first.get(3, TimeUnit.SECONDS); next.get(3, TimeUnit.SECONDS);
                 assertEquals(2, executions.get());
@@ -121,11 +119,11 @@ class RenderWorkQueueTests {
         var entered = new CountDownLatch(1); var release = new CountDownLatch(1);
         try (var callers = Executors.newVirtualThreadPerTaskExecutor();
                 var queue = new RenderWorkQueue(1, settings(1, Duration.ofSeconds(5)), (request, _) -> {
-                    entered.countDown(); await(release); return response(request);
+                    entered.countDown(); awaitLatch(release); return response(request);
                 })) {
             var active = callers.submit(() -> queue.execute(request("active"), Duration.ofSeconds(5)));
             try {
-                await(entered);
+                awaitLatch(entered);
                 var expired = callers.submit(() -> queue.execute(request("short"), Duration.ofMillis(100)));
                 assertEquals(RenderException.Kind.QUEUE_DEADLINE, failureKind(expired));
                 assertEquals(0, queue.waitingJobs());
@@ -143,11 +141,11 @@ class RenderWorkQueueTests {
         var cancellation = new AtomicReference<RenderException.Kind>(); var callerDone = new CountDownLatch(1);
         try (var callers = Executors.newVirtualThreadPerTaskExecutor();
                 var queue = new RenderWorkQueue(1, settings(1, Duration.ofSeconds(5)), (request, _) -> {
-                    executions.incrementAndGet(); entered.countDown(); await(release); return response(request);
+                    executions.incrementAndGet(); entered.countDown(); awaitLatch(release); return response(request);
                 })) {
             var active = callers.submit(() -> queue.execute(request("active"), Duration.ofSeconds(5)));
             try {
-                await(entered);
+                awaitLatch(entered);
                 var cancelled = callers.submit(() -> {
                     try {
                         queue.execute(request("cancelled"), Duration.ofSeconds(5));
@@ -159,8 +157,9 @@ class RenderWorkQueueTests {
                         callerDone.countDown();
                     }
                 });
-                eventually(() -> queue.waitingJobs() == 1);
-                cancelled.cancel(true); await(callerDone);
+                await().pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(5)).atMost(Duration.ofSeconds(3))
+                        .until(() -> queue.waitingJobs() == 1);
+                cancelled.cancel(true); awaitLatch(callerDone);
                 assertEquals(RenderException.Kind.QUEUE_CANCELLED, cancellation.get());
                 assertEquals(0, queue.waitingJobs());
                 release.countDown(); active.get(3, TimeUnit.SECONDS);
@@ -190,11 +189,13 @@ class RenderWorkQueueTests {
                 })) {
             var active = callers.submit(() -> queue.execute(request("active"), Duration.ofSeconds(5)));
             try {
-                await(entered); long retained = queue.retainedBytes(); active.cancel(true); await(interrupted);
+                awaitLatch(entered); long retained = queue.retainedBytes(); active.cancel(true); awaitLatch(interrupted);
                 assertEquals(retained, queue.retainedBytes());
                 assertEquals(RenderException.Kind.OVERLOADED, assertThrows(RenderException.class,
                         () -> queue.execute(request("not-yet"), Duration.ofSeconds(1))).kind());
-                release.countDown(); eventually(() -> queue.retainedBytes() == 0);
+                release.countDown();
+                await().pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(5)).atMost(Duration.ofSeconds(3))
+                        .until(() -> queue.retainedBytes() == 0);
                 assertEquals("recovered", queue.execute(request("recovered"), Duration.ofSeconds(1)).getRequestId());
             } finally {
                 release.countDown();
@@ -208,11 +209,11 @@ class RenderWorkQueueTests {
         long weight = 1024L + 3L * request("same").getSerializedSize();
         try (var callers = Executors.newVirtualThreadPerTaskExecutor();
                 var queue = new RenderWorkQueue(1, new RenderQueueSettings(10, weight * 2 - 1, Duration.ofSeconds(5)), (request, _) -> {
-                    entered.countDown(); await(release); return response(request);
+                    entered.countDown(); awaitLatch(release); return response(request);
                 })) {
             var first = callers.submit(() -> queue.execute(request("same"), Duration.ofSeconds(5)));
             try {
-                await(entered);
+                awaitLatch(entered);
                 assertEquals(RenderException.Kind.OVERLOADED, assertThrows(RenderException.class,
                         () -> queue.execute(request("same"), Duration.ofSeconds(5))).kind());
                 assertEquals(0, queue.waitingJobs()); assertEquals(weight, queue.retainedBytes());
@@ -220,7 +221,8 @@ class RenderWorkQueueTests {
                 release.countDown();
                 first.get(3, TimeUnit.SECONDS);
             }
-            eventually(() -> queue.retainedBytes() == 0);
+            await().pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(5)).atMost(Duration.ofSeconds(3))
+                    .until(() -> queue.retainedBytes() == 0);
         }
     }
 
@@ -237,7 +239,8 @@ class RenderWorkQueueTests {
             assertEquals(0, queue.retainedBytes());
             assertEquals(RenderException.Kind.FAILED, assertThrows(RenderException.class,
                     () -> queue.execute(request("fail"), Duration.ofSeconds(5))).kind());
-            eventually(() -> queue.retainedBytes() == 0);
+            await().pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(5)).atMost(Duration.ofSeconds(3))
+                    .until(() -> queue.retainedBytes() == 0);
             assertEquals("ok", queue.execute(request("ok"), Duration.ofSeconds(5)).getRequestId());
         }
     }
@@ -247,15 +250,18 @@ class RenderWorkQueueTests {
         var entered = new CountDownLatch(1);
         try (var callers = Executors.newVirtualThreadPerTaskExecutor();
                 var queue = new RenderWorkQueue(1, settings(1, Duration.ofSeconds(5)), (request, _) -> {
-                    entered.countDown(); await(new CountDownLatch(1)); return response(request);
+                    entered.countDown(); awaitLatch(new CountDownLatch(1)); return response(request);
                 })) {
             var active = callers.submit(() -> queue.execute(request("active"), Duration.ofSeconds(5)));
-            await(entered);
+            awaitLatch(entered);
             var waiting = callers.submit(() -> queue.execute(request("waiting"), Duration.ofSeconds(5)));
-            eventually(() -> queue.waitingJobs() == 1); queue.close();
+            await().pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(5)).atMost(Duration.ofSeconds(3))
+                    .until(() -> queue.waitingJobs() == 1);
+            queue.close();
             assertEquals(RenderException.Kind.QUEUE_CANCELLED, failureKind(waiting));
             assertEquals(RenderException.Kind.CANCELLED, failureKind(active));
-            eventually(() -> queue.retainedBytes() == 0);
+            await().pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(5)).atMost(Duration.ofSeconds(3))
+                    .until(() -> queue.retainedBytes() == 0);
             assertEquals(RenderException.Kind.OVERLOADED, assertThrows(RenderException.class,
                     () -> queue.execute(request("closed"), Duration.ofSeconds(5))).kind());
             assertEquals(0, queue.retainedBytes());

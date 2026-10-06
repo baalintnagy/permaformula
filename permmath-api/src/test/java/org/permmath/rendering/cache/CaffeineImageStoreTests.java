@@ -1,11 +1,13 @@
 package org.permmath.rendering.cache;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.awaitility.Awaitility.await;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -18,6 +20,41 @@ import org.springframework.util.unit.DataSize;
 import org.springframework.web.server.ResponseStatusException;
 
 class CaffeineImageStoreTests {
+
+    @Test
+    void sharedFailurePreservesOriginalExceptionAndAllowsRetry() throws Exception {
+        var store = store(65536, new AtomicLong());
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var failure = new IOException("private-failure", new IllegalArgumentException("private-cause"));
+        try (var callers = Executors.newFixedThreadPool(2)) {
+            var owner = callers.submit(() -> store.getOrGenerate("failed", () -> {
+                entered.countDown();
+                try {
+                    assertTrue(release.await(5, TimeUnit.SECONDS));
+                } catch (InterruptedException interrupted) {
+                    throw new IOException(interrupted);
+                }
+                throw failure;
+            }));
+            try {
+                assertTrue(entered.await(2, TimeUnit.SECONDS));
+                var waiter = callers.submit(() -> store.getOrGenerate("failed", () -> {
+                    throw new AssertionError("Must share the active generation");
+                }));
+                await().atMost(Duration.ofSeconds(2)).until(() -> store.stats().hitCount() == 1);
+                release.countDown();
+                assertSame(failure, assertThrows(ExecutionException.class,
+                        () -> owner.get(2, TimeUnit.SECONDS)).getCause());
+                assertSame(failure, assertThrows(ExecutionException.class,
+                        () -> waiter.get(2, TimeUnit.SECONDS)).getCause());
+                assertEquals("recovered", store.getOrGenerate("failed", () -> "recovered"));
+                assertEquals(1, store.stats().loadFailureCount());
+            } finally {
+                release.countDown();
+            }
+        }
+    }
 
     @Test
     void cacheBudgetLeavesHeapHeadroomAndHonorsSmallerConfiguration() {

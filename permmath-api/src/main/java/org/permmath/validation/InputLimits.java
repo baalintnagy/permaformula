@@ -3,6 +3,8 @@ package org.permmath.validation;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+import com.google.common.base.Utf8;
+
 /** Cheap bounds applied before serialization, parsing or rendering. */
 public final class InputLimits {
     public static final int MAX_CONTENT_BYTES = 4 * 1024 * 1024;
@@ -17,10 +19,20 @@ public final class InputLimits {
     private InputLimits() { }
 
     public static void text(String value, int maximumBytes, String name) {
-        // Bound the UTF-8 validation allocation by checking character count first.
+        // Reject excessive character counts before measuring encoded bytes.
         if (value != null && (value.length() > maximumBytes
-                || value.getBytes(StandardCharsets.UTF_8).length > maximumBytes)) {
+                || utf8Length(value) > maximumBytes)) {
             throw new IllegalArgumentException(name + " exceeds " + maximumBytes + " UTF-8 bytes");
+        }
+    }
+
+    /** Count bytes without allocating an encoded array for well-formed UTF-16. */
+    public static int utf8Length(String value) {
+        try {
+            return Utf8.encodedLength(value);
+        } catch (IllegalArgumentException malformedUtf16) {
+            // Preserve the JDK encoder's replacement behavior for unpaired surrogates.
+            return value.getBytes(StandardCharsets.UTF_8).length;
         }
     }
 

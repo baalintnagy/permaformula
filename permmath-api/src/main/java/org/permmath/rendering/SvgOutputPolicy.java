@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.Set;
 import javax.xml.XMLConstants;
@@ -15,6 +14,7 @@ import javax.xml.stream.*;
 import org.apache.commons.lang3.StringUtils;
 import org.owasp.html.FilterUrlByProtocolAttributePolicy;
 import org.permmath.contract.ComplexityPolicy;
+import org.permmath.validation.InputLimits;
 
 /** API-side output boundary. XML and CSS are parsed by StAX and ph-css, URLs by OWASP. */
 public final class SvgOutputPolicy {
@@ -99,7 +99,7 @@ public final class SvgOutputPolicy {
 
     static String sanitize(String svg) throws IOException {
         if (!StringUtils.isNotBlank(svg) || svg.length() > LIMITS.get(SVG_BYTES)
-                || svg.getBytes(StandardCharsets.UTF_8).length > LIMITS.get(SVG_BYTES)) {
+                || InputLimits.utf8Length(svg) > LIMITS.get(SVG_BYTES)) {
             throw rejected();
         }
         var factory = XMLInputFactory.newDefaultFactory();
@@ -194,7 +194,7 @@ public final class SvgOutputPolicy {
             }
             writer.flush();
             String clean = result.toString();
-            if (!rootSeen || !stack.isEmpty() || clean.getBytes(StandardCharsets.UTF_8).length > LIMITS.get(SVG_BYTES)) {
+            if (!rootSeen || !stack.isEmpty() || InputLimits.utf8Length(clean) > LIMITS.get(SVG_BYTES)) {
                 throw rejected();
             }
             return clean;
