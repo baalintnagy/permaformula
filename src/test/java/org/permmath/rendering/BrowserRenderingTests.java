@@ -8,28 +8,26 @@ import java.util.List;
 import java.util.regex.Pattern;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.api.Test;
 import org.permmath.PermMathProperties;
 import org.permmath.url.ImageDescriptor;
 
 @EnabledIfSystemProperty(named = "rendering.tests", matches = "true")
 class BrowserRenderingTests {
-    @ParameterizedTest
-    @EnumSource(RenderingProperties.Engine.class)
-    void rendersOriginalStyledHtmlExample(RenderingProperties.Engine engine) throws Exception {
+    @Test
+    void rendersOriginalStyledHtmlExample() throws Exception {
         String example = Files.readString(Path.of("requests.md"));
         var html = Pattern.compile("```html\\s*(.*?)```", Pattern.DOTALL).matcher(example);
         var css = Pattern.compile("```css\\s*(.*?)```", Pattern.DOTALL).matcher(example);
         assertTrue(html.find());
         assertTrue(css.find());
-        var settings = new RenderingProperties(engine, Path.of(".runtime/browsers"), Duration.ofSeconds(30));
+        var settings = new RenderingProperties(Path.of(".runtime/browsers"), Duration.ofSeconds(30));
         try (var renderer = new ImageRendererService(
                 new PermMathProperties("http://localhost:8086", 800, 2000), settings)) {
             var image = renderer.getImage(new ImageDescriptor(html.group(1), 1000, List.of(), css.group(1)));
             var directory = Path.of("target/rendering");
             Files.createDirectories(directory);
-            var destination = directory.resolve(engine.name().toLowerCase() + ".svg");
+            var destination = directory.resolve("chromium.svg");
             try (var input = image.getInputStream()) { Files.write(destination, input.readAllBytes()); }
             var decoded = parse(Files.readString(destination));
             assertEquals("svg", decoded.getDocumentElement().getLocalName());
@@ -42,9 +40,8 @@ class BrowserRenderingTests {
         }
     }
 
-    @ParameterizedTest
-    @EnumSource(RenderingProperties.Engine.class)
-    void plainHtmlAndExternalStylesRenderWithoutLeakingBetweenRequests(RenderingProperties.Engine engine) throws Exception {
+    @Test
+    void plainHtmlAndExternalStylesRenderWithoutLeakingBetweenRequests() throws Exception {
         var cssServer = com.sun.net.httpserver.HttpServer.create(
                 new java.net.InetSocketAddress("127.0.0.1", 0), 0);
         cssServer.createContext("/style.css", exchange -> {
@@ -55,7 +52,7 @@ class BrowserRenderingTests {
             exchange.close();
         });
         cssServer.start();
-        var settings = new RenderingProperties(engine, Path.of(".runtime/browsers"), Duration.ofSeconds(30));
+        var settings = new RenderingProperties(Path.of(".runtime/browsers"), Duration.ofSeconds(30));
         try (var renderer = new ImageRendererService(
                 new PermMathProperties("http://localhost:8086", 800, 2000), settings)) {
             String ref = "http://127.0.0.1:" + cssServer.getAddress().getPort() + "/style.css";

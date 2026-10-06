@@ -12,7 +12,6 @@ permmath:
         maximum-size: 1GB
         expire-after-write: 60d
     rendering:
-        engine: javafx
         browser-directory: .runtime/browsers
         timeout: 30s
 

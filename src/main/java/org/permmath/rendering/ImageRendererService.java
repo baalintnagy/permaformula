@@ -47,13 +47,8 @@ public class ImageRendererService implements AutoCloseable {
             var url = assets.add(html);
             int width = Objects.requireNonNullElse(descriptor.imageWidth(), properties.defaultImageWidth());
             try {
-                return switch (rendering.engine()) {
-                    case JAVAFX -> JavaFxRenderer.render(url, width, rendering.timeout());
-                    case CHROMIUM -> {
-                        if (chromium == null) chromium = new ChromiumRenderer(rendering);
-                        yield chromium.render(url, width);
-                    }
-                };
+                if (chromium == null) chromium = new ChromiumRenderer(rendering);
+                return chromium.render(url, width);
             } finally { assets.remove(url); }
         });
         try {
@@ -65,7 +60,7 @@ public class ImageRendererService implements AutoCloseable {
             throw new IOException("Rendering interrupted", e);
         } catch (java.util.concurrent.ExecutionException e) {
             if (e.getCause() instanceof IllegalArgumentException invalid) throw invalid;
-            throw new IOException("Rendering failed using " + rendering.engine(), e.getCause());
+            throw new IOException("Rendering failed using Chromium", e.getCause());
         } catch (java.util.concurrent.TimeoutException e) {
             task.cancel(true);
             throw new IOException("Rendering timed out", e);

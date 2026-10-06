@@ -46,7 +46,7 @@ normalization. The historical `forumla` JSON spelling remains in compressed
 payloads for `/image` and `/decode`.
 
 This endpoint runs bundled MathJax 3.2.2 with its lightweight DOM adapter in
-GraalJS inside the JVM. It launches neither Chromium nor JavaFX and needs no
+GraalJS inside the JVM. It launches no browser and needs no
 Node.js installation at runtime. Build instructions are in
 [`tools/svg/README.md`](tools/svg/README.md).
 
@@ -94,7 +94,7 @@ resources become visible after eviction, expiry or restart.
 
 Keys are SHA-256 hashes of a versioned rendering identity and the effective
 descriptor, independent of the compressed URL spelling. HTML keys include the
-resolved width; JavaFX and Chromium share the same keys. Formula-only keys ignore unused layout options.
+resolved width. Formula-only keys depend on the exact formula text.
 Stylesheet order is preserved. Bump the rendering identity version in
 `GeneratedImageService` when a template, MathJax bundle, browser version or export
 change affects output before introducing persistent storage.
@@ -107,9 +107,8 @@ storage is enabled yet. Hit, miss, load and eviction counters are available thro
 
 ### Rendering
 
-Both backends render styled HTML with locally bundled MathJax 3.2.2 (SVG output).
-The default is JavaFX; select Chromium with `permmath.rendering.engine=chromium`
-(or `PERMMATH_RENDERING_ENGINE=chromium`). All image endpoints return SVG. Styled HTML is embedded using SVG foreignObject; `/img` returns pure formula SVG.
+Chromium renders styled HTML with locally bundled MathJax 3.2.2 (SVG output).
+It is the sole HTML rendering backend; no engine selection is required. All image endpoints return SVG. Styled HTML is embedded using SVG foreignObject; `/img` returns pure formula SVG.
 `imageWidth` is the layout width in pixels; image height follows the content.
 The legacy `default-dpi` setting is retained for configuration compatibility but
 browser rendering uses CSS pixels rather than that value.
@@ -132,12 +131,10 @@ mvn verify -Drendering.tests=true
 java --enable-native-access=ALL-UNNAMED -jar target/permmath-service-1.0.jar
 ```
 
-Browser tests require the local download and a graphical environment for JavaFX.
+Browser tests require the local Chromium download and run headlessly.
 They write comparison images to `target/rendering`. Normal unit tests do not
-launch a browser. JavaFX WebView uses an invisible native window and the FX
-application thread. Its packaged classpath deployment currently emits JavaFX's
-unnamed-module warning. Linux needs a display or Xvfb; the Dockerfile installs
-Linux Chromium and uses Xvfb so either backend can be selected.
+launch a browser. The Dockerfile installs Linux Chromium and its dependencies;
+no graphical display or virtual framebuffer is required.
 
 Rendering waits for MathJax, fonts, and images, with a configurable timeout
 (`permmath.rendering.timeout`, default `30s`). User HTML and external stylesheets
