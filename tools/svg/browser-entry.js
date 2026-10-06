@@ -1,5 +1,6 @@
 import { exportStyledSvg } from './export-styled-svg.js';
 import { safeMathOptions } from './mathjax-safety.js';
+import { limits, validateDom } from './complexity-limits.js';
 
 const renderer = { state: 'loading', svg: null, error: null };
 window.PermMathRenderer = renderer;
@@ -8,13 +9,16 @@ window.MathJax = {
   options: safeMathOptions(),
   startup: { pageReady: renderPage },
   svg: { fontCache: 'local' },
+  tex: { maxMacros: limits.TEX_MACROS, maxBuffer: limits.TEX_BUFFER },
 };
 window.addEventListener('error', handleScriptError, true);
 
 async function renderPage() {
   try {
+    validateDom(document.body);
     await window.MathJax.startup.defaultPageReady();
     await waitForAssets();
+    validateDom(document.body);
     if (document.querySelector('mjx-merror')) throw new Error('Invalid math expression');
     renderer.svg = await exportStyledSvg();
     renderer.state = 'ready';

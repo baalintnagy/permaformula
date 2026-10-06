@@ -50,7 +50,9 @@ public class GeneratedImageService {
                 Objects.requireNonNullElse(descriptor.imageWidth(), defaults.defaultImageWidth()),
                 Objects.requireNonNullElse(descriptor.styleRefs(), List.of()),
                 Objects.requireNonNullElse(descriptor.style(), ""));
-            return new Prepared(effective, key("html-svg-v7:html-to-image-1.11.13:presentation-policy-3:" + SvgOutputPolicy.VERSION, effective));
+            PreparationComplexity.html(effective.forumla());
+            PreparationComplexity.css(effective.style());
+            return new Prepared(effective, key("html-svg-v9:complexity-policy-2:html-to-image-1.11.13:presentation-policy-3:" + SvgOutputPolicy.VERSION, effective));
         });
         return store.getOrGenerate(prepared.key(), () -> work.generate(() -> {
             try (var input = htmlRenderer.getImage(prepared.descriptor()).getInputStream()) {
@@ -62,8 +64,9 @@ public class GeneratedImageService {
     public String getImg(@NotBlank String formula) throws IOException {
         var cacheKey = work.prepare(() -> {
             org.permmath.validation.InputLimits.formula(formula);
+            org.permmath.contract.ComplexityPolicy.CURRENT.checkMathInput(formula);
             var identity = new ImageDescriptor(formula, null, null, null);
-            return key("formula-svg-v2:mathjax-3.2.2:" + SvgOutputPolicy.VERSION, identity);
+            return key("formula-svg-v4:complexity-policy-2:mathjax-3.2.2:" + SvgOutputPolicy.VERSION, identity);
         });
         return store.getOrGenerate(cacheKey,
                 () -> work.generate(() -> SvgOutputPolicy.sanitize(formulaRenderer.render(formula))));
@@ -71,7 +74,8 @@ public class GeneratedImageService {
 
     private String key(String format, ImageDescriptor descriptor) throws IOException {
         // Stable versioned content identity, also suitable for filenames or database keys.
-        var identity = format + "\n" + mapper.writeValueAsString(descriptor);
+        var identity = format + ":" + org.permmath.contract.ComplexityPolicy.CURRENT.fingerprint()
+                + "\n" + mapper.writeValueAsString(descriptor);
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(identity.getBytes(StandardCharsets.UTF_8)));

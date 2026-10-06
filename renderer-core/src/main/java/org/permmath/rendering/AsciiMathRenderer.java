@@ -9,19 +9,25 @@ import org.graalvm.polyglot.Value;
 
 /** Browser-free ASCIIMath conversion using MathJax's lightweight DOM adapter. */
 public class AsciiMathRenderer implements AutoCloseable {
+    private final org.permmath.contract.ComplexityPolicy policy;
     private Context context;
     private Value render;
+
+    public AsciiMathRenderer() { this(org.permmath.contract.ComplexityPolicy.CURRENT); }
+    AsciiMathRenderer(org.permmath.contract.ComplexityPolicy policy) { this.policy = Objects.requireNonNull(policy); }
 
     public synchronized String render(String formula) throws IOException {
         if (formula == null || formula.isBlank()) {
             throw new IllegalArgumentException("formula must not be blank");
         }
+        policy.checkMathInput(formula);
         if (context == null) {
             var created = Context.newBuilder("js").allowHostAccess(HostAccess.NONE)
                     .allowHostClassLookup(_ -> false)
                     // Stock JDK operation intentionally uses GraalJS's interpreter.
                     .option("engine.WarnInterpreterOnly", "false").build();
             try (var input = getClass().getResourceAsStream("/svg/renderer.js")) {
+                created.eval("js", "globalThis.PermMathComplexity = " + policy.json() + ";");
                 created.eval("js", new String(Objects.requireNonNull(input).readAllBytes(), StandardCharsets.UTF_8));
                 render = created.eval("js", "PermMathSvg.render");
                 context = created;
@@ -31,7 +37,12 @@ public class AsciiMathRenderer implements AutoCloseable {
             }
         }
         // Pass input as a value, never interpolate it into executable JavaScript.
-        return render.execute(formula).asString();
+        try {
+            return render.execute(formula).asString();
+        } catch (org.graalvm.polyglot.PolyglotException invalid) {
+            if (invalid.isGuestException()) throw new IllegalArgumentException("Invalid math expression");
+            throw invalid;
+        }
     }
 
     @Override public synchronized void close() {

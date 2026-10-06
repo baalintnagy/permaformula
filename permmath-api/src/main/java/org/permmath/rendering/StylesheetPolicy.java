@@ -14,11 +14,14 @@ import com.helger.css.handler.DoNothingCSSParseExceptionCallback;
 import com.helger.css.writer.CSSWriter;
 import com.helger.css.writer.CSSWriterSettings;
 import org.owasp.html.CssSchema;
+import org.permmath.contract.ComplexityPolicy;
+import static org.permmath.contract.ComplexityPolicy.Limit.*;
 
 /**
  * Parsed presentation CSS, including variables, responsive rules and modern layout.
  */
 final class StylesheetPolicy {
+    private static final ComplexityPolicy LIMITS = ComplexityPolicy.CURRENT;
 
     private static final Set<String> MODERN_PROPERTIES = Set.of(
             "display", "position", "inset", "top", "right", "bottom", "left", "z-index",
@@ -78,6 +81,7 @@ final class StylesheetPolicy {
     }
 
     static String declarations(String source) {
+        PreparationComplexity.css(source);
         var declarations = CSSReaderDeclarationList.readFromString(source, readerSettings());
         if (declarations == null) {
             return "";
@@ -87,6 +91,7 @@ final class StylesheetPolicy {
     }
 
     static CascadingStyleSheet parse(String source) {
+        PreparationComplexity.css(source);
         var sheet = CSSReader.readFromStringReader(source, readerSettings());
         if (sheet == null) {
             throw new IllegalArgumentException("Invalid CSS stylesheet");
@@ -114,10 +119,16 @@ final class StylesheetPolicy {
     }
 
     private static boolean cleanRule(Object rule, int depth) {
-        if (depth > 32) {
-            throw new IllegalArgumentException("CSS nesting exceeds 32 levels");
+        if (depth > LIMITS.get(CSS_BLOCK_DEPTH)) {
+            PreparationComplexity.reject("CSS nesting");
         }
         if (rule instanceof CSSStyleRule style) {
+            for (var selector : style.getAllSelectors()) {
+                String value = selector.getAsCSSString(WRITER, 0);
+                if (value.length() > LIMITS.get(CSS_SELECTOR_CHARS)) {
+                    PreparationComplexity.reject("CSS selector length");
+                }
+            }
             cleanDeclarations(style);
             for (int i = style.getRuleCount() - 1; i >= 0; i--) {
                 if (!cleanRule(style.getRuleAtIndex(i), depth + 1)) {
@@ -157,18 +168,32 @@ final class StylesheetPolicy {
     }
 
     private static boolean safeExpression(CSSExpression expression, int depth, boolean output) {
-        if (depth > 32) {
+        if (depth > LIMITS.get(CSS_FUNCTION_DEPTH)) {
             return false;
         }
         return expression.getAllMembers().stream().allMatch(member -> safeMember(member, depth + 1, output));
     }
 
     private static boolean safeMember(Object member, int depth, boolean output) {
-        if (depth > 32) {
+        if (depth > LIMITS.get(CSS_FUNCTION_DEPTH)) {
             return false;
         }
         if (member instanceof CSSExpressionMemberFunction function) {
             String name = function.getFunctionName().toLowerCase(Locale.ROOT);
+            if ("repeat".equals(name) && function.hasExpression()) {
+                var members = function.getExpression().getAllMembers();
+                if (!members.isEmpty() && members.get(0) instanceof CSSExpressionMemberTermSimple term) {
+                    String value = term.getValue();
+                    if (!value.equalsIgnoreCase("auto-fill") && !value.equalsIgnoreCase("auto-fit")) {
+                        try {
+                            double repeats = Double.parseDouble(value);
+                            if (!Double.isFinite(repeats) || repeats > LIMITS.get(CSS_GRID_REPEAT)) PreparationComplexity.reject("CSS grid repetition");
+                        } catch (NumberFormatException invalid) {
+                            PreparationComplexity.reject("CSS grid repetition");
+                        }
+                    }
+                }
+            }
             return (FUNCTIONS.contains(name) || output && "rect".equals(name))
                     && (!function.hasExpression() || safeExpression(function.getExpression(), depth + 1, output));
         }

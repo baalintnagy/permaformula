@@ -6,6 +6,8 @@ import org.jsoup.nodes.DataNode;
 import org.owasp.html.HtmlPolicyBuilder;
 import org.owasp.html.PolicyFactory;
 import org.permmath.url.ImageDescriptor;
+import org.permmath.contract.ComplexityPolicy;
+import static org.permmath.contract.ComplexityPolicy.Limit.*;
 
 /**
  * Presentation-only input: no submitted URLs, scripts or embedded documents.
@@ -29,6 +31,10 @@ final class RenderContentPolicy {
 
 
     static String document(String template, ImageDescriptor descriptor, java.util.List<String> externalCss) throws IOException {
+        PreparationComplexity.html(descriptor.forumla());
+        int rules = PreparationComplexity.css(descriptor.style() == null ? "" : descriptor.style());
+        for (var css : externalCss) rules += PreparationComplexity.css(css);
+        if (rules > ComplexityPolicy.CURRENT.get(CSS_RULES)) PreparationComplexity.reject("Combined CSS rules/selectors");
         var document = Jsoup.parse(template);
         document.outputSettings().prettyPrint(false);
         var nonce = java.util.UUID.randomUUID().toString();
@@ -42,6 +48,10 @@ final class RenderContentPolicy {
         externalCss.forEach(sheet -> document.head().appendElement("style").appendChild(new DataNode(css(sheet))));
         document.head().appendElement("style").appendChild(new DataNode(css(descriptor.style())));
         document.body().html(HTML.sanitize(descriptor.forumla()));
+        PreparationComplexity.dom(document.body());
+        if ((long) rules * document.body().getAllElements().size() > ComplexityPolicy.CURRENT.get(CSS_HTML_WORK)) {
+            PreparationComplexity.reject("Combined CSS/HTML work");
+        }
         return document.outerHtml();
     }
 

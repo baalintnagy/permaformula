@@ -13,6 +13,59 @@ import org.permmath.url.ImageDescriptor;
 
 @EnabledIfSystemProperty(named = "rendering.tests", matches = "true")
 class BrowserRenderingTests {
+    @Test void configuredPolicyReachesChromiumBeforeDocumentScripts() throws Exception {
+        var policy = org.permmath.contract.ComplexityPolicy.load(new java.util.Properties(),
+                java.util.Map.of("PERMMATH_COMPLEXITY_RENDER_DIMENSION", "1000"));
+        String template;
+        try (var input = getClass().getResourceAsStream("/wrapper.html")) {
+            template = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+                    .replace("</body>", "<div style='height:1200px'>Too tall</div></body>");
+        }
+        try (var assets = new RenderAssets(); var renderer = new ChromiumRenderer(new BrowserSettings(
+                Path.of("../.runtime/browsers"), Duration.ofSeconds(30), false), policy)) {
+            assertThrows(IllegalArgumentException.class, () -> renderer.render(assets.add(template), 320));
+        }
+    }
+
+    @Test void mathJaxDiscoveryBoundsExpressionCountAndNativeTexExpansion() throws Exception {
+        String template;
+        try (var input = getClass().getResourceAsStream("/wrapper.html")) {
+            template = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+        try (var assets = new RenderAssets(); var renderer = new ChromiumRenderer(new BrowserSettings(
+                Path.of("../.runtime/browsers"), Duration.ofSeconds(30), false))) {
+            String many = template.replace("</body>", "<p>`x`</p>".repeat(2049) + "</body>");
+            var count = assertThrows(IllegalArgumentException.class, () -> renderer.render(assets.add(many), 320));
+            assertTrue(count.getMessage().contains("Math expression count"));
+            String loop = template.replace("</body>", "<p>\\(\\def\\boom{\\boom}\\boom\\)</p></body>");
+            var expansion = assertThrows(IllegalArgumentException.class, () -> renderer.render(assets.add(loop), 320));
+            assertTrue(expansion.getMessage().contains("Invalid math expression"));
+        }
+    }
+    @Test void mathJaxChecksActualExpressionsBeforeCompilation() throws Exception {
+        String template;
+        try (var input = getClass().getResourceAsStream("/wrapper.html")) {
+            template = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+                    .replace("</body>", "<p>\\(" + "x".repeat(262145) + "\\)</p></body>");
+        }
+        try (var assets = new RenderAssets(); var renderer = new ChromiumRenderer(new BrowserSettings(
+                Path.of("../.runtime/browsers"), Duration.ofSeconds(30), false))) {
+            var failure = assertThrows(IllegalArgumentException.class, () -> renderer.render(assets.add(template), 320));
+            assertTrue(failure.getMessage().contains("Math expression exceeds size limit"));
+        }
+    }
+    @Test void rejectsExtremeLayoutAndRecoversForGenerousTallDocument() throws Exception {
+        try (var renderer = imageRenderer(new PermMathProperties("http://localhost:8086", 800, 2000),
+                new BrowserSettings(Path.of("../.runtime/browsers"), Duration.ofSeconds(30), false))) {
+            assertThrows(IllegalArgumentException.class, () -> renderer.getImage(
+                    new ImageDescriptor("<div>Too tall</div>", 1000, null, "div{height:40000px}")));
+            try (var input = renderer.getImage(new ImageDescriptor("<div>Generous document</div>",
+                    1000, null, "div{height:30000px}")).getInputStream()) {
+                assertTrue(SvgOutputPolicy.sanitize(new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8))
+                        .contains("Generous document"));
+            }
+        }
+    }
     @Test
     void reportsMathJaxLoadFailureThroughRendererState() throws Exception {
         String template;

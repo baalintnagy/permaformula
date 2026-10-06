@@ -11,11 +11,12 @@ import javax.xml.XMLConstants;
 import javax.xml.stream.*;
 import org.apache.commons.lang3.StringUtils;
 import org.owasp.html.FilterUrlByProtocolAttributePolicy;
-import org.permmath.contract.RenderProtocol;
+import org.permmath.contract.ComplexityPolicy;
+import static org.permmath.contract.ComplexityPolicy.Limit.*;
 
 /** API-side output boundary. XML and CSS are parsed by StAX and ph-css, URLs by OWASP. */
 public final class SvgOutputPolicy {
-    static final String VERSION = "svg-output-policy-1";
+    static final String VERSION = "svg-output-policy-3";
     public static final String CSP = "sandbox; default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; "
             + "img-src 'none'; font-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; "
             + "base-uri 'none'; form-action 'none'";
@@ -55,17 +56,34 @@ public final class SvgOutputPolicy {
             "mathcolor", "mathbackground");
     private static final FilterUrlByProtocolAttributePolicy HTTPS =
             new FilterUrlByProtocolAttributePolicy(Set.of("https"));
-    private static final int MAX_DEPTH = 128;
-    private static final int MAX_ELEMENTS = 20_000;
-    private static final int MAX_ATTRIBUTES = 64;
-    private static final int MAX_STYLE = 32_768;
+    private static final ComplexityPolicy LIMITS = ComplexityPolicy.CURRENT;
 
     private SvgOutputPolicy() {
     }
 
+    private static void checkDimensions(XMLStreamReader reader) throws IOException {
+        double width = dimension(reader.getAttributeValue(null, "width"));
+        double height = dimension(reader.getAttributeValue(null, "height"));
+        if (width > LIMITS.get(RENDER_DIMENSION) || height > LIMITS.get(RENDER_DIMENSION)
+                || width * height > LIMITS.get(RENDER_AREA)) throw rejected();
+    }
+
+    private static double dimension(String value) throws IOException {
+        if (value == null) return 0;
+        double factor = 1;
+        if (value.endsWith("ex")) { factor = LIMITS.get(EX_PIXELS); value = value.substring(0, value.length() - 2); }
+        else if (value.endsWith("em")) { factor = LIMITS.get(EM_PIXELS); value = value.substring(0, value.length() - 2); }
+        else if (value.endsWith("px")) value = value.substring(0, value.length() - 2);
+        try {
+            double result = Double.parseDouble(value) * factor;
+            if (!Double.isFinite(result) || result <= 0) throw rejected();
+            return result;
+        } catch (NumberFormatException invalid) { throw rejected(); }
+    }
+
     static String sanitize(String svg) throws IOException {
-        if (!StringUtils.isNotBlank(svg) || svg.length() > RenderProtocol.MAX_CONTENT_BYTES
-                || svg.getBytes(StandardCharsets.UTF_8).length > RenderProtocol.MAX_CONTENT_BYTES) {
+        if (!StringUtils.isNotBlank(svg) || svg.length() > LIMITS.get(SVG_BYTES)
+                || svg.getBytes(StandardCharsets.UTF_8).length > LIMITS.get(SVG_BYTES)) {
             throw rejected();
         }
         var factory = XMLInputFactory.newDefaultFactory();
@@ -91,8 +109,9 @@ public final class SvgOutputPolicy {
                     case XMLStreamConstants.START_ELEMENT -> {
                         String ns = reader.getNamespaceURI();
                         String name = reader.getLocalName();
-                        if (++count > MAX_ELEMENTS || stack.size() >= MAX_DEPTH
-                                || reader.getAttributeCount() > MAX_ATTRIBUTES || reader.getNamespaceCount() > 8) {
+                        if (++count > LIMITS.get(RENDER_NODES) || stack.size() >= LIMITS.get(RENDER_DEPTH)
+                                || reader.getAttributeCount() > LIMITS.get(ATTRIBUTES)
+                                || reader.getNamespaceCount() > LIMITS.get(NAMESPACE_DECLARATIONS)) {
                             throw rejected();
                         }
                         if (stack.isEmpty()) {
@@ -100,6 +119,7 @@ public final class SvgOutputPolicy {
                                 throw rejected();
                             }
                             rootSeen = true;
+                            checkDimensions(reader);
                         }
                         if (SVG.equals(ns)) {
                             if (!SVG_ELEMENTS.contains(name)) {
@@ -152,13 +172,13 @@ public final class SvgOutputPolicy {
                         // Comments and the XML declaration are omitted.
                     }
                 }
-                if (result.getBuffer().length() > RenderProtocol.MAX_CONTENT_BYTES) {
+                if (result.getBuffer().length() > LIMITS.get(SVG_BYTES)) {
                     throw rejected();
                 }
             }
             writer.flush();
             String clean = result.toString();
-            if (!rootSeen || !stack.isEmpty() || clean.getBytes(StandardCharsets.UTF_8).length > RenderProtocol.MAX_CONTENT_BYTES) {
+            if (!rootSeen || !stack.isEmpty() || clean.getBytes(StandardCharsets.UTF_8).length > LIMITS.get(SVG_BYTES)) {
                 throw rejected();
             }
             return clean;
@@ -215,7 +235,7 @@ public final class SvgOutputPolicy {
         if ("href".equals(name)) {
             value = link("a".equals(element) || MATH.equals(ns), value);
         } else if ("style".equals(name)) {
-            if (value.length() > MAX_STYLE) {
+            if (value.length() > LIMITS.get(INLINE_STYLE_CHARS)) {
                 throw rejected();
             }
             value = StylesheetPolicy.outputDeclarations(value);

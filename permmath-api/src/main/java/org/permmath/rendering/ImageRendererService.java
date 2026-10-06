@@ -30,6 +30,8 @@ public class ImageRendererService implements AutoCloseable {
     }
 
     public InputStreamResource getImage(@Valid @NotNull ImageDescriptor descriptor) throws IOException {
+        PreparationComplexity.html(descriptor.forumla());
+        PreparationComplexity.css(descriptor.style() == null ? "" : descriptor.style());
         var externalCss = descriptor.styleRefs() == null || descriptor.styleRefs().isEmpty()
                 ? java.util.List.<String>of()
                 : work.fetch(() -> new StylesheetFetcher().fetchAll(descriptor.styleRefs()));

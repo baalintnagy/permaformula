@@ -22,6 +22,13 @@ class GeneratedImageServiceTests {
     private final ImageRendererService html = mock(ImageRendererService.class);
     private final FormulaSvgRenderer formula = mock(FormulaSvgRenderer.class);
 
+    @Test void rejectsComplexInputBeforeCallingEitherRenderer() throws Exception {
+        var service = service(800);
+        assertThrows(IllegalArgumentException.class, () -> service.getImg("x".repeat(262145)));
+        assertThrows(IllegalArgumentException.class, () -> service.getImage(new ImageDescriptor("<div>".repeat(129), null, null, null)));
+        verifyNoInteractions(html, formula);
+    }
+
     @Test
     void htmlUsesEffectiveWidthAndCachesReusableContent() throws Exception {
         when(html.getImage(any())).thenReturn(resource("<svg xmlns=\"http://www.w3.org/2000/svg\">α</svg>"));

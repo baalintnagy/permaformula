@@ -18,8 +18,14 @@ final class ChromiumRenderer implements AutoCloseable {
     private final Browser browser;
 
     private final double timeout;
+    private final org.permmath.contract.ComplexityPolicy policy;
 
     ChromiumRenderer(BrowserSettings properties) throws IOException {
+        this(properties, org.permmath.contract.ComplexityPolicy.CURRENT);
+    }
+
+    ChromiumRenderer(BrowserSettings properties, org.permmath.contract.ComplexityPolicy policy) throws IOException {
+        this.policy = java.util.Objects.requireNonNull(policy);
         var directory = properties.browserDirectory().toAbsolutePath().normalize();
         // Only executables in the configured browser installation are considered.
         playwright = Playwright.create(new Playwright.CreateOptions().setEnv(Map.of(
@@ -42,6 +48,7 @@ final class ChromiumRenderer implements AutoCloseable {
 
     byte[] render(String url, int width) {
         try (var context = BrowserChannelPolicy.newContext(browser, width)) {
+            context.addInitScript("globalThis.PermMathComplexity = " + policy.json() + ";");
             var page = BrowserChannelPolicy.newPage(context, url);
             page.setDefaultTimeout(timeout);
             page.setDefaultNavigationTimeout(timeout);

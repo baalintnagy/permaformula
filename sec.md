@@ -18,7 +18,7 @@ The original raw-markup execution path is no longer present. MathJax-generated D
 
 `StylesheetPolicy` parses CSS, restricts properties and value functions, rejects resource URLs and unsupported rules, and escapes literal `<` before stylesheet embedding. `RenderContentPolicy` builds the document with DOM APIs rather than substituting raw input into the template. Inline declarations use the same policy. External CSS is also sanitized.
 
-The original closing-style-tag injection path is addressed. CSS parsing/layout resource consumption is a separate open issue under 12.
+The original closing-style-tag injection path is addressed. CSS parsing/layout budgets are implemented under 12; worker execution limits remain necessary for costly accepted layouts.
 
 AntiSamy 1.7.8 was evaluated as a replacement for custom CSS filtering on 2026-10-06.
 Default and permissive diagnostic policies lost required variables, calculations,
@@ -60,7 +60,7 @@ These controls reduce native exploit impact and remove render execution from the
 
 Input sanitization and CSP prevent the original supported route for submitted scripts to replace rendering functions or completion/output state (now grouped in `window.PermMathRenderer`). `GeneratedImageService` passes both renderer paths through `SvgOutputPolicy` in the API process before caching. The policy parses namespace-aware XML and permits presentation elements/attributes, the required outer foreignObject, XHTML/MathML and embedded glyph fragments. Unknown/active elements and attributes, external glyph references and unsafe hyperlink schemes reject the artifact. CSS is parsed and filtered by ph-css; hyperlink protocols use OWASP Java HTML Sanitizer's URL policy.
 
-The ready flag still proves protocol completion, not document safety. The independent output policy provides that boundary. Standard JDK StAX disables DTDs, external entities and external resolution; processing instructions and entity references are rejected. Bounds cover 16 MiB input/output, depth 128, 20,000 elements, 64 attributes per element, eight namespace declarations per element and 32 KiB per style attribute. This does not bound rendering work already performed or API preparation; see 12–13.
+The ready flag still proves protocol completion, not document safety. The independent output policy provides that boundary. Standard JDK StAX disables DTDs, external entities and external resolution; processing instructions and entity references are rejected. Bounds cover 16 MiB input/output, depth 256, 100,000 elements, 64 attributes per element, eight namespace declarations per element and 32 KiB per style attribute. This does not bound rendering work already performed or API preparation; see 12–13.
 
 ### 8. Active content in returned SVG — reproduced path addressed
 
@@ -77,7 +77,7 @@ Its source adapter handles dimensions, disables font embedding and removes style
 nodes and the library's obsolete foreignObject attribute. DOM cloning and computed-style
 copying are delegated to the library. Existing browser network restrictions and API-side
 SVG validation remain the security boundaries; html-to-image itself is not a sanitizer.
-The HTML cache format is `html-svg-v7` and includes the exporter version.
+The HTML cache format is `html-svg-v8` and includes the exporter version.
 Browser regressions cover external Bootstrap styles, safe math links, hostile input,
 cross-request styles, vector positioning and viewing with the response CSP.
 
@@ -122,15 +122,62 @@ serialization. Text limits count UTF-8 bytes and preserve accepted whitespace.
 Oversized existing permalinks are intentionally rejected. Proxy/server query
 limits may be smaller. Tests cover byte boundaries, concatenated-member expansion,
 compression bombs, malformed descriptors, endpoint rejection and no renderer call
-on invalid inputs. Admission is implemented under 13; parsing/layout complexity remains open under 12.
+on invalid inputs. Admission is implemented under 13; parsing/layout complexity budgets are implemented under 12.
 
-### 12. Expensive layout, math and parsing — partially mitigated, high-priority gaps
+### 12. Expensive layout, math and parsing — structural budgets implemented
 
 Image width is validated from 220 to 4000, remote stylesheet downloads have limits, and submitted images/fonts/resource URLs/animations outside the CSS subset are removed. These are real improvements.
 
-Prepared HTML/formula and SVG output are capped at 16 MiB at the RPC/process boundary; execution has supervised deadlines and container resource limits. API content/formula/inline CSS byte sizes are now bounded before preparation. DOM node count, rule/selector complexity and rendered height remain insufficiently bounded. Allowed CSS can still create expensive layouts and extreme dimensions. CSS nesting checks occur after parsing and are not a parser resource boundary. MathJax-generated DOM can also grow substantially. Export copies the DOM and computed styles and holds several representations in memory.
+jsoup's streaming HTML parser uses its native stack-depth cap and aborts when the
+element/node budgets are exhausted. HTML allows 20,000 elements, depth 128 and 64
+attributes per element; normalized HTML is checked using jsoup's traversal with
+a 60,000-node budget and 32 KiB inline styles. ph-css's own tokenizer enforces CSS
+budgets before its recursive grammar runs, including escaped function tokens and
+proper handling of strings/comments. CSS allows
+20,000 rules/selectors, 100,000 declaration separators and 262,144 lexical tokens per source,
+32 block/bracket levels, 64 function levels and 4,096 selector/token characters.
+Combined stylesheets allow 20,000 rules/selectors; selectors multiplied by normalized HTML elements
+must not exceed 100 million. Parsed numeric grid repeat counts are limited to 1,024.
 
-Add limits before parsing/rendering, enforce height/output limits, and bound total work with worker CPU/memory limits. Reject oversized output before returning/caching it; checking cache weight after generation is too late.
+MathJax discovers actual expressions and checks 2,048 expressions per HTML document
+and 262,144 characters per expression before compilation. The formula endpoint
+also retains its 256 KiB UTF-8 bound. Native browser TeX expansion allows 10,000
+substitutions with a 262,144-character buffer. Compiled MathJax trees are checked
+before typesetting: 100,000 nodes per document and depth 128. Parser errors,
+including native expansion-limit failures, reject the render. The handwritten
+math token/nesting and HTML delimiter scanners have been removed. ASCIIMath has
+no native pre-parse nesting limiter; isolated worker termination/memory controls
+remain essential for that parser.
+
+Expanded browser DOM and formula SVG are limited to 100,000 nodes and depth 256
+before cloning/serialization. Viewport/content dimensions are at most 32,768 pixels
+per side and 64 million pixels in area. Overflow and individual element geometry
+are checked before export; element positions are bounded to one million pixels.
+The API independently validates root SVG dimensions, 100,000 elements, depth 256
+and 16 MiB output before caching. Cache policy versions were advanced.
+
+These generous structural budgets reduce parser and export amplification; they do
+not predict every CSS/MathJax layout cost. Layout occurs before geometry can be
+measured. The isolated worker's 30-second deadline, 1 GiB heap and container
+CPU/memory limits remain the hard execution boundary. API parser interruption
+still cannot forcibly terminate non-cooperative code; admission retains its slot.
+See README's complexity table for the maintained caps.
+
+Defaults are defined once in `render-contract/src/main/resources/complexity-defaults.properties`.
+`ComplexityPolicy` validates environment/JVM overrides, forwards resolved values
+to isolated workers and injects them into both JavaScript engines. Use matching
+settings for API and renderer; the resolved policy fingerprint versions cache keys.
+There are no separate JavaScript limit defaults or custom HTML/CSS character lexers.
+
+Verification after library/configuration cleanup: `mvn -o -Drendering.tests=true verify`
+passed 149 tests (148 passed, one opt-in Swagger UI test skipped). Coverage includes
+native token handling for comments/strings/escaped functions, jsoup implied closures
+and depth budgets, override validation/precedence, worker-policy transfer and cache
+fingerprints, configured caps reaching both JavaScript engines, compiled math-tree
+limits, native TeX expansion rejection and MathJax expression discovery. Browser
+tests retain rejection of a 40,000-pixel layout, acceptance of a 30,000-pixel document,
+Bootstrap styling and healthy subsequent renders. JavaScript lint, formatting and
+all generated-bundle checks passed.
 
 ### 13. Deadlines, queues and work cancellation — API admission and deadlines implemented
 
@@ -154,12 +201,12 @@ Worker interruption and network/gRPC cancellation are attempted on timeout. Slot
 are released only after the operation exits, so non-cooperative DNS/parsers cannot
 create unlimited lingering tasks through repeated timeouts. They can still retain
 slots and consume CPU within the API JVM; stronger termination guarantees require
-process isolation. Complexity limits (12), per-client request rates, proxy connection
+process isolation. Per-client request rates, proxy connection
 limits, response delivery and independent API egress restrictions remain open.
 
 ### 14. Cache abuse and persistence — partially mitigated
 
-Caffeine has a configurable weight budget (256 MiB by default, capped at 25% of JVM maximum heap), estimates string/key memory, shares generation for identical keys and does not cache failed generations. HTML keys include `presentation-policy-3`; both HTML and formula keys now also include `svg-output-policy-1`, with updated format versions. Expiry is 60 days **after access**, so repeated hits can extend residency.
+Caffeine has a configurable weight budget (256 MiB by default, capped at 25% of JVM maximum heap), estimates string/key memory, shares generation for identical keys and does not cache failed generations. HTML keys include `presentation-policy-3`; both HTML and formula keys now also include `svg-output-policy-2`, with updated format versions. Expiry is 60 days **after access**, so repeated hits can extend residency.
 
 Renderer/API admission, 16 MiB output caps and final validation before storage bound artifact size and concurrent generation. Cache weight does not cap transient API allocations; per-client miss rate limits remain useful. External stylesheet contents can change without a URL/key change; define refresh/TTL semantics if freshness matters. Current storage is in-memory; future persistence would require purge/quarantine support.
 
@@ -167,7 +214,7 @@ Renderer/API admission, 16 MiB output caps and final validation before storage b
 
 AsciiMathRenderer passes formula as a value and disables Java host access/class lookup. It now runs in a fresh disposable JVM inside the renderer container. Formula input/output are capped at 16 MiB, job heap at 1 GiB, and the supervisor terminates stalled jobs under the RPC/service deadline. Container limits cover native allocations. /img still launches neither Chromium nor external CSS fetching.
 
-This removes unbounded formula execution from the API process. The common API-side SVG policy applies to `/img` as well as styled HTML, and its GraalJS bundle now uses MathJax safe filtering. API admission and deadlines are implemented (13); complexity and non-cooperative work still need attention (12–13). Individual inputs are bounded (11). The TeX-link probe targeted styled HTML; it is not evidence of that exact payload working in ASCIIMath-only /img.
+This removes unbounded formula execution from the API process. The common API-side SVG policy applies to `/img` as well as styled HTML, and its GraalJS bundle now uses MathJax safe filtering. API admission and deadlines are implemented (13); complexity budgets are implemented (12); non-cooperative API work still needs attention (13). Individual inputs are bounded (11). The TeX-link probe targeted styled HTML; it is not evidence of that exact payload working in ASCIIMath-only /img.
 
 ### 16. Data exposure and supply chain — partially mitigated; ongoing operational work
 
@@ -199,7 +246,7 @@ Eclipse launch groups to proceed to API startup.
 ## Recommended next work
 
 1. Maintain decompression and endpoint validation regressions (11); individual payload limits are implemented.
-2. Bound DOM/CSS/math complexity and rendered height (12). API preparation/fetch admission, request deadlines and output caps are implemented; non-cooperative API work may need process isolation (13). TODO: Add a bounded work queue with configurable capacity/wait limits, cancellation, the existing end-to-end deadline, and cache-hit bypass of queued generation. Keep immediate rejection when the queue is full.
+2. Maintain the implemented DOM/CSS/math and dimension budgets (12); non-cooperative API work may need process isolation (13). TODO: Add a bounded work queue with configurable capacity/wait limits, cancellation, the existing end-to-end deadline, and cache-hit bypass of queued generation. Keep immediate rejection when the queue is full.
 3. Verify isolated renderer controls on production hosts and add independent API-fetcher egress controls (3–6).
 4. Add delivery-origin isolation, cache-miss controls and operational patch/privacy policies (8, 14, 16).
 

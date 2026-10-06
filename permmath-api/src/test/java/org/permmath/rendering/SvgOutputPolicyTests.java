@@ -90,8 +90,8 @@ class SvgOutputPolicyTests {
     void rejectsMalformedWrongRootAndExcessiveNesting() {
         assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize("<svg/>"));
         assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize(OPEN + "</g>"));
-        assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize(OPEN + "<g>".repeat(128) + "</g>".repeat(128) + "</svg>"));
-        assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize(OPEN + "<g/>".repeat(20_000) + "</svg>"));
+        assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize(OPEN + "<g>".repeat(256) + "</g>".repeat(256) + "</svg>"));
+        assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize(OPEN + "<g/>".repeat(100_000) + "</svg>"));
         assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize(OPEN + "<g style='" + " ".repeat(32_769) + "'/></svg>"));
     }
 
@@ -100,5 +100,11 @@ class SvgOutputPolicyTests {
         String clean = SvgOutputPolicy.sanitize(OPEN + "<text><![CDATA[<script>alert(1)</script>]]></text></svg>");
         assertFalse(clean.contains("<script>"));
         assertTrue(clean.contains("&lt;script&gt;"));
+    }
+
+    @Test void independentlyRejectsExtremeViewportDimensions() throws Exception {
+        assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize("<svg xmlns='http://www.w3.org/2000/svg' width='4000' height='32768'/>"));
+        assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize("<svg xmlns='http://www.w3.org/2000/svg' width='1' height='Infinity'/>"));
+        assertDoesNotThrow(() -> SvgOutputPolicy.sanitize("<svg xmlns='http://www.w3.org/2000/svg' width='1000' height='30000'/>"));
     }
 }

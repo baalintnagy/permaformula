@@ -732,26 +732,74 @@
     return datauri;
   }
 
+  // complexity-limits.js
+  var limits = Object.freeze(globalThis.PermMathComplexity);
+  if (!limits) throw new Error("Missing rendering complexity policy");
+  function validateMathInput(source) {
+    if (source.length > limits.MATH_CHARS) throw new Error("Math expression exceeds size limit");
+  }
+  function validateTree(root, children, nodeLimit, depthLimit, label) {
+    const pending = [[root, 0]];
+    let count = 0;
+    while (pending.length) {
+      const [node, depth] = pending.pop();
+      if (++count > nodeLimit || depth > depthLimit)
+        throw new Error(label + " exceeds complexity limits");
+      for (const child of children(node)) pending.push([child, depth + 1]);
+    }
+    return count;
+  }
+  function validateDom(root) {
+    return validateTree(
+      root,
+      (node) => node.childNodes,
+      limits.RENDER_NODES,
+      limits.RENDER_DEPTH,
+      "Rendered DOM"
+    );
+  }
+  function validateDimensions(width, height) {
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || width > limits.RENDER_DIMENSION || height > limits.RENDER_DIMENSION || width * height > limits.RENDER_AREA) {
+      throw new Error("Rendered dimensions exceed limits");
+    }
+  }
+
   // export-styled-svg.js
   async function exportStyledSvg() {
     const source = document.body;
+    validateDom(source);
+    const dimensions = measureContent(source);
+    validateDimensions(dimensions.width, dimensions.height);
     const dataUrl = await toSvg(source, {
-      ...measureContent(source),
+      ...dimensions,
       skipFonts: true,
       filter: includeNode
     });
-    return normalizeSvg(decodeSvg(dataUrl));
+    if (dataUrl.length > limits.SVG_BYTES * 3 + 128) throw new Error("SVG exceeds size limit");
+    const result = normalizeSvg(decodeSvg(dataUrl));
+    if (result.length > limits.SVG_BYTES) throw new Error("SVG exceeds size limit");
+    return result;
   }
   function measureContent(source) {
     const computed = getComputedStyle(source);
+    const bounds = source.getBoundingClientRect();
     const height = Math.max(
       1,
-      Math.ceil(
-        source.getBoundingClientRect().height + parseFloat(computed.marginTop) + parseFloat(computed.marginBottom)
-      )
+      Math.ceil(bounds.height + parseFloat(computed.marginTop) + parseFloat(computed.marginBottom))
     );
+    const width = window.innerWidth;
+    validateDimensions(
+      Math.max(width, source.scrollWidth, bounds.width),
+      Math.max(height, source.scrollHeight)
+    );
+    for (const element of source.querySelectorAll("*")) {
+      const rectangle = element.getBoundingClientRect();
+      if (![rectangle.x, rectangle.y, rectangle.width, rectangle.height].every(Number.isFinite) || Math.abs(rectangle.x) > limits.ELEMENT_POSITION || Math.abs(rectangle.y) > limits.ELEMENT_POSITION || rectangle.width > limits.RENDER_DIMENSION || rectangle.height > limits.RENDER_DIMENSION) {
+        throw new Error("Element geometry exceeds limits");
+      }
+    }
     return {
-      width: window.innerWidth,
+      width,
       height,
       // Canvas dimensions include margins; keep the body's original content-box dimensions.
       style: { width: computed.width, height: computed.height }
@@ -771,6 +819,7 @@
   }
 
   // mathjax-safety.js
+  var BEFORE_COMPILE = 15;
   var AFTER_COMPILE = 25;
   function safeMathOptions() {
     return {
@@ -778,14 +827,45 @@
         allow: { URLs: "safe", classes: "safe", cssIDs: "safe", styles: "safe" },
         safeProtocols: { https: true, http: false, file: false, javascript: false, data: false }
       },
-      renderActions: { safeAsciiMath: [AFTER_COMPILE, sanitizeDocument, sanitizeMath] }
+      renderActions: {
+        checkMathInputs: [BEFORE_COMPILE, validateInputs, validateInput],
+        safeAsciiMath: [AFTER_COMPILE, sanitizeDocument, sanitizeItem]
+      }
     };
   }
+  function validateInputs(document2) {
+    let count = 0;
+    for (const math of document2.math) {
+      if (++count > limits.MATH_EXPRESSIONS) throw new Error("Math expression count exceeds limit");
+      validateInput(math);
+    }
+  }
+  function validateInput(math) {
+    validateMathInput(math.math);
+  }
   function sanitizeDocument(document2) {
-    for (const math of document2.math) sanitizeMath(math, document2);
+    let nodes = 0;
+    for (const math of document2.math) {
+      nodes += sanitizeMath(math, document2);
+      if (nodes > limits.MATH_NODES) throw new Error("Math document exceeds complexity limits");
+    }
   }
   function sanitizeMath(math, document2) {
+    const count = validateTree(
+      math.root,
+      (node) => node.childNodes,
+      limits.MATH_NODES,
+      limits.MATH_DEPTH,
+      "Compiled math"
+    );
+    math.root.walkTree((node) => {
+      if (node.kind === "merror") throw new Error("Invalid math expression");
+    });
     document2.safe.sanitize(math, document2);
+    return count;
+  }
+  function sanitizeItem(math, document2) {
+    sanitizeMath(math, document2);
   }
 
   // browser-entry.js
@@ -795,13 +875,16 @@
     loader: { load: ["input/asciimath", "ui/safe"] },
     options: safeMathOptions(),
     startup: { pageReady: renderPage },
-    svg: { fontCache: "local" }
+    svg: { fontCache: "local" },
+    tex: { maxMacros: limits.TEX_MACROS, maxBuffer: limits.TEX_BUFFER }
   };
   window.addEventListener("error", handleScriptError, true);
   async function renderPage() {
     try {
+      validateDom(document.body);
       await window.MathJax.startup.defaultPageReady();
       await waitForAssets();
+      validateDom(document.body);
       if (document.querySelector("mjx-merror")) throw new Error("Invalid math expression");
       renderer.svg = await exportStyledSvg();
       renderer.state = "ready";

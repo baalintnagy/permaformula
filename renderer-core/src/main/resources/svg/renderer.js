@@ -33962,7 +33962,31 @@ var PermMathSvg = (() => {
   var import_html = __toESM(require_html());
   var import_SafeHandler = __toESM(require_SafeHandler());
 
+  // complexity-limits.js
+  var limits = Object.freeze(globalThis.PermMathComplexity);
+  if (!limits) throw new Error("Missing rendering complexity policy");
+  function validateMathInput(source) {
+    if (source.length > limits.MATH_CHARS) throw new Error("Math expression exceeds size limit");
+  }
+  function validateTree(root, children, nodeLimit, depthLimit, label) {
+    const pending = [[root, 0]];
+    let count = 0;
+    while (pending.length) {
+      const [node, depth] = pending.pop();
+      if (++count > nodeLimit || depth > depthLimit)
+        throw new Error(label + " exceeds complexity limits");
+      for (const child of children(node)) pending.push([child, depth + 1]);
+    }
+    return count;
+  }
+  function validateDimensions(width, height) {
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || width > limits.RENDER_DIMENSION || height > limits.RENDER_DIMENSION || width * height > limits.RENDER_AREA) {
+      throw new Error("Rendered dimensions exceed limits");
+    }
+  }
+
   // mathjax-safety.js
+  var BEFORE_COMPILE = 15;
   var AFTER_COMPILE = 25;
   function safeMathOptions() {
     return {
@@ -33970,14 +33994,45 @@ var PermMathSvg = (() => {
         allow: { URLs: "safe", classes: "safe", cssIDs: "safe", styles: "safe" },
         safeProtocols: { https: true, http: false, file: false, javascript: false, data: false }
       },
-      renderActions: { safeAsciiMath: [AFTER_COMPILE, sanitizeDocument, sanitizeMath] }
+      renderActions: {
+        checkMathInputs: [BEFORE_COMPILE, validateInputs, validateInput],
+        safeAsciiMath: [AFTER_COMPILE, sanitizeDocument, sanitizeItem]
+      }
     };
   }
+  function validateInputs(document3) {
+    let count = 0;
+    for (const math of document3.math) {
+      if (++count > limits.MATH_EXPRESSIONS) throw new Error("Math expression count exceeds limit");
+      validateInput(math);
+    }
+  }
+  function validateInput(math) {
+    validateMathInput(math.math);
+  }
   function sanitizeDocument(document3) {
-    for (const math of document3.math) sanitizeMath(math, document3);
+    let nodes = 0;
+    for (const math of document3.math) {
+      nodes += sanitizeMath(math, document3);
+      if (nodes > limits.MATH_NODES) throw new Error("Math document exceeds complexity limits");
+    }
   }
   function sanitizeMath(math, document3) {
+    const count = validateTree(
+      math.root,
+      (node) => node.childNodes,
+      limits.MATH_NODES,
+      limits.MATH_DEPTH,
+      "Compiled math"
+    );
+    math.root.walkTree((node) => {
+      if (node.kind === "merror") throw new Error("Invalid math expression");
+    });
     document3.safe.sanitize(math, document3);
+    return count;
+  }
+  function sanitizeItem(math, document3) {
+    sanitizeMath(math, document3);
   }
 
   // render-formula.js
@@ -33989,8 +34044,22 @@ var PermMathSvg = (() => {
     ...safeMathOptions()
   });
   function render(formula) {
+    validateMathInput(formula);
     const container = document2.convert(formula, { display: true });
-    return adaptor.outerHTML(adaptor.firstChild(container));
+    const svg = adaptor.firstChild(container);
+    validateTree(
+      svg,
+      (node) => adaptor.childNodes(node),
+      limits.RENDER_NODES,
+      limits.RENDER_DEPTH,
+      "Math SVG"
+    );
+    const width = parseFloat(adaptor.getAttribute(svg, "width")) * limits.EX_PIXELS;
+    const height = parseFloat(adaptor.getAttribute(svg, "height")) * limits.EX_PIXELS;
+    validateDimensions(width, height);
+    const result = adaptor.outerHTML(svg);
+    if (result.length > limits.SVG_BYTES) throw new Error("SVG exceeds size limit");
+    return result;
   }
   return __toCommonJS(render_formula_exports);
 })();

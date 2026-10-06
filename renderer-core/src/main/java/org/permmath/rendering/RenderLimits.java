@@ -25,6 +25,9 @@ public final class RenderLimits {
                     if (request.getFormula().getFormula().isBlank() || request.getFormula().getFormulaBytes().size() > MAX_CONTENT_BYTES) {
                         invalid();
                     }
+                    try {
+                        org.permmath.contract.ComplexityPolicy.CURRENT.checkMathInput(request.getFormula().getFormula());
+                    } catch (IllegalArgumentException rejected) { invalid(); }
                 }
             default ->
                 invalid();

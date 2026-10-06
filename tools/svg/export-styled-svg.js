@@ -1,29 +1,50 @@
 import { toSvg } from 'html-to-image';
+import { limits, validateDom, validateDimensions } from './complexity-limits.js';
 
 // html-to-image handles DOM cloning, computed styles and foreignObject serialization.
 // Network and output security remain enforced independently by the renderer and API.
 export async function exportStyledSvg() {
   const source = document.body;
+  validateDom(source);
+  const dimensions = measureContent(source);
+  validateDimensions(dimensions.width, dimensions.height);
   const dataUrl = await toSvg(source, {
-    ...measureContent(source),
+    ...dimensions,
     skipFonts: true,
     filter: includeNode,
   });
-  return normalizeSvg(decodeSvg(dataUrl));
+  if (dataUrl.length > limits.SVG_BYTES * 3 + 128) throw new Error('SVG exceeds size limit');
+  const result = normalizeSvg(decodeSvg(dataUrl));
+  if (result.length > limits.SVG_BYTES) throw new Error('SVG exceeds size limit');
+  return result;
 }
 
 function measureContent(source) {
   const computed = getComputedStyle(source);
+  const bounds = source.getBoundingClientRect();
   const height = Math.max(
     1,
-    Math.ceil(
-      source.getBoundingClientRect().height +
-        parseFloat(computed.marginTop) +
-        parseFloat(computed.marginBottom),
-    ),
+    Math.ceil(bounds.height + parseFloat(computed.marginTop) + parseFloat(computed.marginBottom)),
   );
+  const width = window.innerWidth;
+  validateDimensions(
+    Math.max(width, source.scrollWidth, bounds.width),
+    Math.max(height, source.scrollHeight),
+  );
+  for (const element of source.querySelectorAll('*')) {
+    const rectangle = element.getBoundingClientRect();
+    if (
+      ![rectangle.x, rectangle.y, rectangle.width, rectangle.height].every(Number.isFinite) ||
+      Math.abs(rectangle.x) > limits.ELEMENT_POSITION ||
+      Math.abs(rectangle.y) > limits.ELEMENT_POSITION ||
+      rectangle.width > limits.RENDER_DIMENSION ||
+      rectangle.height > limits.RENDER_DIMENSION
+    ) {
+      throw new Error('Element geometry exceeds limits');
+    }
+  }
   return {
-    width: window.innerWidth,
+    width,
     height,
     // Canvas dimensions include margins; keep the body's original content-box dimensions.
     style: { width: computed.width, height: computed.height },

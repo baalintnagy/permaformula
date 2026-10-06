@@ -39,6 +39,7 @@ public final class SupervisedRenderer implements RenderJobExecutor {
                     settings.browserDirectory().toAbsolutePath().toString(), Long.toString(budget.toMillis()),
                     Boolean.toString(settings.chromiumSandbox()));
             process.environment().clear();
+            process.environment().putAll(org.permmath.contract.ComplexityPolicy.CURRENT.workerEnvironment());
             process.environment().putAll(java.util.Map.of("HOME", System.getProperty("java.io.tmpdir"),
                     "TMPDIR", System.getProperty("java.io.tmpdir"), "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1"));
             process.redirectError(ProcessBuilder.Redirect.INHERIT);
@@ -78,7 +79,8 @@ public final class SupervisedRenderer implements RenderJobExecutor {
                     throw new RenderException(RenderException.Kind.INVALID, "Invalid rendering content");
                 }
                 if (process.exitValue() != 0 || !request.getRequestId().equals(response.getRequestId())
-                        || response.getSvg().isEmpty() || response.getSvg().size() > RenderLimits.MAX_CONTENT_BYTES) {
+                        || response.getSvg().isEmpty() || response.getSvg().size() > org.permmath.contract.ComplexityPolicy.CURRENT
+                                .get(org.permmath.contract.ComplexityPolicy.Limit.SVG_BYTES)) {
                     throw new RenderException(RenderException.Kind.FAILED, "Invalid render process result");
                 }
                 return response;

@@ -28,7 +28,8 @@ public final class RenderJobMain {
                     svg = renderer.render(request.getFormula().getFormula()).getBytes(StandardCharsets.UTF_8);
                 }
             }
-            if (svg.length == 0 || svg.length > RenderLimits.MAX_CONTENT_BYTES) {
+            if (svg.length == 0 || svg.length > org.permmath.contract.ComplexityPolicy.CURRENT
+                    .get(org.permmath.contract.ComplexityPolicy.Limit.SVG_BYTES)) {
                 throw new java.io.IOException("Render output exceeds size limit");
             }
             RenderResponse.newBuilder().setRequestId(request.getRequestId()).setSvg(ByteString.copyFrom(svg))

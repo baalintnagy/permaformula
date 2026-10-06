@@ -7,6 +7,14 @@ import org.xml.sax.InputSource;
 import org.junit.jupiter.api.Test;
 
 class AsciiMathRendererTests {
+    @Test void configuredPolicyReachesGraalMathJaxAndRejectsExpandedTrees() throws Exception {
+        var policy = org.permmath.contract.ComplexityPolicy.load(new java.util.Properties(),
+                java.util.Map.of("PERMMATH_COMPLEXITY_MATH_NODES", "20"));
+        try (var renderer = new AsciiMathRenderer(policy)) {
+            assertThrows(RuntimeException.class, () -> renderer.render("x+".repeat(30) + "x"));
+            assertEquals("svg", parse(renderer.render("x")).getDocumentElement().getLocalName());
+        }
+    }
     @Test
     void rendersStandaloneSvgWithEmbeddedGlyphsAndDifferentFormulaSizes() throws Exception {
         try (var renderer = new AsciiMathRenderer()) {
