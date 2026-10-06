@@ -9,6 +9,7 @@ import java.util.ArrayDeque;
 import java.util.Set;
 import javax.xml.XMLConstants;
 import javax.xml.stream.*;
+import org.apache.commons.lang3.StringUtils;
 import org.owasp.html.FilterUrlByProtocolAttributePolicy;
 import org.permmath.contract.RenderProtocol;
 
@@ -54,12 +55,16 @@ public final class SvgOutputPolicy {
             "mathcolor", "mathbackground");
     private static final FilterUrlByProtocolAttributePolicy HTTPS =
             new FilterUrlByProtocolAttributePolicy(Set.of("https"));
-    private static final int MAX_DEPTH = 128, MAX_ELEMENTS = 20_000, MAX_ATTRIBUTES = 64, MAX_STYLE = 32_768;
+    private static final int MAX_DEPTH = 128;
+    private static final int MAX_ELEMENTS = 20_000;
+    private static final int MAX_ATTRIBUTES = 64;
+    private static final int MAX_STYLE = 32_768;
 
-    private SvgOutputPolicy() {}
+    private SvgOutputPolicy() {
+    }
 
     static String sanitize(String svg) throws IOException {
-        if (svg == null || svg.isBlank() || svg.length() > RenderProtocol.MAX_CONTENT_BYTES
+        if (!StringUtils.isNotBlank(svg) || svg.length() > RenderProtocol.MAX_CONTENT_BYTES
                 || svg.getBytes(StandardCharsets.UTF_8).length > RenderProtocol.MAX_CONTENT_BYTES) {
             throw rejected();
         }
@@ -68,7 +73,9 @@ public final class SvgOutputPolicy {
         factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
         factory.setProperty(XMLInputFactory.IS_REPLACING_ENTITY_REFERENCES, false);
         factory.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, "");
-        factory.setXMLResolver((publicId, systemId, base, namespace) -> { throw new XMLStreamException("External XML resource denied"); });
+        factory.setXMLResolver((publicId, systemId, base, namespace) -> {
+            throw new XMLStreamException("External XML resource denied");
+        });
         XMLStreamReader reader = null;
         XMLStreamWriter writer = null;
         try {
@@ -76,33 +83,50 @@ public final class SvgOutputPolicy {
             var result = new StringWriter();
             writer = XMLOutputFactory.newDefaultFactory().createXMLStreamWriter(result);
             var stack = new ArrayDeque<String>();
-            int count = 0, foreignDepth = 0;
+            int count = 0;
+            int foreignDepth = 0;
             boolean rootSeen = false;
             while (reader.hasNext()) {
                 switch (reader.next()) {
                     case XMLStreamConstants.START_ELEMENT -> {
-                        String ns = reader.getNamespaceURI(), name = reader.getLocalName();
+                        String ns = reader.getNamespaceURI();
+                        String name = reader.getLocalName();
                         if (++count > MAX_ELEMENTS || stack.size() >= MAX_DEPTH
-                                || reader.getAttributeCount() > MAX_ATTRIBUTES || reader.getNamespaceCount() > 8) throw rejected();
+                                || reader.getAttributeCount() > MAX_ATTRIBUTES || reader.getNamespaceCount() > 8) {
+                            throw rejected();
+                        }
                         if (stack.isEmpty()) {
-                            if (rootSeen || !SVG.equals(ns) || !"svg".equals(name)) throw rejected();
+                            if (rootSeen || !SVG.equals(ns) || !"svg".equals(name)) {
+                                throw rejected();
+                            }
                             rootSeen = true;
                         }
                         if (SVG.equals(ns)) {
-                            if (!SVG_ELEMENTS.contains(name)) throw rejected();
+                            if (!SVG_ELEMENTS.contains(name)) {
+                                throw rejected();
+                            }
                             if ("foreignObject".equals(name)) {
-                                if (stack.size() != 1 || foreignDepth != 0) throw rejected();
+                                if (stack.size() != 1 || foreignDepth != 0) {
+                                    throw rejected();
+                                }
                                 foreignDepth = stack.size() + 1;
                             }
                         } else if (foreignDepth == 0 || !(HTML.equals(ns) && HTML_ELEMENTS.contains(name)
-                                || MATH.equals(ns) && MATH_ELEMENTS.contains(name))) throw rejected();
+                                || MATH.equals(ns) && MATH_ELEMENTS.contains(name))) {
+                            throw rejected();
+                        }
                         stack.push(name);
                         writer.writeStartElement(reader.getPrefix(), name, ns);
                         for (int i = 0; i < reader.getNamespaceCount(); i++) {
-                            if (!NAMESPACES.contains(reader.getNamespaceURI(i))) throw rejected();
+                            if (!NAMESPACES.contains(reader.getNamespaceURI(i))) {
+                                throw rejected();
+                            }
                             String prefix = reader.getNamespacePrefix(i);
-                            if (prefix == null) writer.writeDefaultNamespace(reader.getNamespaceURI(i));
-                            else writer.writeNamespace(prefix, reader.getNamespaceURI(i));
+                            if (prefix == null) {
+                                writer.writeDefaultNamespace(reader.getNamespaceURI(i));
+                            } else {
+                                writer.writeNamespace(prefix, reader.getNamespaceURI(i));
+                            }
                         }
                         for (int i = 0; i < reader.getAttributeCount(); i++) {
                             writeAttribute(reader, writer, i, ns, name);
@@ -110,63 +134,109 @@ public final class SvgOutputPolicy {
                     }
                     case XMLStreamConstants.END_ELEMENT -> {
                         writer.writeEndElement();
-                        if (stack.size() == foreignDepth) foreignDepth = 0;
+                        if (stack.size() == foreignDepth) {
+                            foreignDepth = 0;
+                        }
                         stack.pop();
                     }
                     case XMLStreamConstants.CHARACTERS, XMLStreamConstants.CDATA, XMLStreamConstants.SPACE -> {
-                        if (!stack.isEmpty()) writer.writeCharacters(reader.getText());
-                        else if (!reader.isWhiteSpace()) throw rejected();
+                        if (!stack.isEmpty()) {
+                            writer.writeCharacters(reader.getText());
+                        } else if (!reader.isWhiteSpace()) {
+                            throw rejected();
+                        }
                     }
                     case XMLStreamConstants.DTD, XMLStreamConstants.ENTITY_REFERENCE,
-                         XMLStreamConstants.PROCESSING_INSTRUCTION -> throw rejected();
-                    default -> { /* Comments and the XML declaration are omitted. */ }
+                            XMLStreamConstants.PROCESSING_INSTRUCTION -> throw rejected();
+                    default -> {
+                        // Comments and the XML declaration are omitted.
+                    }
                 }
-                if (result.getBuffer().length() > RenderProtocol.MAX_CONTENT_BYTES) throw rejected();
+                if (result.getBuffer().length() > RenderProtocol.MAX_CONTENT_BYTES) {
+                    throw rejected();
+                }
             }
             writer.flush();
             String clean = result.toString();
-            if (!rootSeen || !stack.isEmpty() || clean.getBytes(StandardCharsets.UTF_8).length > RenderProtocol.MAX_CONTENT_BYTES) throw rejected();
+            if (!rootSeen || !stack.isEmpty() || clean.getBytes(StandardCharsets.UTF_8).length > RenderProtocol.MAX_CONTENT_BYTES) {
+                throw rejected();
+            }
             return clean;
         } catch (XMLStreamException | IllegalArgumentException invalid) {
             // Parser/renderer diagnostics can contain the document. Do not propagate their text.
             throw rejected();
         } finally {
-            try { if (reader != null) reader.close(); } catch (XMLStreamException ignored) {}
-            try { if (writer != null) writer.close(); } catch (XMLStreamException ignored) {}
+            try {
+                if (reader != null) {
+                    reader.close();
+                }
+            } catch (XMLStreamException ignored) {
+                // Cleanup must not replace the validation result or rejection.
+            }
+            try {
+                if (writer != null) {
+                    writer.close();
+                }
+            } catch (XMLStreamException ignored) {
+                // Cleanup must not replace the validation result or rejection.
+            }
         }
     }
 
     private static void writeAttribute(XMLStreamReader reader, XMLStreamWriter writer, int index,
             String ns, String element) throws IOException, XMLStreamException {
-        String attrNS = reader.getAttributeNamespace(index), name = reader.getAttributeLocalName(index);
+        String attrNS = reader.getAttributeNamespace(index);
+        String name = reader.getAttributeLocalName(index);
         String value = reader.getAttributeValue(index);
-        if (attrNS == null) attrNS = "";
+        if (attrNS == null) {
+            attrNS = "";
+        }
         if (XMLConstants.XML_NS_URI.equals(attrNS)) {
-            if (!Set.of("space", "lang").contains(name)) throw rejected();
+            if (!Set.of("space", "lang").contains(name)) {
+                throw rejected();
+            }
         } else if (XLINK.equals(attrNS)) {
-            if (!SVG.equals(ns) || !"href".equals(name)) throw rejected();
-        } else if (!attrNS.isEmpty()) throw rejected();
-        else if ("href".equals(name)) {
-            if (!("a".equals(element) || MATH.equals(ns) || SVG.equals(ns) && "use".equals(element))) throw rejected();
+            if (!SVG.equals(ns) || !"href".equals(name)) {
+                throw rejected();
+            }
+        } else if (!attrNS.isEmpty()) {
+            throw rejected();
+        } else if ("href".equals(name)) {
+            if (!("a".equals(element) || MATH.equals(ns) || SVG.equals(ns) && "use".equals(element))) {
+                throw rejected();
+            }
         } else if (!COMMON_ATTRIBUTES.contains(name) && !name.startsWith("aria-") && !name.startsWith("data-")
                 && !(SVG.equals(ns) && SVG_ATTRIBUTES.contains(name))
                 && !(HTML.equals(ns) && HTML_ATTRIBUTES.contains(name))
-                && !(MATH.equals(ns) && MATH_ATTRIBUTES.contains(name))) throw rejected();
+                && !(MATH.equals(ns) && MATH_ATTRIBUTES.contains(name))) {
+            throw rejected();
+        }
 
         if ("href".equals(name)) {
             value = link("a".equals(element) || MATH.equals(ns), value);
         } else if ("style".equals(name)) {
-            if (value.length() > MAX_STYLE) throw rejected();
+            if (value.length() > MAX_STYLE) {
+                throw rejected();
+            }
             value = StylesheetPolicy.outputDeclarations(value);
         } else if (PAINT_ATTRIBUTES.contains(name)) {
             // ph-css handles CSS escapes/functions, including URI values hidden by escaping.
-            String property = name.equals("mathcolor") ? "color" : name.equals("mathbackground") ? "background-color" : name;
+            String property = switch (name) {
+                case "mathcolor" -> "color";
+                case "mathbackground" -> "background-color";
+                default -> name;
+            };
             String declaration = StylesheetPolicy.outputDeclarations(property + ":" + value);
-            if (declaration.isEmpty()) throw rejected();
+            if (declaration.isEmpty()) {
+                throw rejected();
+            }
             value = declaration.substring(declaration.indexOf(':') + 1).replaceFirst(";$", "");
         }
-        if (attrNS.isEmpty()) writer.writeAttribute(name, value);
-        else writer.writeAttribute(reader.getAttributePrefix(index), attrNS, name, value);
+        if (attrNS.isEmpty()) {
+            writer.writeAttribute(name, value);
+        } else {
+            writer.writeAttribute(reader.getAttributePrefix(index), attrNS, name, value);
+        }
     }
 
     static boolean localReference(String value) {
@@ -174,15 +244,25 @@ public final class SvgOutputPolicy {
     }
 
     private static String link(boolean hyperlink, String value) throws IOException {
-        if (localReference(value)) return value;
+        if (localReference(value)) {
+            return value;
+        }
         String clean = HTTPS.apply("a", "href", value);
-        if (!hyperlink || clean == null) throw rejected();
+        if (!hyperlink || clean == null) {
+            throw rejected();
+        }
         try {
             URI uri = URI.create(clean);
-            if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null || uri.getRawUserInfo() != null) throw rejected();
-        } catch (IllegalArgumentException invalid) { throw rejected(); }
+            if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null || uri.getRawUserInfo() != null) {
+                throw rejected();
+            }
+        } catch (IllegalArgumentException invalid) {
+            throw rejected();
+        }
         return clean;
     }
 
-    private static IOException rejected() { return new IOException("Renderer produced invalid SVG output"); }
+    private static IOException rejected() {
+        return new IOException("Renderer produced invalid SVG output");
+    }
 }

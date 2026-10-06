@@ -1,8 +1,10 @@
 package org.permmath.rendering;
 
 import static org.junit.jupiter.api.Assertions.*;
+
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -10,9 +12,11 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class SvgOutputPolicyTests {
     private static final String OPEN = "<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink'>";
-    @TempDir java.nio.file.Path temp;
+    @TempDir
+    Path temp;
 
-    @Test void preservesStyledForeignObjectMathAndGlyphReferences() throws Exception {
+    @Test
+    void preservesStyledForeignObjectMathAndGlyphReferences() throws Exception {
         String svg = OPEN + "<defs><path id='glyph' d='M0 0L1 1'/></defs>"
                 + "<foreignObject width='100%' height='100%'><div xmlns='http://www.w3.org/1999/xhtml'"
                 + " style='color:rgb(220,53,69);display:flex;background:linear-gradient(red,blue);clip:rect(1px,1px,1px,1px)'>"
@@ -38,7 +42,8 @@ class SvgOutputPolicyTests {
         assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize(OPEN + "<a href='" + url + "'><text>x</text></a></svg>"));
     }
 
-    @Test void keepsHttpsHyperlinksButNeverExternalUseReferences() throws Exception {
+    @Test
+    void keepsHttpsHyperlinksButNeverExternalUseReferences() throws Exception {
         assertTrue(SvgOutputPolicy.sanitize(OPEN + "<a xlink:href='https://example.com/math'><text>x</text></a></svg>")
                 .contains("https://example.com/math"));
         assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize(OPEN + "<use href='https://example.com/image.svg#x'/></svg>"));
@@ -57,7 +62,8 @@ class SvgOutputPolicyTests {
         assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize(OPEN + body + "</svg>"));
     }
 
-    @Test void filtersCssUsingParserIncludingEscapesAndNestedUrls() throws Exception {
+    @Test
+    void filtersCssUsingParserIncludingEscapesAndNestedUrls() throws Exception {
         String clean = SvgOutputPolicy.sanitize(OPEN + "<g style=\"color:red;fill:url(#glyph);"
                 + "background-image:url(https://evil.example/a);--bad:url(https://evil.example/b);"
                 + "color:expression(alert(1))\"/></svg>");
@@ -70,7 +76,8 @@ class SvgOutputPolicyTests {
         assertFalse(SvgOutputPolicy.sanitize(OPEN + "<g style='width:calc(1px + url(https://evil.example/x))'/></svg>").contains("evil.example"));
     }
 
-    @Test void rejectsDtdExternalEntitiesAndStylesheetInstructions() throws Exception {
+    @Test
+    void rejectsDtdExternalEntitiesAndStylesheetInstructions() throws Exception {
         var secret = temp.resolve("secret.txt");
         Files.writeString(secret, "private-content");
         assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize("<!DOCTYPE svg [<!ENTITY xxe SYSTEM '"
@@ -79,7 +86,8 @@ class SvgOutputPolicyTests {
         assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize("<!DOCTYPE svg [<!ENTITY x 'x'>]>" + OPEN + "</svg>"));
     }
 
-    @Test void rejectsMalformedWrongRootAndExcessiveNesting() {
+    @Test
+    void rejectsMalformedWrongRootAndExcessiveNesting() {
         assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize("<svg/>"));
         assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize(OPEN + "</g>"));
         assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize(OPEN + "<g>".repeat(128) + "</g>".repeat(128) + "</svg>"));
@@ -87,7 +95,8 @@ class SvgOutputPolicyTests {
         assertThrows(IOException.class, () -> SvgOutputPolicy.sanitize(OPEN + "<g style='" + " ".repeat(32_769) + "'/></svg>"));
     }
 
-    @Test void escapesCdataAsTextInsteadOfReemittingMarkup() throws Exception {
+    @Test
+    void escapesCdataAsTextInsteadOfReemittingMarkup() throws Exception {
         String clean = SvgOutputPolicy.sanitize(OPEN + "<text><![CDATA[<script>alert(1)</script>]]></text></svg>");
         assertFalse(clean.contains("<script>"));
         assertTrue(clean.contains("&lt;script&gt;"));

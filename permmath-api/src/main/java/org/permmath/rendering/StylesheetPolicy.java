@@ -49,7 +49,9 @@ final class StylesheetPolicy {
 
     /** Preserve vector paint and local glyph/clip references in exported presentation styles. */
     static String outputDeclarations(String source) {
-        if (!StringUtils.isNotBlank(source)) return "";
+        if (!StringUtils.isNotBlank(source)) {
+            return "";
+        }
         // The stylesheet parser supports empty custom properties emitted by getComputedStyle;
         // the standalone declaration-list parser does not. Never emit the wrapper or extra rules.
         var sheet = parse(".output{" + source + "}");

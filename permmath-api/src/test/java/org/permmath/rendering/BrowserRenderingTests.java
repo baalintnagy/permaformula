@@ -158,7 +158,9 @@ class BrowserRenderingTests {
             exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
             exchange.getResponseHeaders().set("Referrer-Policy", "no-referrer");
             exchange.sendResponseHeaders(200, svg.length);
-            try (var body = exchange.getResponseBody()) { body.write(svg); }
+            try (var body = exchange.getResponseBody()) {
+                body.write(svg);
+            }
         });
         server.start();
         String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/preview.svg";
