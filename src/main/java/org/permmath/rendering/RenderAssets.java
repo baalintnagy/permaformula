@@ -16,6 +16,7 @@ final class RenderAssets implements AutoCloseable {
     RenderAssets() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
+            exchange.getResponseHeaders().set("X-DNS-Prefetch-Control", "off");
             var path = exchange.getRequestURI().getPath();
             byte[] bytes;
             if (path.startsWith("/document/")) {

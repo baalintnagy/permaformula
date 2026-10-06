@@ -120,7 +120,7 @@ $env:JAVA_HOME = 'C:\Java\jdk25'
 ./scripts/install-rendering.ps1
 ```
 
-The installer uses Playwright 1.58.0's matching Chromium build and stores it under
+The installer uses Playwright 1.59.0's matching Chromium build and stores it under
 `.runtime/browsers` in this project. Rendering resolves that version's executable
 inside the configured `permmath.rendering.browser-directory`; it does not select
 an installed Chrome or Edge browser. The runtime directory is excluded from Git
@@ -131,7 +131,8 @@ mvn verify -Drendering.tests=true
 java --enable-native-access=ALL-UNNAMED -jar target/permmath-service-1.0.jar
 ```
 
-Browser tests require the local Chromium download and run headlessly.
+Browser tests require the local Chromium download and run headlessly. The original
+styled HTML example test also fetches Bootstrap from its public HTTPS CDN.
 They write comparison images to `target/rendering`. Normal unit tests do not
 launch a browser. The Dockerfile installs Linux Chromium and its dependencies;
 no graphical display or virtual framebuffer is required.
@@ -144,7 +145,15 @@ The `/image` response type is `image/svg+xml` instead of
 payload. HTML SVG exports use `foreignObject` with computed styles embedded,
 and keep MathJax formulas as vector paths. They are intended for browsers;
 SVG tools that do not support `foreignObject` should use `/img` for individual
-formulas. Ordinary HTML text still uses the viewer's fonts. External stylesheets are fetched by a controlled HTTP client, with HTTPS on port 443, normal TLS certificate/hostname verification, and public IP addresses only. The connection uses the validated DNS addresses, so it cannot re-resolve an unchecked address. Every redirect is validated; HTTP downgrades, credentials and private/loopback/link-local/reserved destinations are rejected. CSS imports use the same fetcher and resolve relative to the final stylesheet URL. Limits are 8 top-level references, 16 fetched resources including imports, 3 redirects per resource, 3 import levels, 1 MiB per response, 4 MiB combined decoded CSS, and a shared 15-second fetch deadline. Responses must be `text/css`; compressed responses are rejected (requests ask for identity encoding). CSS resource URLs, external fonts, executable expressions and unknown at-rules are removed. Browser contexts block service workers, WebSockets and all requests except the current document and bundled rendering scripts. A restrictive CSP supplies another boundary. Deployment still requires OS-level egress restrictions and browser isolation; these application checks do not replace them.
+formulas. Ordinary HTML text still uses the viewer's fonts.
+
+External stylesheets are fetched by a controlled HTTP client, with HTTPS on port 443, normal TLS certificate/hostname verification, and public IP addresses only. The connection uses the validated DNS addresses, so it cannot re-resolve an unchecked address. Every redirect is validated; HTTP downgrades, credentials and private/loopback/link-local/reserved destinations are rejected. CSS imports use the same fetcher and resolve relative to the final stylesheet URL.
+
+Limits are 8 top-level references, 16 fetched resources including imports, 3 redirects per resource, 3 import levels, 1 MiB per response, 4 MiB combined decoded CSS, and a shared 15-second fetch deadline. Responses must be `text/css`; compressed responses are rejected (requests ask for identity encoding). CSS resource URLs, external fonts, executable expressions and unknown at-rules are removed.
+
+Browser contexts block service workers, WebSockets and all requests except the current document and bundled rendering scripts. Only one document load in the approved main frame is allowed. Reloads and redirects are denied, extra pages close, and any child frame terminates the render, including srcdoc and data frames. Before document scripts run, an initialization script disables workers, service-worker registration, WebRTC constructors, WebTransport, WebSocketStream and window.open. The asset server disables DNS prefetch hints. A restrictive CSP supplies another boundary. Browser channel tests exercise these guards independently of the sanitizer and CSP; they do not establish OS-level network isolation.
+
+Deployment still requires OS-level egress restrictions and browser isolation; these application checks do not replace them.
 
 ### Prerequisites
 

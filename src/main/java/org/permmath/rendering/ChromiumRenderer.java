@@ -7,7 +7,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.net.URI;
-import com.microsoft.playwright.options.ServiceWorkerPolicy;
 
 /** All methods are invoked on the service's single rendering thread. */
 final class ChromiumRenderer implements AutoCloseable {
@@ -36,15 +35,8 @@ final class ChromiumRenderer implements AutoCloseable {
     }
 
     byte[] render(String url, int width) {
-        try (var context = browser.newContext(new Browser.NewContextOptions().setViewportSize(width, 600)
-                .setServiceWorkers(ServiceWorkerPolicy.BLOCK).setAcceptDownloads(false))) {
-            context.route("**/*", route -> {
-                if (allowedRequest(url, route.request().url(), route.request().method(),
-                        route.request().resourceType())) route.resume();
-                else route.abort();
-            });
-            context.routeWebSocket("**/*", socket -> socket.close());
-            var page = context.newPage();
+        try (var context = BrowserChannelPolicy.newContext(browser, width)) {
+            var page = BrowserChannelPolicy.newPage(context, url);
             page.setDefaultTimeout(timeout);
             page.setDefaultNavigationTimeout(timeout);
             page.navigate(url);
