@@ -8,28 +8,16 @@ import com.microsoft.playwright.options.ServiceWorkerPolicy;
  */
 final class BrowserChannelPolicy {
 
-    private static final String DISABLE_CHANNELS = """
-        (() => {
-          const blocked = function () {
-            throw new DOMException('This API is disabled in the renderer', 'SecurityError');
-          };
-          for (const name of ['Worker', 'SharedWorker', 'RTCPeerConnection', 'webkitRTCPeerConnection',
-                              'WebTransport', 'WebSocketStream']) {
-            Object.defineProperty(globalThis, name, {value: blocked, writable: false, configurable: false});
-          }
-          Object.defineProperty(globalThis, 'open', {
-            value: () => null, writable: false, configurable: false
-          });
-          if ('serviceWorker' in navigator) {
-            const deniedRegistration = {
-              value: () => Promise.reject(new DOMException('Service workers are disabled in the renderer', 'SecurityError')),
-              writable: false, configurable: false
-            };
-            Object.defineProperty(ServiceWorkerContainer.prototype, 'register', deniedRegistration);
-            Object.defineProperty(navigator.serviceWorker, 'register', deniedRegistration);
-          }
-        })();
-        """;
+    private static final String DISABLE_CHANNELS = loadGuards();
+
+    private static String loadGuards() {
+        try (var input = BrowserChannelPolicy.class.getResourceAsStream("/browser-guards.js")) {
+            if (input == null) throw new IllegalStateException("Missing browser guards resource");
+            return new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException error) {
+            throw new java.io.UncheckedIOException("Unable to load browser guards", error);
+        }
+    }
 
     static BrowserContext newContext(Browser browser, int width) {
         var context = browser.newContext(new Browser.NewContextOptions().setViewportSize(width, 600)

@@ -169,6 +169,12 @@ adapter in `tools/svg/export-styled-svg.js`. Node.js is needed only to rebuild
 the checked-in bundle. The exporter copies computed styles and retains nested
 MathJax SVG; browser network guards and API-side SVG validation still apply.
 
+Handwritten renderer JavaScript lives in `tools/svg`: browser startup and guards
+are named modules, and both renderers share the MathJax safety configuration.
+Run `npm run check` there to lint, check formatting and verify the checked-in bundles.
+The template contains only trusted script references. Java reads browser results
+through `window.PermMathRenderer`; no Node.js process runs in the service.
+
 Both renderers enable MathJax's safe extension. The API independently validates
 SVG before caching or serving it, using secure JDK StAX XML parsing, OWASP URL
 filtering and ph-css. The presentation policy preserves computed styles,

@@ -58,7 +58,7 @@ These controls reduce native exploit impact and remove render execution from the
 
 ### 7. Tampering with rendering machinery — input and independent output boundaries implemented
 
-Input sanitization and CSP prevent the original supported route for submitted scripts to replace `window.exportStyledSvg`, `window.renderState` or `window.renderSvg`. `GeneratedImageService` now passes both renderer paths through `SvgOutputPolicy` in the API process before caching. The policy parses namespace-aware XML and permits presentation elements/attributes, the required outer foreignObject, XHTML/MathML and embedded glyph fragments. Unknown/active elements and attributes, external glyph references and unsafe hyperlink schemes reject the artifact. CSS is parsed and filtered by ph-css; hyperlink protocols use OWASP Java HTML Sanitizer's URL policy.
+Input sanitization and CSP prevent the original supported route for submitted scripts to replace rendering functions or completion/output state (now grouped in `window.PermMathRenderer`). `GeneratedImageService` passes both renderer paths through `SvgOutputPolicy` in the API process before caching. The policy parses namespace-aware XML and permits presentation elements/attributes, the required outer foreignObject, XHTML/MathML and embedded glyph fragments. Unknown/active elements and attributes, external glyph references and unsafe hyperlink schemes reject the artifact. CSS is parsed and filtered by ph-css; hyperlink protocols use OWASP Java HTML Sanitizer's URL policy.
 
 The ready flag still proves protocol completion, not document safety. The independent output policy provides that boundary. Standard JDK StAX disables DTDs, external entities and external resolution; processing instructions and entity references are rejected. Bounds cover 8 MiB input/output, depth 128, 20,000 elements, 64 attributes per element, eight namespace declarations per element and 32 KiB per style attribute. This does not bound rendering work already performed or API preparation; see 12–13.
 
@@ -77,9 +77,22 @@ Its source adapter handles dimensions, disables font embedding and removes style
 nodes and the library's obsolete foreignObject attribute. DOM cloning and computed-style
 copying are delegated to the library. Existing browser network restrictions and API-side
 SVG validation remain the security boundaries; html-to-image itself is not a sanitizer.
-The HTML cache format is bumped to `html-svg-v6` and includes the exporter version.
+The HTML cache format is `html-svg-v7` and includes the exporter version.
 Browser regressions cover external Bootstrap styles, safe math links, hostile input,
 cross-request styles, vector positioning and viewing with the response CSP.
+
+Handwritten JavaScript now lives in named source modules under `tools/svg`. MathJax
+safety configuration is shared by both entry points; browser startup uses named async
+functions, and guards are loaded independently from a bundled classpath resource.
+Legacy unused `ASCIIMathML.js` and CDN loader resources are removed. ESLint, formatting
+and generated-bundle checks are available through `npm run check`; they are development
+checks and do not introduce a Node.js runtime. Input/output and network policies remain
+the security boundaries.
+
+After the JavaScript cleanup, the full browser-enabled Maven build passed (110 passed,
+one Swagger UI test skipped). The additional MathJax script-load failure regression
+also passed. Source lint/format checks and all three generated-bundle comparisons pass;
+an intentionally stale artifact was correctly rejected by the bundle check.
 
 ### 9. Cross-request state — fresh execution state
 

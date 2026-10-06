@@ -14,6 +14,22 @@ import org.permmath.url.ImageDescriptor;
 @EnabledIfSystemProperty(named = "rendering.tests", matches = "true")
 class BrowserRenderingTests {
     @Test
+    void reportsMathJaxLoadFailureThroughRendererState() throws Exception {
+        String template;
+        try (var input = getClass().getResourceAsStream("/wrapper.html")) {
+            template = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+                    .replace("/mathjax/tex-svg.js", "/mathjax/missing.js");
+        }
+        try (var assets = new RenderAssets();
+                var renderer = new ChromiumRenderer(new BrowserSettings(
+                        Path.of("../.runtime/browsers"), Duration.ofSeconds(30), false))) {
+            var failure = assertThrows(IllegalArgumentException.class,
+                    () -> renderer.render(assets.add(template), 320));
+            assertTrue(failure.getMessage().contains("MathJax failed to load"));
+        }
+    }
+
+    @Test
     void mathJaxSafeModeBlocksGeneratedActiveLinksAndRetainsSafeMath() throws Exception {
         try (var renderer = imageRenderer(new PermMathProperties("http://localhost:8086", 800, 2000),
                 new BrowserSettings(Path.of("../.runtime/browsers"), Duration.ofSeconds(30), false))) {
@@ -47,8 +63,8 @@ class BrowserRenderingTests {
         try (var renderer = imageRenderer(new PermMathProperties("http://localhost:8086", 800, 2000),
                 new BrowserSettings(Path.of("../.runtime/browsers"), Duration.ofSeconds(30), false))) {
             var input = "<div onclick='alert(1)'>Safe `x^2`</div>"
-                    + "<script>window.renderSvg='FORGED';window.renderState='ready';fetch('" + target + "')</script>"
-                    + "<img src='" + target + "' onerror='window.renderSvg=\"FORGED\"'>"
+                    + "<script>window.PermMathRenderer={svg:'FORGED',state:'ready'};fetch('" + target + "')</script>"
+                    + "<img src='" + target + "' onerror='window.PermMathRenderer.svg=\"FORGED\"'>"
                     + "<iframe src='" + target + "'></iframe>";
             try (var image = renderer.getImage(new ImageDescriptor(input, 320, null,
                     "@import url('" + target + "'); div {color:red;background-image:url('" + target + "')}"))

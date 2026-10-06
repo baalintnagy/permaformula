@@ -2,16 +2,26 @@
   "name": "permmath-svg-bundle",
   "private": true,
   "scripts": {
-    "build": "npm run build:formula && npm run build:html",
-    "build:formula": "esbuild renderer.js --bundle --format=iife --global-name=PermMathSvg --platform=browser --define:global=globalThis --outfile=../../renderer-core/src/main/resources/svg/renderer.js",
-    "build:html": "esbuild export-styled-svg.js --bundle --format=iife --platform=browser --outfile=../../renderer-core/src/main/resources/export-svg.js"
+    "build": "node build.mjs",
+    "build:formula": "node build.mjs formula",
+    "build:html": "node build.mjs html",
+    "build:guards": "node build.mjs guards",
+    "lint": "eslint .",
+    "format": "prettier --write \"*.js\" \"*.mjs\" package.json .prettierrc.json",
+    "format:check": "prettier --check \"*.js\" \"*.mjs\" package.json .prettierrc.json",
+    "check:bundles": "node build.mjs --check",
+    "check": "npm run lint && npm run format:check && npm run check:bundles"
   },
   "overrides": {
     "@xmldom/xmldom": "0.9.12"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "esbuild": "0.25.12",
+    "eslint": "10.12.0",
+    "globals": "17.13.0",
     "html-to-image": "1.11.13",
-    "mathjax-full": "3.2.2"
+    "mathjax-full": "3.2.2",
+    "prettier": "3.9.9"
   }
 }

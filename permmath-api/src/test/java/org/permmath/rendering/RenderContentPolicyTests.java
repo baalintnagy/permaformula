@@ -35,7 +35,7 @@ class RenderContentPolicyTests {
     @Test void removesExecutableAndNetworkMarkupBeforeParsing() throws Exception {
         var html = RenderContentPolicy.document("<html><head></head><body></body></html>",
                 new ImageDescriptor("<div class='math' style='color:red'>`x^2`</div>"
-                        + "<script>window.renderState='ready'</script><img src='http://127.0.0.1' onerror='alert(1)'>"
+                        + "<script>window.PermMathRenderer.state='ready'</script><img src='http://127.0.0.1' onerror='alert(1)'>"
                         + "<iframe srcdoc='<script>alert(1)</script>'></iframe><svg onload='alert(1)'></svg>"
                         + "<form action='http://localhost'><input></form><a href='javascript:alert(1)'>link</a>",
                         320, null, null));

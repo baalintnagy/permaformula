@@ -1,3 +1,4 @@
+// Generated from tools/svg/render-formula.js; run npm run build. Do not edit.
 var PermMathSvg = (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -33949,9 +33950,9 @@ var PermMathSvg = (() => {
     }
   });
 
-  // renderer.js
-  var renderer_exports = {};
-  __export(renderer_exports, {
+  // render-formula.js
+  var render_formula_exports = {};
+  __export(render_formula_exports, {
     render: () => render
   });
   var import_mathjax = __toESM(require_mathjax());
@@ -33960,26 +33961,36 @@ var PermMathSvg = (() => {
   var import_liteAdaptor = __toESM(require_liteAdaptor());
   var import_html = __toESM(require_html());
   var import_SafeHandler = __toESM(require_SafeHandler());
+
+  // mathjax-safety.js
+  var AFTER_COMPILE = 25;
+  function safeMathOptions() {
+    return {
+      safeOptions: {
+        allow: { URLs: "safe", classes: "safe", cssIDs: "safe", styles: "safe" },
+        safeProtocols: { https: true, http: false, file: false, javascript: false, data: false }
+      },
+      renderActions: { safeAsciiMath: [AFTER_COMPILE, sanitizeDocument, sanitizeMath] }
+    };
+  }
+  function sanitizeDocument(document3) {
+    for (const math of document3.math) sanitizeMath(math, document3);
+  }
+  function sanitizeMath(math, document3) {
+    document3.safe.sanitize(math, document3);
+  }
+
+  // render-formula.js
   var adaptor = (0, import_liteAdaptor.liteAdaptor)();
   (0, import_SafeHandler.SafeHandler)((0, import_html.RegisterHTMLHandler)(adaptor));
   var document2 = import_mathjax.mathjax.document("", {
     InputJax: new import_asciimath.AsciiMath(),
     OutputJax: new import_svg.SVG({ fontCache: "local" }),
-    safeOptions: {
-      allow: { URLs: "safe", classes: "safe", cssIDs: "safe", styles: "safe" },
-      safeProtocols: { https: true, http: false, file: false, javascript: false, data: false }
-    },
-    renderActions: {
-      // SafeHandler supplies TeX filters, but ASCIIMath also needs its compiled tree filtered.
-      safeAsciiMath: [25, () => {
-      }, (math, doc) => {
-        doc.safe.sanitize(math, doc);
-      }]
-    }
+    ...safeMathOptions()
   });
   function render(formula) {
     const container = document2.convert(formula, { display: true });
     return adaptor.outerHTML(adaptor.firstChild(container));
   }
-  return __toCommonJS(renderer_exports);
+  return __toCommonJS(render_formula_exports);
 })();

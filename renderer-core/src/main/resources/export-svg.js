@@ -1,3 +1,4 @@
+// Generated from tools/svg/browser-entry.js; run npm run build. Do not edit.
 (() => {
   // node_modules/html-to-image/es/util.js
   function resolveUrl(url, baseUrl) {
@@ -732,24 +733,103 @@
   }
 
   // export-styled-svg.js
-  window.exportStyledSvg = async function() {
+  async function exportStyledSvg() {
     const source = document.body;
-    const computed = getComputedStyle(source);
-    const height = Math.max(1, Math.ceil(source.getBoundingClientRect().height + parseFloat(computed.marginTop) + parseFloat(computed.marginBottom)));
     const dataUrl = await toSvg(source, {
+      ...measureContent(source),
+      skipFonts: true,
+      filter: includeNode
+    });
+    return normalizeSvg(decodeSvg(dataUrl));
+  }
+  function measureContent(source) {
+    const computed = getComputedStyle(source);
+    const height = Math.max(
+      1,
+      Math.ceil(
+        source.getBoundingClientRect().height + parseFloat(computed.marginTop) + parseFloat(computed.marginBottom)
+      )
+    );
+    return {
       width: window.innerWidth,
       height,
       // Canvas dimensions include margins; keep the body's original content-box dimensions.
-      style: { width: computed.width, height: computed.height },
-      skipFonts: true,
-      filter: (node) => !["SCRIPT", "LINK", "STYLE"].includes(node.nodeName.toUpperCase())
-    });
-    const svg = new DOMParser().parseFromString(
-      decodeURIComponent(dataUrl.substring(dataUrl.indexOf(",") + 1)),
-      "image/svg+xml"
-    );
+      style: { width: computed.width, height: computed.height }
+    };
+  }
+  function includeNode(node) {
+    return !["SCRIPT", "LINK", "STYLE"].includes(node.nodeName.toUpperCase());
+  }
+  function decodeSvg(dataUrl) {
+    const markup = decodeURIComponent(dataUrl.substring(dataUrl.indexOf(",") + 1));
+    return new DOMParser().parseFromString(markup, "image/svg+xml");
+  }
+  function normalizeSvg(svg) {
     svg.querySelector("foreignObject").removeAttribute("externalResourcesRequired");
     svg.querySelectorAll("script,link,style").forEach((node) => node.remove());
     return new XMLSerializer().serializeToString(svg.documentElement);
+  }
+
+  // mathjax-safety.js
+  var AFTER_COMPILE = 25;
+  function safeMathOptions() {
+    return {
+      safeOptions: {
+        allow: { URLs: "safe", classes: "safe", cssIDs: "safe", styles: "safe" },
+        safeProtocols: { https: true, http: false, file: false, javascript: false, data: false }
+      },
+      renderActions: { safeAsciiMath: [AFTER_COMPILE, sanitizeDocument, sanitizeMath] }
+    };
+  }
+  function sanitizeDocument(document2) {
+    for (const math of document2.math) sanitizeMath(math, document2);
+  }
+  function sanitizeMath(math, document2) {
+    document2.safe.sanitize(math, document2);
+  }
+
+  // browser-entry.js
+  var renderer = { state: "loading", svg: null, error: null };
+  window.PermMathRenderer = renderer;
+  window.MathJax = {
+    loader: { load: ["input/asciimath", "ui/safe"] },
+    options: safeMathOptions(),
+    startup: { pageReady: renderPage },
+    svg: { fontCache: "local" }
   };
+  window.addEventListener("error", handleScriptError, true);
+  async function renderPage() {
+    try {
+      await window.MathJax.startup.defaultPageReady();
+      await waitForAssets();
+      if (document.querySelector("mjx-merror")) throw new Error("Invalid math expression");
+      renderer.svg = await exportStyledSvg();
+      renderer.state = "ready";
+    } catch (error) {
+      failRender(error);
+    }
+  }
+  async function waitForAssets() {
+    await Promise.all([document.fonts.ready, ...Array.from(document.images, waitForImage)]);
+  }
+  function waitForImage(image) {
+    if (image.complete) {
+      return image.naturalWidth ? Promise.resolve() : Promise.reject(new Error("Image failed: " + image.src));
+    }
+    return new Promise((resolve, reject) => {
+      image.addEventListener("load", resolve, { once: true });
+      image.addEventListener("error", () => reject(new Error("Image failed: " + image.src)), {
+        once: true
+      });
+    });
+  }
+  function handleScriptError(event) {
+    if (event.target instanceof HTMLScriptElement && event.target.id === "mathjax-script") {
+      failRender(new Error("MathJax failed to load"));
+    }
+  }
+  function failRender(error) {
+    renderer.error = String(error);
+    renderer.state = "error";
+  }
 })();

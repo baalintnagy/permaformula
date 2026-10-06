@@ -46,11 +46,11 @@ final class ChromiumRenderer implements AutoCloseable {
             page.setDefaultTimeout(timeout);
             page.setDefaultNavigationTimeout(timeout);
             page.navigate(url);
-            page.waitForFunction("window.renderState === 'ready' || window.renderState === 'error'");
-            if ("error".equals(page.evaluate("window.renderState"))) {
-                throw new IllegalArgumentException("Typesetting failed: " + page.evaluate("window.renderError"));
+            page.waitForFunction("window.PermMathRenderer?.state === 'ready' || window.PermMathRenderer?.state === 'error'");
+            if ("error".equals(page.evaluate("window.PermMathRenderer.state"))) {
+                throw new IllegalArgumentException("Typesetting failed: " + page.evaluate("window.PermMathRenderer.error"));
             }
-            return ((String) page.evaluate("window.renderSvg")).getBytes(StandardCharsets.UTF_8);
+            return ((String) page.evaluate("window.PermMathRenderer.svg")).getBytes(StandardCharsets.UTF_8);
         }
     }
 

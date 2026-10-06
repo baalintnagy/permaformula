@@ -23,7 +23,7 @@ MathJax's upstream license is in `renderer-core/src/main/resources/mathjax/LICEN
 `export-styled-svg.js` is the source adapter for html-to-image 1.11.13. Its bundled
 output is `renderer-core/src/main/resources/export-svg.js`; edit the adapter and
 run `npm run build:html`, rather than editing the generated file. `npm run build`
-rebuilds both the formula and HTML exporters. No Node process is needed at runtime.
+rebuilds the formula, HTML and browser-guard bundles. No Node process is needed at runtime.
 
 The HTML exporter delegates DOM cloning, computed-style copying and SVG serialization
 to html-to-image. The adapter preserves our output dimensions, disables font downloads,
@@ -32,3 +32,35 @@ and remote resources remain restricted by the existing input and browser policie
 Pseudo-element stylesheet nodes are omitted, matching the previous exporter contract.
 Final SVG is still independently validated in the API. The library's MIT license is
 included in `renderer-core/src/main/resources/html-to-image-LICENSE`.
+
+## Source organization
+
+| Source | Purpose |
+|---|---|
+| `render-formula.js` | GraalJS ASCIIMath entry point, exposed as `PermMathSvg.render`. |
+| `browser-entry.js` | Browser MathJax setup, readiness, export and error handling. |
+| `export-styled-svg.js` | Named functions for content measurement and html-to-image export normalization. |
+| `mathjax-safety.js` | Shared safe protocols and ASCIIMath render action for both entry points. |
+| `browser-guards.js` | Browser channel restrictions installed before page scripts. |
+| `build.mjs` | Build or verify checked-in bundles with esbuild. |
+
+The browser communicates with Java through `window.PermMathRenderer` (`state`, `svg`,
+`error`). The HTML template contains only references to trusted scripts; it contains
+no application JavaScript or inline event handlers. Playwright loads the generated
+guard resource directly, so it does not depend on the page or asset server.
+
+## Checks
+
+```sh
+npm run format
+npm run build
+npm run check
+```
+
+`check` runs ESLint, Prettier's formatting check and an in-memory esbuild comparison
+against all three checked-in bundles. It fails on missing/stale bundles without
+rewriting them. Generated files carry notices identifying their source; do not
+format or lint vendor bundles. Dependencies are pinned in `package-lock.json`.
+Run these checks before the browser-enabled Maven verification. Node is required
+for JavaScript development checks only; ordinary Maven builds use the checked-in
+resources. The full MathJax distribution remains intact for dynamic extension loading.

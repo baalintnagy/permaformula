@@ -49,7 +49,7 @@ public class GeneratedImageService {
                 Objects.requireNonNullElse(descriptor.imageWidth(), defaults.defaultImageWidth()),
                 Objects.requireNonNullElse(descriptor.styleRefs(), List.of()),
                 Objects.requireNonNullElse(descriptor.style(), ""));
-        return store.getOrGenerate(key("html-svg-v6:html-to-image-1.11.13:presentation-policy-3:" + SvgOutputPolicy.VERSION, effective), () -> {
+        return store.getOrGenerate(key("html-svg-v7:html-to-image-1.11.13:presentation-policy-3:" + SvgOutputPolicy.VERSION, effective), () -> {
             try (var input = htmlRenderer.getImage(effective).getInputStream()) {
                 return SvgOutputPolicy.sanitize(new String(input.readAllBytes(), StandardCharsets.UTF_8));
             }
