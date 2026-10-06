@@ -53,7 +53,7 @@ final class StylesheetFetcher {
 
     private static final class Budget {
 
-        final long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(15);
+        final long deadline = System.nanoTime() + WorkDeadline.remainingNanos(java.time.Duration.ofSeconds(15));
 
         int resources;
 
@@ -80,6 +80,7 @@ final class StylesheetFetcher {
     }
 
     private String expand(URI uri, Budget budget, java.util.Set<URI> ancestors, int depth) throws IOException {
+        checkDeadline(budget.deadline);
         if (depth > MAX_IMPORT_DEPTH || ++budget.resources > MAX_RESOURCES) {
             throw new IllegalArgumentException("Stylesheet import limit exceeded");
         }
@@ -88,6 +89,7 @@ final class StylesheetFetcher {
         }
         try {
             var downloaded = downloader.get(uri, budget.deadline);
+            checkDeadline(budget.deadline);
             budget.bytes += downloaded.css().getBytes(StandardCharsets.UTF_8).length;
             if (budget.bytes > 4 * MAX_BYTES) {
                 throw new IllegalArgumentException("Combined stylesheets exceed 4 MiB");
@@ -108,9 +110,17 @@ final class StylesheetFetcher {
             }
             sheet.removeAllImportRules();
             output.append(new com.helger.css.writer.CSSWriter(writer).getCSSAsString(sheet));
-            return StylesheetPolicy.stylesheet(output.toString());
+            var result = StylesheetPolicy.stylesheet(output.toString());
+            checkDeadline(budget.deadline);
+            return result;
         } finally {
             ancestors.remove(uri);
+        }
+    }
+
+    private static void checkDeadline(long deadline) {
+        if (System.nanoTime() >= deadline || Thread.currentThread().isInterrupted()) {
+            throw WorkDeadline.timedOut();
         }
     }
 
@@ -120,7 +130,7 @@ final class StylesheetFetcher {
             for (int redirects = 0; ; redirects++) {
                 long remaining = deadline - System.nanoTime();
                 if (remaining <= 0) {
-                    throw new IOException("Stylesheet fetching timed out");
+                    throw WorkDeadline.timedOut();
                 }
                 var manager = PoolingHttpClientConnectionManagerBuilder.create()
                         .setDnsResolver(new PublicDnsResolver())
@@ -156,6 +166,9 @@ final class StylesheetFetcher {
                     }
                 }
             }
+        } catch (IOException failure) {
+            checkDeadline(deadline);
+            throw failure;
         }
     }
 

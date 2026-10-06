@@ -87,7 +87,7 @@ public final class GrpcRenderGateway implements RenderGateway, AutoCloseable {
             throw new IllegalArgumentException("Rendering content is too large");
         }
         try {
-            var response = RendererGrpc.newBlockingStub(channel).withDeadlineAfter(timeout.toNanos(), TimeUnit.NANOSECONDS)
+            var response = RendererGrpc.newBlockingStub(channel).withDeadlineAfter(WorkDeadline.remainingNanos(timeout), TimeUnit.NANOSECONDS)
                     .render(request);
             if (!request.getRequestId().equals(response.getRequestId()) || response.getSvg().isEmpty()
                     || response.getSvg().size() > RenderProtocol.MAX_CONTENT_BYTES) {

@@ -1,7 +1,5 @@
 package org.permmath.rendering;
 
-import org.apache.commons.lang3.StringUtils;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -32,6 +30,8 @@ public class GeneratedImageService {
     private final PermMathProperties defaults;
 
     private final ObjectMapper mapper;
+    @org.springframework.beans.factory.annotation.Autowired
+    private ApiWorkService work = new ApiWorkService(ApiWorkProperties.defaults());
 
 
     public GeneratedImageService(GeneratedImageStore store, ImageRendererService htmlRenderer,
@@ -45,25 +45,28 @@ public class GeneratedImageService {
     }
 
     public String getImage(@Valid @NotNull ImageDescriptor descriptor) throws IOException {
-        var effective = new ImageDescriptor(descriptor.forumla(),
+        var prepared = work.prepare(() -> {
+            var effective = new ImageDescriptor(descriptor.forumla(),
                 Objects.requireNonNullElse(descriptor.imageWidth(), defaults.defaultImageWidth()),
                 Objects.requireNonNullElse(descriptor.styleRefs(), List.of()),
                 Objects.requireNonNullElse(descriptor.style(), ""));
-        return store.getOrGenerate(key("html-svg-v7:html-to-image-1.11.13:presentation-policy-3:" + SvgOutputPolicy.VERSION, effective), () -> {
-            try (var input = htmlRenderer.getImage(effective).getInputStream()) {
+            return new Prepared(effective, key("html-svg-v7:html-to-image-1.11.13:presentation-policy-3:" + SvgOutputPolicy.VERSION, effective));
+        });
+        return store.getOrGenerate(prepared.key(), () -> work.generate(() -> {
+            try (var input = htmlRenderer.getImage(prepared.descriptor()).getInputStream()) {
                 return SvgOutputPolicy.sanitize(new String(input.readAllBytes(), StandardCharsets.UTF_8));
             }
-        });
+        }));
     }
 
     public String getImg(@NotBlank String formula) throws IOException {
-        org.permmath.validation.InputLimits.formula(formula);
-        if (!StringUtils.isNotBlank(formula)) {
-            throw new IllegalArgumentException("Formula must not be blank");
-        }
-        var identity = new ImageDescriptor(formula, null, null, null);
-        return store.getOrGenerate(key("formula-svg-v2:mathjax-3.2.2:" + SvgOutputPolicy.VERSION, identity),
-                () -> SvgOutputPolicy.sanitize(formulaRenderer.render(formula)));
+        var cacheKey = work.prepare(() -> {
+            org.permmath.validation.InputLimits.formula(formula);
+            var identity = new ImageDescriptor(formula, null, null, null);
+            return key("formula-svg-v2:mathjax-3.2.2:" + SvgOutputPolicy.VERSION, identity);
+        });
+        return store.getOrGenerate(cacheKey,
+                () -> work.generate(() -> SvgOutputPolicy.sanitize(formulaRenderer.render(formula))));
     }
 
     private String key(String format, ImageDescriptor descriptor) throws IOException {
@@ -76,4 +79,6 @@ public class GeneratedImageService {
             throw new IllegalStateException(impossible);
         }
     }
+
+    private record Prepared(ImageDescriptor descriptor, String key) { }
 }

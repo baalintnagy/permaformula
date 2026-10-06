@@ -111,4 +111,28 @@ class CaffeineImageStoreTests {
     private static CaffeineImageStore store(long bytes, AtomicLong time) {
         return new CaffeineImageStore(new ImageCacheProperties(DataSize.ofBytes(bytes), Duration.ofHours(1)), time::get);
     }
+
+    @Test
+    void duplicateWaiterTimesOutWithoutCancellingOrReplacingSharedGeneration() throws Exception {
+        var store = store(65536, new AtomicLong());
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        try (var caller = Executors.newSingleThreadExecutor()) {
+            var active = caller.submit(() -> store.getOrGenerate("same", () -> {
+                entered.countDown();
+                try { release.await(); } catch (InterruptedException interrupted) { throw new IOException(interrupted); }
+                return "done";
+            }));
+            try {
+                assertTrue(entered.await(2, TimeUnit.SECONDS));
+                try (var scope = org.permmath.rendering.WorkDeadline.open(Duration.ofMillis(100))) {
+                    assertEquals(504, assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                            () -> store.getOrGenerate("same", () -> { throw new AssertionError("duplicate generation"); }))
+                            .getStatusCode().value());
+                }
+            } finally { release.countDown(); }
+            assertEquals("done", active.get(2, TimeUnit.SECONDS));
+            assertEquals("done", store.getOrGenerate("same", () -> { throw new AssertionError("must remain cached"); }));
+        }
+    }
 }

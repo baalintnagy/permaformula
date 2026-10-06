@@ -18,6 +18,8 @@ public class CaffeineImageStore implements GeneratedImageStore {
     private static final Logger log = LoggerFactory.getLogger(CaffeineImageStore.class);
 
     private final Cache<String, String> cache;
+    private final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CompletableFuture<String>> loading
+            = new java.util.concurrent.ConcurrentHashMap<>();
 
     @Autowired
     public CaffeineImageStore(ImageCacheProperties properties) {
@@ -34,6 +36,44 @@ public class CaffeineImageStore implements GeneratedImageStore {
 
     @Override
     public String getOrGenerate(String key, Generator generator) throws IOException {
+        String cached = cache.getIfPresent(key);
+        if (cached != null) {
+            log.info("event=cache_hit key={} source=cached", key);
+            return cached;
+        }
+        var completion = new java.util.concurrent.CompletableFuture<String>();
+        var pending = loading.putIfAbsent(key, completion);
+        if (pending != null) {
+            try {
+                return pending.get(org.permmath.rendering.WorkDeadline.remainingNanos(java.time.Duration.ofSeconds(30)),
+                        TimeUnit.NANOSECONDS);
+            } catch (java.util.concurrent.TimeoutException timeout) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.GATEWAY_TIMEOUT, "Waiting for image exceeded request deadline");
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.GATEWAY_TIMEOUT, "Image wait interrupted");
+            } catch (java.util.concurrent.ExecutionException failed) {
+                if (failed.getCause() instanceof IOException checked) throw checked;
+                if (failed.getCause() instanceof RuntimeException runtime) throw runtime;
+                if (failed.getCause() instanceof Error error) throw error;
+                throw new IOException("Image generation failed", failed.getCause());
+            }
+        }
+        try {
+            String result = load(key, generator);
+            completion.complete(result);
+            return result;
+        } catch (IOException | RuntimeException | Error failed) {
+            completion.completeExceptionally(failed);
+            throw failed;
+        } finally {
+            loading.remove(key, completion);
+        }
+    }
+
+    private String load(String key, Generator generator) throws IOException {
         // cache.get keeps lookup and generation atomic. Other callers may reuse an in-flight load.
         boolean[] generated = { false };
         try {

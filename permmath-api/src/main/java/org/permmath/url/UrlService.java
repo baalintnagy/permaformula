@@ -43,12 +43,19 @@ public class UrlService {
 
     @Autowired
     private StringCompressionService stringCompressionService;
+    @Autowired
+    private org.permmath.rendering.ApiWorkService work = new org.permmath.rendering.ApiWorkService(
+            org.permmath.rendering.ApiWorkProperties.defaults());
 
     public String getImageUrl(
             @NotBlank String formula,
             @Nullable @ValidImageWidth Integer imageWidth,
             @Nullable List<@NotBlank String> styleRefs,
             @Nullable String style) throws IOException {
+        return work.prepare(() -> createImageUrl(formula, imageWidth, styleRefs, style));
+    }
+
+    private String createImageUrl(String formula, Integer imageWidth, List<String> styleRefs, String style) throws IOException {
 
         var imageJson = objectMapper.writeValueAsString(
                 new ImageDescriptor(
@@ -63,6 +70,10 @@ public class UrlService {
 
     // Request parameters have already been URL-decoded by Spring.
     public ImageDescriptor decodeUbcq(@NotBlank String ubcq) throws IOException {
+        return work.prepare(() -> decode(ubcq));
+    }
+
+    private ImageDescriptor decode(String ubcq) throws IOException {
         try {
             var json = stringCompressionService.decompress(ubcq);
             var descriptor = DESCRIPTOR_MAPPER.readValue(json, ImageDescriptor.class);

@@ -11,6 +11,11 @@ permmath:
     image-cache:
         maximum-size: 256MB
         expire-after-access: 60d
+    api-work:
+        preparation-concurrency: 4
+        generation-concurrency: 2
+        fetch-concurrency: 2
+        timeout: 30s
     rendering:
         target: localhost:9090
         timeout: 30s

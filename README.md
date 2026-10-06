@@ -156,6 +156,39 @@ Opt-in browser tests run with `mvn verify '-Drendering.tests=true'` after instal
 
 Both HTML and formula rendering use gRPC with request IDs and deadlines. Occupied renderer capacity returns HTTP 503; a deadline returns 504. Each job uses fresh execution state. Content/output are bounded at 16 MiB. `RenderGateway` separates API generation from the transport, and `RenderJobExecutor` separates rendering from gRPC. A future RabbitMQ consumer can reuse the contract/core; new async endpoints and pending indicator images remain future work.
 
+API work also uses immediate admission with no queue:
+
+```yaml
+permmath:
+    api-work:
+        preparation-concurrency: 4
+        generation-concurrency: 2
+        fetch-concurrency: 2
+        timeout: 30s
+```
+
+Preparation slots cover descriptor decoding, permalink creation and cache-identity
+serialization. Generation slots cover unique cache misses, including HTML/CSS
+preparation, rendering and final SVG validation. Fetch slots separately cover
+stylesheet batches and their imports; documents without references do not use them.
+These limits apply per API instance. Occupied capacity returns HTTP 503 immediately.
+The renderer still admits one job by default; overlapping generations may therefore
+receive its own HTTP 503. These settings do not increase renderer concurrency.
+
+One monotonic deadline starts in the servlet filter and follows work across its
+threads. Preparation, fetches, shared-image waits and gRPC use the remaining
+budget; expired work returns HTTP 504. The stylesheet network deadline remains at
+most 15 seconds and the renderer deadline at most its configured timeout.
+Cache hits skip generation and fetching; decoding and identity preparation still
+need preparation admission. A timed-out duplicate waiter does not cancel the shared
+generation. Failed or timed-out generations are not cached.
+
+Cancellation interrupts workers and gRPC. If DNS or a parser ignores interruption,
+its admission slot remains occupied until that work exits. This bounds lingering
+work but cannot forcibly stop it inside the API JVM. The deadline covers application
+work, not slow HTTP request transmission or response delivery. Proxy rate/connection
+limits, API egress rules and parser/layout complexity limits remain separate controls.
+
 Rendering waits for MathJax, fonts, and images, with a configurable timeout
 (`permmath.rendering.timeout`, default `30s`). User HTML is sanitized with a presentation element/attribute allowlist. External and inline CSS are parsed with ph-css and filtered by a presentation property/function allowlist. CSS variables, responsive media rules, supports rules, cascade layers and nested styles are retained. External stylesheets retain their application order; inline CSS follows them. Submitted images, SVG, links, scripts, forms and embedded documents are removed.
 
@@ -192,7 +225,7 @@ Limits are 8 top-level references, 16 fetched resources including imports, 3 red
 
 Browser contexts block service workers, WebSockets and all requests except the current document and bundled rendering scripts. Only one document load in the approved main frame is allowed. Reloads and redirects are denied, extra pages close, and any child frame terminates the render, including srcdoc and data frames. Before document scripts run, an initialization script disables workers, service-worker registration, WebRTC constructors, WebTransport, WebSocketStream and window.open. The asset server disables DNS prefetch hints. A restrictive CSP supplies another boundary. Browser channel tests exercise these guards independently of the sanitizer and CSP; they do not establish OS-level network isolation.
 
-Docker Compose isolates the renderer in a separate container with no network access. The API fetcher still needs deployment egress and admission controls.
+Docker Compose isolates the renderer in a separate container with no network access. The API fetcher has bounded admission but still needs independent deployment egress and client rate controls.
 
 ### Docker deployment
 
@@ -254,5 +287,5 @@ Existing permalinks exceeding these limits are rejected. JSON escaping counts to
 the serialized JSON budget. Web-server/proxy URL limits may be lower and reject a
 request before these application limits apply.
 
-These limits bound individual inputs. Concurrent API preparation/fetching and
-HTML/CSS/math complexity still require separate admission and complexity controls.
+These limits bound individual inputs. API admission and deadlines also bound
+concurrent preparation/fetching; HTML/CSS/math complexity needs additional controls.

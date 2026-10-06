@@ -4,7 +4,7 @@ Reviewed the current Maven modules, rendering policies, gRPC service and Docker 
 
 This is a source review with focused local rendering probes, not a penetration test, a full dependency vulnerability scan or verification of production infrastructure. Deployment controls outside this repository remain unverified. Previous browser-enabled Maven verification: 111 tests, 110 passed and one opt-in Swagger UI test skipped, including output-policy and response-header regressions. Existing coverage includes gRPC transport/cancellation, correlation and supervised process termination/recovery. Styled SVG is also checked visually and in Chromium both as an image and as a document with the delivery CSP.
 
-The submitted HTML/CSS execution paths have been substantially hardened, and external styles remain supported through controlled fetching. Generated SVG now passes an independent API-side presentation policy before caching or delivery. Decompression and endpoint payload limits are now implemented (11). The most urgent remaining issues are **API preparation/fetch admission and parsing complexity (12–13)**.
+The submitted HTML/CSS execution paths have been substantially hardened, and external styles remain supported through controlled fetching. Generated SVG now passes an independent API-side presentation policy before caching or delivery. Decompression and endpoint payload limits are now implemented (11). The most urgent remaining issues are **parsing/layout complexity and non-cooperative API work (12–13)**.
 
 ## Findings
 
@@ -34,7 +34,7 @@ The fetcher requires HTTPS on port 443, rejects credentials/fragments and inappr
 
 Current bounds: eight top-level references, 16 resources including imports, import depth three, three redirects per resource, 1 MiB per response and 4 MiB combined decoded CSS measured after UTF-8 re-encoding. Requests share a 15-second network deadline with five-second connection/socket/response timeouts.
 
-Compose disables renderer networking; external CSS remains fetched in the API. Remaining: no independent API egress restriction is defined. Arbitrary public HTTPS hosts are allowed, so the API can still be abused as a bounded public-site fetcher. Apply fetch concurrency/rate limits; add a domain allowlist if product requirements permit it. Use network rules to reject internal/metadata destinations independently of application checks. Blocking DNS resolution and CSS processing are not proven to obey the network cancellation deadline; see 13. [OWASP SSRF guidance](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html).
+Compose disables renderer networking; external CSS remains fetched in the API. Remaining: no independent API egress restriction is defined. Arbitrary public HTTPS hosts are allowed, so the API can still be abused as a bounded public-site fetcher. Fetch concurrency is now bounded; apply per-client rate limits; add a domain allowlist if product requirements permit it. Use network rules to reject internal/metadata destinations independently of application checks. Blocking DNS resolution and CSS processing are not proven to obey the network cancellation deadline; see 13. [OWASP SSRF guidance](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html).
 
 ### 4. Alternative browser network channels — application guards and isolated renderer network boundary implemented
 
@@ -122,7 +122,7 @@ serialization. Text limits count UTF-8 bytes and preserve accepted whitespace.
 Oversized existing permalinks are intentionally rejected. Proxy/server query
 limits may be smaller. Tests cover byte boundaries, concatenated-member expansion,
 compression bombs, malformed descriptors, endpoint rejection and no renderer call
-on invalid inputs. Concurrency and parsing/layout complexity remain open under 12–13.
+on invalid inputs. Admission is implemented under 13; parsing/layout complexity remains open under 12.
 
 ### 12. Expensive layout, math and parsing — partially mitigated, high-priority gaps
 
@@ -132,23 +132,42 @@ Prepared HTML/formula and SVG output are capped at 16 MiB at the RPC/process bou
 
 Add limits before parsing/rendering, enforce height/output limits, and bound total work with worker CPU/memory limits. Reject oversized output before returning/caching it; checking cache weight after generation is too late.
 
-### 13. Deadlines, queues and work cancellation — rendering bounded; API preparation gaps remain
+### 13. Deadlines, queues and work cancellation — API admission and deadlines implemented
 
 The unbounded single-thread rendering queue is removed. SupervisedRenderer uses immediate bounded admission (one job by default), returning overload as gRPC RESOURCE_EXHAUSTED / HTTP 503. RPC deadlines are bounded by the service's 30-second maximum. Cancellation interrupts the supervisor, which kills the child and known descendants. Both formula and HTML execution are covered. Fatal jobs restart the container to clear orphan native processes. Process termination/recovery and RPC cancellation have regression tests.
 
-HTML sanitization, external fetching and CSS parsing still run in the API before the RPC deadline. HTTP concurrency, unique cache misses and fetch/preparation admission are not bounded here. Blocking DNS/CSS parsing are not proven to stop under the stylesheet network timer. Add end-to-end preparation budgets, input/complexity limits and API admission controls.
+The API now has configurable immediate admission: four input-preparation operations,
+two unique image generations and two stylesheet batches by default, per instance.
+There is no work queue; occupied capacity returns HTTP 503. Preparation covers
+decompression/JSON decoding, URL creation and identity serialization; generation
+covers HTML/CSS preparation, rendering and final SVG validation. Fetch admission
+covers imports and is skipped for documents without stylesheet references.
+
+A servlet-filter deadline defaults to 30 seconds and is propagated to workers.
+Fetches use the smaller of their 15-second budget and the remaining API deadline;
+gRPC uses the smaller of the rendering timeout and remaining API deadline. Expiry
+returns HTTP 504. Duplicate cache waiters have bounded waits and cannot cancel
+another caller's generation. Cache hits bypass generation/fetch admission but
+still require decoding/identity preparation. Failed or timed-out loads are not cached.
+
+Worker interruption and network/gRPC cancellation are attempted on timeout. Slots
+are released only after the operation exits, so non-cooperative DNS/parsers cannot
+create unlimited lingering tasks through repeated timeouts. They can still retain
+slots and consume CPU within the API JVM; stronger termination guarantees require
+process isolation. Complexity limits (12), per-client request rates, proxy connection
+limits, response delivery and independent API egress restrictions remain open.
 
 ### 14. Cache abuse and persistence — partially mitigated
 
 Caffeine has a configurable weight budget (256 MiB by default, capped at 25% of JVM maximum heap), estimates string/key memory, shares generation for identical keys and does not cache failed generations. HTML keys include `presentation-policy-3`; both HTML and formula keys now also include `svg-output-policy-1`, with updated format versions. Expiry is 60 days **after access**, so repeated hits can extend residency.
 
-Renderer admission, 16 MiB output caps and final validation before storage bound artifact size and reject unsafe output, but unique cache misses still cause unbounded API preparation pressure; cache weight does not cap transient API allocations. Add miss rate/admission limits. External stylesheet contents can change without a URL/key change; define refresh/TTL semantics if freshness matters. Current storage is in-memory; future persistence would require purge/quarantine support.
+Renderer/API admission, 16 MiB output caps and final validation before storage bound artifact size and concurrent generation. Cache weight does not cap transient API allocations; per-client miss rate limits remain useful. External stylesheet contents can change without a URL/key change; define refresh/TTL semantics if freshness matters. Current storage is in-memory; future persistence would require purge/quarantine support.
 
 ### 15. Formula-only renderer abuse — supervised isolation and output policy implemented
 
 AsciiMathRenderer passes formula as a value and disables Java host access/class lookup. It now runs in a fresh disposable JVM inside the renderer container. Formula input/output are capped at 16 MiB, job heap at 1 GiB, and the supervisor terminates stalled jobs under the RPC/service deadline. Container limits cover native allocations. /img still launches neither Chromium nor external CSS fetching.
 
-This removes unbounded formula execution from the API process. The common API-side SVG policy applies to `/img` as well as styled HTML, and its GraalJS bundle now uses MathJax safe filtering. API admission and complexity still need work (12–13); individual inputs are bounded (11). The TeX-link probe targeted styled HTML; it is not evidence of that exact payload working in ASCIIMath-only /img.
+This removes unbounded formula execution from the API process. The common API-side SVG policy applies to `/img` as well as styled HTML, and its GraalJS bundle now uses MathJax safe filtering. API admission and deadlines are implemented (13); complexity and non-cooperative work still need attention (12–13). Individual inputs are bounded (11). The TeX-link probe targeted styled HTML; it is not evidence of that exact payload working in ASCIIMath-only /img.
 
 ### 16. Data exposure and supply chain — partially mitigated; ongoing operational work
 
@@ -169,7 +188,7 @@ The subsequent increase to 256 KiB formulas, 4 MiB HTML, 1 MiB inline CSS, 8 MiB
 ## Recommended next work
 
 1. Maintain decompression and endpoint validation regressions (11); individual payload limits are implemented.
-2. Bound API preparation/fetch admission and input/DOM/CSS/math complexity and rendered height (12–13). Render deadlines, admission and output caps are implemented.
+2. Bound DOM/CSS/math complexity and rendered height (12). API preparation/fetch admission, request deadlines and output caps are implemented; non-cooperative API work may need process isolation (13).
 3. Verify isolated renderer controls on production hosts and add independent API-fetcher egress controls (3–6).
 4. Add delivery-origin isolation, cache-miss controls and operational patch/privacy policies (8, 14, 16).
 

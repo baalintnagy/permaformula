@@ -96,6 +96,32 @@ class GeneratedImageServiceTests {
                 JsonMapper.builder().build());
     }
 
+    @Test
+    void cachedImageRemainsAvailableWhileGenerationCapacityIsOccupied() throws Exception {
+        var work = new ApiWorkService(new ApiWorkProperties(1, 1, 1, Duration.ofSeconds(5)));
+        var service = service(800);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "work", work);
+        when(formula.render("cached")).thenReturn("<svg xmlns='http://www.w3.org/2000/svg'><text>cached</text></svg>");
+        String cached = service.getImg("cached");
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        try (var caller = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            var active = caller.submit(() -> work.generate(() -> {
+                entered.countDown();
+                try { release.await(); } catch (InterruptedException interrupted) { throw new java.io.IOException(interrupted); }
+                return "done";
+            }));
+            try {
+                assertTrue(entered.await(2, java.util.concurrent.TimeUnit.SECONDS));
+                assertEquals(cached, service.getImg("cached"));
+                assertEquals(503, assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                        () -> service.getImg("uncached")).getStatusCode().value());
+                verify(formula, never()).render("uncached");
+            } finally { release.countDown(); }
+            active.get(2, java.util.concurrent.TimeUnit.SECONDS);
+        }
+    }
+
     private static InputStreamResource resource(String svg) {
         return new InputStreamResource(new ByteArrayInputStream(svg.getBytes(StandardCharsets.UTF_8)));
     }

@@ -1,5 +1,7 @@
 package org.permmath;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -158,6 +160,55 @@ class PermMathControllerTests {
                     URLDecoder.decode(parts[1], StandardCharsets.UTF_8));
         });
         return request;
+    }
+
+    @Test
+    void urlAndDecodeReturn503BeforePreparationWhenCapacityIsOccupied() throws Exception {
+        var work = new org.permmath.rendering.ApiWorkService(new org.permmath.rendering.ApiWorkProperties(
+                1, 1, 1, java.time.Duration.ofSeconds(5)));
+        ReflectionTestUtils.setField(urlService, "work", work);
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        try (var caller = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            var active = caller.submit(() -> work.prepare(() -> {
+                entered.countDown();
+                try { release.await(); } catch (InterruptedException interrupted) { throw new java.io.IOException(interrupted); }
+                return "done";
+            }));
+            try {
+                assertTrue(entered.await(2, java.util.concurrent.TimeUnit.SECONDS));
+                mvc.perform(get("/url").param("formula", "x")).andExpect(status().isServiceUnavailable());
+                mvc.perform(get("/decode").param("ubcq", "%%%"))
+                        .andExpect(status().isServiceUnavailable());
+            } finally { release.countDown(); }
+            active.get(2, java.util.concurrent.TimeUnit.SECONDS);
+        }
+        mvc.perform(get("/url").param("formula", "x")).andExpect(status().isOk());
+    }
+
+    @Test
+    void requestDeadlineCoversDecodingAndSubsequentRequestsRecover() throws Exception {
+        var compression = mock(StringCompressionService.class);
+        var worker = new java.util.concurrent.atomic.AtomicReference<Thread>();
+        when(compression.decompress(any())).thenAnswer(_ -> {
+            worker.set(Thread.currentThread());
+            new java.util.concurrent.CountDownLatch(1).await();
+            return "never";
+        });
+        ReflectionTestUtils.setField(urlService, "stringCompressionService", compression);
+        var controller = new PermMathController();
+        ReflectionTestUtils.setField(controller, "urlService", urlService);
+        ReflectionTestUtils.setField(controller, "generatedImageService", renderer);
+        var properties = new org.permmath.rendering.ApiWorkProperties(1, 1, 1, java.time.Duration.ofMillis(100));
+        var timedMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new org.boava.exception.LocalExceptionHandler())
+                .addFilters(new org.permmath.rendering.ApiDeadlineFilter(properties)).build();
+        timedMvc.perform(get("/decode").param("ubcq", "valid-but-stalled"))
+                .andExpect(status().isGatewayTimeout());
+        org.junit.jupiter.api.Assertions.assertNotNull(worker.get());
+        worker.get().join(2000);
+        ReflectionTestUtils.setField(urlService, "stringCompressionService", new StringCompressionService());
+        timedMvc.perform(get("/url").param("formula", "x")).andExpect(status().isOk());
     }
 
     @ParameterizedTest

@@ -11,13 +11,23 @@ The Maven build verifies all four modules. Docker builds separate targets:
 
 The renderer has `network_mode: none`. gRPC uses Netty's Unix-domain socket transport with generated Protocol Buffers on `/run/permmath/render.sock`. The named volume contains only the socket; it is writable in the renderer and read-only in the API. Directory mode 0750 and socket mode 0660 restrict access to renderer group 10002, which is a supplementary API group. Do not mount this volume into other workloads. Plaintext gRPC is confined to this filesystem boundary; neither a renderer TCP port nor host socket is exposed.
 
-External styles remain supported: only the API fetches them, using the existing HTTPS/public-address validation and size limits. The renderer receives sanitized embedded styles and serves trusted MathJax scripts on its private loopback interface. It cannot contact public or internal network destinations. The API still needs independent egress rules and fetch rate/concurrency limits.
+External styles remain supported: only the API fetches them, using the existing HTTPS/public-address validation and size limits. The renderer receives sanitized embedded styles and serves trusted MathJax scripts on its private loopback interface. It cannot contact public or internal network destinations. The API has bounded fetch concurrency and still needs independent egress rules and client rate limits.
 
 ## Execution limits
 
 `RENDERER_CONCURRENCY` defaults to 1. There is no rendering queue: occupied capacity returns gRPC RESOURCE_EXHAUSTED, exposed as HTTP 503. Both render paths have a 30-second maximum (`RENDERER_TIMEOUT_SECONDS`), further restricted by the API RPC deadline (`PERMMATH_RENDERING_TIMEOUT`, default 30s). The supervisor terminates job descendants on cancellation, timeout or failure. Fatal jobs cause service exit and Compose restarts the container, clearing its PID namespace, including orphan native processes. A supervisor is required when running outside Compose.
 
-Content and SVG payloads are limited to 16 MiB; the gRPC envelope allows 64 KiB extra. Each job has a 1 GiB JVM heap; the supervisor has 256 MiB. Browser/native allocations are additionally bounded by the container. API decompression and endpoint inputs have separate byte/JSON limits; these do not bound concurrent CSS parsing or request preparation. See `sec.md`.
+The API defaults to four preparation operations, two unique image generations and
+two stylesheet batches, with no queue and HTTP 503 on occupied capacity. Configure
+`PERMMATH_API_WORK_PREPARATION_CONCURRENCY`, `PERMMATH_API_WORK_GENERATION_CONCURRENCY`
+and `PERMMATH_API_WORK_FETCH_CONCURRENCY`. `PERMMATH_API_WORK_TIMEOUT` defaults to
+30s across preparation, fetching, shared-image waits and rendering. Cache hits skip
+generation/fetching but decoding and identity preparation still use bounded slots.
+Timeout returns HTTP 504 and interrupts work; non-cooperative DNS/parsers retain
+their slots until exit. These are per-instance concurrency limits, not client rate
+limits or proof of forcible API parser termination.
+
+Content and SVG payloads are limited to 16 MiB; the gRPC envelope allows 64 KiB extra. Each job has a 1 GiB JVM heap; the supervisor has 256 MiB. Browser/native allocations are additionally bounded by the container. API decompression and endpoint inputs have separate byte/JSON limits; API admission separately bounds concurrent parsing and preparation. See `sec.md`.
 
 Both containers use read-only root filesystems, dropped capabilities, no-new-privileges, private 512 MiB tmpfs, two CPUs and 256 processes/threads. The API has 2 GiB memory, a JVM heap sized at 50% of container memory (approximately 1 GiB), and a cache configured for 256 MiB and capped at 25% of JVM maximum heap; the renderer has 3 GiB memory and private 512 MiB shared memory, with no extra swap. Private `/tmp` mounts permit execution for Playwright and the native Netty epoll library used by Unix gRPC; both remain nosuid/nodev. Logs rotate; core dumps are disabled.
 

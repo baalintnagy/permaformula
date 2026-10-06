@@ -15,6 +15,25 @@ import org.springframework.web.server.ResponseStatusException;
 class GrpcRenderGatewayTests {
 
     @Test
+    void grpcReceivesRemainingRequestBudgetRatherThanFullRendererTimeout() throws Exception {
+        var server = NettyServerBuilder.forAddress(new InetSocketAddress("127.0.0.1", 0))
+                .addService(new RendererGrpc.RendererImplBase() {
+                    @Override public void render(RenderRequest request, StreamObserver<RenderResponse> observer) {
+                        long remaining = Context.current().getDeadline().timeRemaining(java.util.concurrent.TimeUnit.MILLISECONDS);
+                        observer.onNext(RenderResponse.newBuilder().setRequestId(request.getRequestId())
+                                .setSvg(ByteString.copyFromUtf8(Long.toString(remaining))).build());
+                        observer.onCompleted();
+                    }
+                }).build().start();
+        var channel = NettyChannelBuilder.forAddress("127.0.0.1", server.getPort()).usePlaintext().build();
+        try (var gateway = new GrpcRenderGateway(channel, Duration.ofSeconds(5));
+                var scope = WorkDeadline.open(Duration.ofSeconds(2))) {
+            long remaining = Long.parseLong(new String(gateway.renderFormula("x"), java.nio.charset.StandardCharsets.UTF_8));
+            assertTrue(remaining > 0 && remaining <= 2000, "RPC must use remaining API budget");
+        } finally { server.shutdownNow(); }
+    }
+
+    @Test
     void actualGrpcTransportPreservesContentAndMapsErrors() throws Exception {
         var server = NettyServerBuilder.forAddress(new InetSocketAddress("127.0.0.1", 0))
                 .addService(new RendererGrpc.RendererImplBase() {
