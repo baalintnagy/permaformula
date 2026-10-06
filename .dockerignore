@@ -1,6 +1,7 @@
 .git
 .runtime
 target
+**/target
 .idea
 .vscode
 .codex

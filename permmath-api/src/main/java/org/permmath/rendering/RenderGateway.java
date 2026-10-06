@@ -1,0 +1,9 @@
+package org.permmath.rendering;
+
+import java.io.IOException;
+
+/** API-side rendering port; HTTP endpoints and caching do not depend on gRPC stubs. */
+public interface RenderGateway {
+    byte[] renderHtml(String preparedDocument, int width) throws IOException;
+    byte[] renderFormula(String formula) throws IOException;
+}

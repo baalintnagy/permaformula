@@ -46,7 +46,7 @@ normalization. The historical `forumla` JSON spelling remains in compressed
 payloads for `/image` and `/decode`.
 
 This endpoint runs bundled MathJax 3.2.2 with its lightweight DOM adapter in
-GraalJS inside the JVM. It launches no browser and needs no
+GraalJS in a disposable JVM inside the separate renderer service. It launches no browser and needs no
 Node.js installation at runtime. Build instructions are in
 [`tools/svg/README.md`](tools/svg/README.md).
 
@@ -113,29 +113,37 @@ It is the sole HTML rendering backend; no engine selection is required. All imag
 The legacy `default-dpi` setting is retained for configuration compatibility but
 browser rendering uses CSS pixels rather than that value.
 
-To use Chromium, install the dedicated build on Windows:
+The project is a Maven reactor with four modules:
+
+| Module | Responsibility |
+|---|---|
+| `permmath-api` | HTTP endpoints, controlled CSS fetching, sanitization and caching |
+| `render-contract` | Versioned Protocol Buffers and generated gRPC client/server types |
+| `renderer-core` | Chromium/GraalJS rendering, admission and disposable-process supervision |
+| `renderer-service` | Private gRPC endpoint, health service and deployment lifecycle |
+
+Run `mvn verify` with JDK 25 to build and test all modules. Docker is the recommended way to run both services: `docker compose up --build -d`.
+
+For Windows development, install Chromium with `./scripts/install-rendering.ps1`, then build runtime dependencies:
 
 ```powershell
-$env:JAVA_HOME = 'C:\Java\jdk25'
-./scripts/install-rendering.ps1
+mvn package dependency:copy-dependencies '-DincludeScope=runtime' '-DoutputDirectory=target/runtime-deps'
+$env:RENDERER_CHROMIUM_SANDBOX = 'false' # Windows development
+java --enable-native-access=ALL-UNNAMED -cp 'renderer-service/target/renderer-service-1.0.jar;renderer-service/target/runtime-deps/*' org.permmath.renderer.RendererServiceMain
 ```
 
-The installer uses Playwright 1.59.0's matching Chromium build and stores it under
-`.runtime/browsers` in this project. Rendering resolves that version's executable
-inside the configured `permmath.rendering.browser-directory`; it does not select
-an installed Chrome or Edge browser. The runtime directory is excluded from Git
-and Docker build context. Chromium uses a fresh browser context for each request.
+In another terminal, start the API with local plaintext gRPC explicitly enabled:
 
 ```powershell
-mvn verify -Drendering.tests=true
-java --enable-native-access=ALL-UNNAMED -jar target/permmath-service-1.0.jar
+$env:PERMMATH_RENDERING_PLAINTEXT = 'true'
+java --enable-native-access=ALL-UNNAMED -jar permmath-api/target/permmath-api-1.0.jar
 ```
 
-Browser tests require the local Chromium download and run headlessly. The original
-styled HTML example test also fetches Bootstrap from its public HTTPS CDN.
-They write comparison images to `target/rendering`. Normal unit tests do not
-launch a browser. The Dockerfile installs Linux Chromium and its dependencies;
-no graphical display or virtual framebuffer is required.
+The renderer binds to loopback port 9090. The API defaults to TLS for TCP; see [deployment configuration](docker/README.md) for mutual TLS and the network-isolated Docker Unix socket. Chromium is resolved only within `PLAYWRIGHT_BROWSERS_PATH` (default `.runtime/browsers`), not an installed Chrome/Edge browser. Playwright 1.59.0 selects the matching browser build.
+
+Opt-in browser tests run with `mvn verify '-Drendering.tests=true'` after installation. The styled example fetches Bootstrap from its public HTTPS CDN; comparison images go into module `target/rendering` directories. Normal tests do not launch Chromium.
+
+Both HTML and formula rendering use gRPC with request IDs and deadlines. Occupied renderer capacity returns HTTP 503; a deadline returns 504. Each job uses fresh execution state. Content/output are bounded at 8 MiB. `RenderGateway` separates API generation from the transport, and `RenderJobExecutor` separates rendering from gRPC. A future RabbitMQ consumer can reuse the contract/core; new async endpoints and pending indicator images remain future work.
 
 Rendering waits for MathJax, fonts, and images, with a configurable timeout
 (`permmath.rendering.timeout`, default `30s`). User HTML is sanitized with a presentation element/attribute allowlist. External and inline CSS are parsed with ph-css and filtered by a presentation property/function allowlist. CSS variables, responsive media rules, supports rules, cascade layers and nested styles are retained. External stylesheets retain their application order; inline CSS follows them. Submitted images, SVG, links, scripts, forms and embedded documents are removed.
@@ -153,15 +161,11 @@ Limits are 8 top-level references, 16 fetched resources including imports, 3 red
 
 Browser contexts block service workers, WebSockets and all requests except the current document and bundled rendering scripts. Only one document load in the approved main frame is allowed. Reloads and redirects are denied, extra pages close, and any child frame terminates the render, including srcdoc and data frames. Before document scripts run, an initialization script disables workers, service-worker registration, WebRTC constructors, WebTransport, WebSocketStream and window.open. The asset server disables DNS prefetch hints. A restrictive CSP supplies another boundary. Browser channel tests exercise these guards independently of the sanitizer and CSP; they do not establish OS-level network isolation.
 
-Deployment still requires OS-level egress restrictions and browser isolation; these application checks do not replace them.
+Docker Compose isolates the renderer in a separate container with no network access. The API fetcher still needs deployment egress and admission controls.
 
 ### Docker deployment
 
-The Dockerfile builds a separate JRE runtime image, runs as an unprivileged user
-and enables Chromium's sandbox. Use `docker compose up --build -d` to also apply
-a read-only filesystem, private temporary storage, resource limits and the
-Chromium seccomp profile. See [container deployment](docker/README.md) for
-configuration, smoke checks and remaining isolation/network requirements.
+The Dockerfile builds separate API and renderer images. Compose applies private socket communication, renderer network isolation, read-only filesystems, resource limits and Chromium sandbox controls. See [container deployment](docker/README.md) for configuration and verification.
 
 ### Prerequisites
 
