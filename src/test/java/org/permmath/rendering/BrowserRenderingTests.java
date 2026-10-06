@@ -15,10 +15,15 @@ import org.permmath.url.ImageDescriptor;
 class BrowserRenderingTests {
     @Test
     void rendersOriginalStyledHtmlExample() throws Exception {
-        var method = org.permmath.PermMathController.class.getMethod("getImage", String.class);
-        var payload = method.getParameters()[0].getAnnotation(io.swagger.v3.oas.annotations.Parameter.class).example();
-        var json = new org.permmath.compression.StringCompressionService().decompress(payload);
-        var example = tools.jackson.databind.json.JsonMapper.builder().build().readValue(json, ImageDescriptor.class);
+        var method = org.permmath.PermMathController.class.getMethod("getUrl", String.class,
+                Integer.class, List.class, String.class);
+        var parameters = method.getParameters();
+        var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
+        var refs = mapper.readValue(parameters[2].getAnnotation(io.swagger.v3.oas.annotations.Parameter.class).example(),
+                new tools.jackson.core.type.TypeReference<List<String>>() {});
+        var example = new ImageDescriptor(
+                parameters[0].getAnnotation(io.swagger.v3.oas.annotations.Parameter.class).example(), null, refs,
+                parameters[3].getAnnotation(io.swagger.v3.oas.annotations.Parameter.class).example());
         var settings = new RenderingProperties(Path.of(".runtime/browsers"), Duration.ofSeconds(30));
         try (var renderer = new ImageRendererService(
                 new PermMathProperties("http://localhost:8086", 800, 2000), settings)) {

@@ -41,8 +41,8 @@ class SwaggerUiTests {
             var imageResponse = page.waitForResponse(r -> r.url().contains("/image?") && r.status() == 200,
                     () -> imageOperation.getByText("Execute", new com.microsoft.playwright.Locator.GetByTextOptions().setExact(true)).click());
             assertTrue(imageResponse.text().startsWith("<svg"));
-            assertTrue(imageResponse.text().contains("A title for the formula"));
-            assertTrue(imageResponse.text().contains("color:rgb(248, 249, 250)"));
+            assertTrue(imageResponse.text().contains("width=\"220\""));
+            assertTrue(imageResponse.text().contains("<path"));
         }
     }
 }

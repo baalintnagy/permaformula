@@ -75,7 +75,7 @@ public class PermMathController {
     @GetMapping(value = "/image", produces = "image/svg+xml")
     public ResponseEntity<String> getImage(
             @Parameter(description = "Compressed descriptor from the ubcq parameter of a /url permalink. Paste the decoded parameter value into Swagger; it handles URL encoding.",
-                    example = "H4sIAAAAAAAA/42TTXObMBCG/4pGvaCJ+fR46lK701x6zCGXHuJCBBKgRh9UEomJ4/9eQRwHx+5MYUZiVu8+uyt2d7BSuhMcwxRu5MauCHsEJcfGrDfQfftaKbuB3zYSuGfVxJND03Lc+wtg6db6nNXNILwGlllOgcMC24y76JzLKmziN0p7hHCKyau/oaWSBOt+ZLRY41rjtrnAac8xdItFy6l/EB3zHZ5704ncY+sYZRKwbL72POnJqxihMEFZcn+AXcLKTvimNxexK2O1kvXEMgbbrrtC45J6h6gRyryXPOeqzguZ5y8IPHomZ6jIGMo9l5AENzcIXIFTN5esUkep5zPk1H8G9V00ixEwXQFub9H9JJ/wJKGL9VSq04zqST2DYHJVPzwlaI0RWLtQNt/5Su2znVtA5VkEaLbzGRglwO4BseeXF7qecd8bCWeQCVzTn4zYBqbLKJpBY3tOb2llYHoHG2tbk4ZhSWTw2xDK2aMOJLWhbEVYuK5z9eD2+yKYB0tHNTYsjXk/CASTgbPAXwfu2MBDDoUiPdi9V9ViQpis0+jrpFSBdc3kqa1QmlDtbK+m/TAPwdsMXCKCJGq3U0KlpPUrLBjvU3CtGeYzYLA0rrs1q6ZK/4kWD8yJBw8jXIBmJGJpnRfDhpITuVDPvjLbM70bkt6UmNOTQnD5UGvVSeKXiiudgk/zaHinosPJU8Msfa942IIP4zQt/TU+e6ZpvHS1n/p9mJep3yGargsviT7PQJzMxwWdXd8ITxZn8A/N+w/44svM/ZXYLXHyX2y4/wvpnLf3AwUAAA==")
+                    example = "H4sIAAAAAAACCqtWSssvKs3NSVSyUkqoiDNKUNJRysxNTE8Nz0wpyVCyMjIyqAUAxqPtbyQAAAA=")
             @NotBlank @RequestParam String ubcq) throws IOException {
         return ok()
                 .contentType(org.springframework.http.MediaType.parseMediaType("image/svg+xml;charset=UTF-8"))
