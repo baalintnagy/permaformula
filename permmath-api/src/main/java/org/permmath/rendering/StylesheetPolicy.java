@@ -42,6 +42,27 @@ final class StylesheetPolicy {
 
     private static final CSSWriterSettings WRITER = new CSSWriterSettings(true);
 
+    private static final Set<String> SVG_PROPERTIES = Set.of("fill", "fill-rule", "fill-opacity", "stroke",
+            "stroke-width", "stroke-opacity", "stroke-linecap", "stroke-linejoin", "stroke-miterlimit",
+            "stroke-dasharray", "stroke-dashoffset", "clip-path", "clip-rule", "text-anchor", "dominant-baseline",
+            "alignment-baseline", "baseline-shift", "vector-effect", "paint-order", "shape-rendering", "clip");
+
+    /** Preserve vector paint and local glyph/clip references in exported presentation styles. */
+    static String outputDeclarations(String source) {
+        if (!StringUtils.isNotBlank(source)) return "";
+        // The stylesheet parser supports empty custom properties emitted by getComputedStyle;
+        // the standalone declaration-list parser does not. Never emit the wrapper or extra rules.
+        var sheet = parse(".output{" + source + "}");
+        if (sheet.getRuleCount() != 1 || sheet.getImportRuleCount() != 0 || sheet.getNamespaceRuleCount() != 0
+                || !(sheet.getRuleAtIndex(0) instanceof CSSStyleRule declarations) || declarations.getRuleCount() != 0) {
+            throw new IllegalArgumentException("Invalid SVG presentation style");
+        }
+        cleanDeclarations(declarations, true);
+        var result = new CSSDeclarationList();
+        declarations.getAllDeclarations().forEach(result::addDeclaration);
+        return escapeBoundary(result.getAsCSSString(WRITER, 0));
+    }
+
     static String stylesheet(String source) {
         if (!StringUtils.isNotBlank(source)) {
             return "";
@@ -116,41 +137,50 @@ final class StylesheetPolicy {
     }
 
     private static void cleanDeclarations(IHasCSSDeclarations<?> declarations) {
+        cleanDeclarations(declarations, false);
+    }
+
+    private static void cleanDeclarations(IHasCSSDeclarations<?> declarations, boolean output) {
         for (int i = declarations.getDeclarationCount() - 1; i >= 0; i--) {
             var declaration = declarations.getDeclarationAtIndex(i);
             var property = declaration.getProperty().toLowerCase(Locale.ROOT);
             boolean permitted = CssSchema.DEFAULT.allowedProperties().contains(property)
                     || MODERN_PROPERTIES.contains(property) || property.matches("--[a-zA-Z0-9_-]+")
-                    || property.matches("(?:margin|padding|border|text|font)-(?:inline|block)(?:-[a-z-]+)?");
-            if (!permitted || !safeExpression(declaration.getExpression(), 0)) {
+                    || property.matches("(?:margin|padding|border|text|font)-(?:inline|block)(?:-[a-z-]+)?")
+                    || (output && SVG_PROPERTIES.contains(property));
+            if (!permitted || !safeExpression(declaration.getExpression(), 0, output)) {
                 declarations.removeDeclaration(i);
             }
         }
     }
 
-    private static boolean safeExpression(CSSExpression expression, int depth) {
+    private static boolean safeExpression(CSSExpression expression, int depth, boolean output) {
         if (depth > 32) {
             return false;
         }
-        return expression.getAllMembers().stream().allMatch(member -> safeMember(member, depth + 1));
+        return expression.getAllMembers().stream().allMatch(member -> safeMember(member, depth + 1, output));
     }
 
-    private static boolean safeMember(Object member, int depth) {
+    private static boolean safeMember(Object member, int depth, boolean output) {
         if (depth > 32) {
             return false;
         }
         if (member instanceof CSSExpressionMemberFunction function) {
-            return FUNCTIONS.contains(function.getFunctionName().toLowerCase(Locale.ROOT))
-                    && (!function.hasExpression() || safeExpression(function.getExpression(), depth + 1));
+            String name = function.getFunctionName().toLowerCase(Locale.ROOT);
+            return (FUNCTIONS.contains(name) || output && "rect".equals(name))
+                    && (!function.hasExpression() || safeExpression(function.getExpression(), depth + 1, output));
         }
         if (member instanceof CSSExpressionMemberMath math) {
-            return math.getAllMembers().stream().allMatch(child -> safeMember(child, depth + 1));
+            return math.getAllMembers().stream().allMatch(child -> safeMember(child, depth + 1, output));
         }
         if (member instanceof CSSExpressionMemberMathProduct product) {
-            return product.getAllMembers().stream().allMatch(child -> safeMember(child, depth + 1));
+            return product.getAllMembers().stream().allMatch(child -> safeMember(child, depth + 1, output));
         }
         if (member instanceof CSSExpressionMemberMathUnitProduct unit) {
-            return safeMember(unit.getProduct(), depth + 1);
+            return safeMember(unit.getProduct(), depth + 1, output);
+        }
+        if (member instanceof CSSExpressionMemberTermURI uri) {
+            return output && SvgOutputPolicy.localReference(uri.getURIString());
         }
         // URI members and unknown function types fail closed, including in custom-property values.
         return member instanceof CSSExpressionMemberTermSimple || member instanceof CSSExpressionMemberMathUnitSimple

@@ -1,10 +1,10 @@
 # Security reassessment — 2026-10-06
 
-Reviewed the current Maven modules, rendering policies, gRPC service and Docker configuration, building on commit `0ad1916`. This replaces the original assessment; finding numbers are retained for continuity. Removed JavaFX functionality is excluded.
+Reviewed the current Maven modules, rendering policies, gRPC service and Docker configuration, including the SVG output hardening following commit `bebf5b6`. This replaces the original assessment; finding numbers are retained for continuity. Removed JavaFX functionality is excluded.
 
-This is a source review with a focused local rendering probe, not a penetration test, a full dependency vulnerability scan or verification of production infrastructure. Deployment controls outside this repository remain unverified. Current Maven verification: 83 tests, 73 passed and 10 opt-in browser tests skipped; the browser-enabled run passed 82 tests with one Swagger UI test skipped. New tests cover gRPC transport/cancellation, correlation and supervised process termination/recovery.
+This is a source review with focused local rendering probes, not a penetration test, a full dependency vulnerability scan or verification of production infrastructure. Deployment controls outside this repository remain unverified. Browser-enabled Maven verification: 111 tests, 110 passed and one opt-in Swagger UI test skipped, including output-policy and response-header regressions. Existing coverage includes gRPC transport/cancellation, correlation and supervised process termination/recovery. Styled SVG is also checked visually and in Chromium both as an image and as a document with the delivery CSP.
 
-The submitted HTML/CSS execution paths have been substantially hardened, and external styles remain supported through controlled fetching. The most urgent remaining issues are **unsafe MathJax-generated SVG links (8), unbounded decompression (11), and API preparation/fetch admission and parsing complexity (12–13)**.
+The submitted HTML/CSS execution paths have been substantially hardened, and external styles remain supported through controlled fetching. Generated SVG now passes an independent API-side presentation policy before caching or delivery. The most urgent remaining issues are **unbounded decompression (11), and API preparation/fetch admission and parsing complexity (12–13)**.
 
 ## Findings
 
@@ -12,7 +12,7 @@ The submitted HTML/CSS execution paths have been substantially hardened, and ext
 
 `RenderContentPolicy` applies OWASP Java HTML Sanitizer before Chromium parses the document. The allowlist permits presentation HTML and limited attributes, excludes scripts, event handlers, submitted SVG, frames, forms and links, and sanitizes inline CSS. The trusted template receives nonce-based CSP; only trusted MathJax/exporter scripts are intended to execute.
 
-The original raw-markup execution path is no longer present. This does not establish that DOM created later by MathJax, or the exported SVG, is safe: see 8. Keep hostile-markup regression coverage when expanding the supported HTML subset.
+The original raw-markup execution path is no longer present. MathJax-generated DOM and final SVG have separate controls under 8. Keep hostile-markup regression coverage when expanding the supported HTML subset.
 
 ### 2. Breaking out of the stylesheet — addressed for submitted CSS
 
@@ -50,21 +50,21 @@ Compose separates API and renderer containers/accounts, disables renderer networ
 
 These controls reduce native exploit impact and remove render execution from the API JVM. They do not prove resistance to native/kernel vulnerabilities, bound API preparation or validate SVG. Verify effective sandbox/syscall/network controls on production hosts. Outside Compose, provide a restart supervisor and equivalent isolation. Maintain browser/JDK/dependency/base-image updates. [Playwright Docker guidance](https://playwright.dev/java/docs/docker).
 
-### 7. Tampering with rendering machinery — original script path mitigated; output trust remains open
+### 7. Tampering with rendering machinery — input and independent output boundaries implemented
 
-Input sanitization and CSP prevent the original supported route for submitted scripts to replace `window.exportStyledSvg`, `window.renderState` or `window.renderSvg`. The service still accepts the page's ready flag and SVG string without an independent final-output validator.
+Input sanitization and CSP prevent the original supported route for submitted scripts to replace `window.exportStyledSvg`, `window.renderState` or `window.renderSvg`. `GeneratedImageService` now passes both renderer paths through `SvgOutputPolicy` in the API process before caching. The policy parses namespace-aware XML and permits presentation elements/attributes, the required outer foreignObject, XHTML/MathML and embedded glyph fragments. Unknown/active elements and attributes, external glyph references and unsafe hyperlink schemes reject the artifact. CSS is parsed and filtered by ph-css; hyperlink protocols use OWASP Java HTML Sanitizer's URL policy.
 
-Validate output outside the page before caching or serving it. The ready flag proves completion according to the renderer protocol, not safety of the resulting document. See the confirmed output gap in 8.
+The ready flag still proves protocol completion, not document safety. The independent output policy provides that boundary. Standard JDK StAX disables DTDs, external entities and external resolution; processing instructions and entity references are rejected. Bounds cover 8 MiB input/output, depth 128, 20,000 elements, 64 attributes per element, eight namespace declarations per element and 32 KiB per style attribute. This does not bound rendering work already performed or API preparation; see 12–13.
 
-### 8. Active content in returned SVG — confirmed open, high priority
+### 8. Active content in returned SVG — reproduced path addressed
 
-**Local reproduction:** render `<p>\(\href{javascript:alert(1)}{probe}\)</p>` through `ImageRendererService` with the current template and policies. The exported SVG retains `javascript:alert(1)` in a MathJax-generated link. The probe checked the generated bytes; it did not demonstrate execution in a victim browser or origin.
+**Historical reproduction:** `<p>\(\href{javascript:alert(1)}{probe}\)</p>` previously retained a JavaScript URI in MathJax-generated SVG. The probe checked generated bytes; it did not demonstrate execution in a victim browser or origin. Browser regression tests now verify that JavaScript, file and data links are absent while HTTPS links and vector glyphs survive.
 
-The template loads `tex-svg.js` as well as ASCIIMath, so TeX processing remains reachable in HTML text. MathJax creates the link after input sanitization. `export-svg.js` removes scripts and event attributes but does not reject unsafe URI attributes. `GeneratedImageService` stores the output without final validation. The rendering page's CSP is not carried into the returned SVG document.
+The template loads `tex-svg.js` as well as ASCIIMath, so TeX processing remains reachable in HTML text. MathJax's `ui/safe` extension is enabled in the browser and the rebuilt GraalJS bundle, with explicit protocols allowing HTTPS and denying HTTP, JavaScript, file and data. An additional MathJax render action applies safe filtering to ASCIIMath trees; the upstream extension already installs TeX filtering. The API independently validates final output, so safety does not depend on the exporter or MathJax alone. Internal fragment references and HTTPS hyperlinks are retained; external resource references, active SVG/HTML and dangerous schemes are rejected. CSS resource URLs are removed except local fragments.
 
-Exploitability depends on how the SVG is consumed: an image-element context has different restrictions from direct document opening or inline embedding. Nevertheless, retaining a supplied JavaScript URI is an output-policy failure. `/image` and `/img` currently set SVG content type but no restrictive CSP, `nosniff` or referrer policy in their controller responses; deployment headers are unverified.
+Both `/image` and `/img` return restrictive sandbox CSP, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. CSP permits embedded presentation styles while denying scripts, external resources, connections, frames and objects. Both cache identities include the new output-policy version; failed validation is not cached. Regression coverage includes forged renderer output, namespaces, active features, CSS URI escapes, XML entities, limits and delivery headers.
 
-Fix: enable/configure MathJax's `ui/safe` extension to restrict generated URLs/styles, and validate the final SVG with a namespace-aware presentation allowlist outside the rendering engine. Preserve required glyph paths, fragment references and the supported outer foreignObject while rejecting dangerous URI schemes and active document features. Apply the output policy to both renderer paths and version their cache keys when it changes. Serve SVG with restrictive CSP, `X-Content-Type-Options: nosniff` and referrer policy, preferably from a dedicated origin without application cookies. Header protections do not accompany downloaded/inline SVG everywhere. [MathJax safe-extension documentation](https://docs.mathjax.org/en/v3.2/options/safe.html).
+A dedicated delivery origin without application cookies remains a deployment improvement. Headers do not accompany downloaded/inline SVG everywhere, so maintain the independent byte-level policy and bump its version when changed. This is a presentation subset, not support for arbitrary active SVG. [MathJax safe-extension documentation](https://docs.mathjax.org/en/v3.2/options/safe.html).
 
 ### 9. Cross-request state — fresh execution state
 
@@ -98,15 +98,15 @@ HTML sanitization, external fetching and CSS parsing still run in the API before
 
 ### 14. Cache abuse and persistence — partially mitigated
 
-Caffeine has a configurable weight budget (1 GB by default), estimates string/key memory, shares generation for identical keys and does not cache failed generations. HTML keys include `presentation-policy-3`; formula keys have their own format/MathJax version. Expiry is 60 days **after access**, so repeated hits can extend residency.
+Caffeine has a configurable weight budget (1 GB by default), estimates string/key memory, shares generation for identical keys and does not cache failed generations. HTML keys include `presentation-policy-3`; both HTML and formula keys now also include `svg-output-policy-1`, with updated format versions. Expiry is 60 days **after access**, so repeated hits can extend residency.
 
-Renderer admission and 8 MiB output caps bound rendering pressure, but unique cache misses still cause unbounded API preparation pressure; cache weight does not cap transient API allocations. Unsafe SVG can be retained. Add miss rate/admission limits and a per-artifact size limit, sanitize before storage, and change policy versions after output-security fixes. External stylesheet contents can change without a URL/key change; define refresh/TTL semantics if freshness matters. Current storage is in-memory; future persistence would require purge/quarantine support.
+Renderer admission, 8 MiB output caps and final validation before storage bound artifact size and reject unsafe output, but unique cache misses still cause unbounded API preparation pressure; cache weight does not cap transient API allocations. Add miss rate/admission limits. External stylesheet contents can change without a URL/key change; define refresh/TTL semantics if freshness matters. Current storage is in-memory; future persistence would require purge/quarantine support.
 
-### 15. Formula-only renderer abuse — supervised isolation implemented; output policy remains
+### 15. Formula-only renderer abuse — supervised isolation and output policy implemented
 
 AsciiMathRenderer passes formula as a value and disables Java host access/class lookup. It now runs in a fresh disposable JVM inside the renderer container. Formula input/output are capped at 8 MiB, job heap at 512 MiB, and the supervisor terminates stalled jobs under the RPC/service deadline. Container limits cover native allocations. /img still launches neither Chromium nor external CSS fetching.
 
-This removes unbounded formula execution from the API process. API input/admission and final SVG policy still need work (8, 11–13). The TeX-link probe targeted styled HTML; it is not evidence of that exact payload working in ASCIIMath-only /img.
+This removes unbounded formula execution from the API process. The common API-side SVG policy applies to `/img` as well as styled HTML, and its GraalJS bundle now uses MathJax safe filtering. API input/admission still need work (11–13). The TeX-link probe targeted styled HTML; it is not evidence of that exact payload working in ASCIIMath-only /img.
 
 ### 16. Data exposure and supply chain — partially mitigated; ongoing operational work
 
@@ -120,10 +120,9 @@ The two-image build passes Maven verification on Docker Desktop's Linux engine. 
 
 ## Recommended next work
 
-1. Fix confirmed generated-link handling and validate SVG before caching/delivery (8); update security cache versions.
-2. Bound decompression and all entry-point payloads, including `/decode` (11).
-3. Bound API preparation/fetch admission and input/DOM/CSS/math complexity and rendered height (12–13). Render deadlines, admission and output caps are implemented.
-4. Verify isolated renderer controls on production hosts and add independent API-fetcher egress controls (3–6).
-5. Finish delivery headers/origin isolation, cache-miss controls and operational patch/privacy policies (8, 14, 16).
+1. Bound decompression and all entry-point payloads, including `/decode` (11).
+2. Bound API preparation/fetch admission and input/DOM/CSS/math complexity and rendered height (12–13). Render deadlines, admission and output caps are implemented.
+3. Verify isolated renderer controls on production hosts and add independent API-fetcher egress controls (3–6).
+4. Add delivery-origin isolation, cache-miss controls and operational patch/privacy policies (8, 14, 16).
 
 The target architecture remains an API, a controlled stylesheet fetcher and a restricted rendering worker. It preserves external styling while putting limits and independent validation around untrusted content.

@@ -7,7 +7,18 @@
 <script>
 window.renderState = 'loading';
 window.MathJax = {
-  loader: {load: ['input/asciimath']},
+  loader: {load: ['input/asciimath', 'ui/safe']},
+  options: {
+    safeOptions: {
+      allow: {URLs: 'safe', classes: 'safe', cssIDs: 'safe', styles: 'safe'},
+      safeProtocols: {https: true, http: false, file: false, javascript: false, data: false}
+    },
+    renderActions: {
+      safeAsciiMath: [25, function (doc) {
+        for (const math of doc.math) doc.safe.sanitize(math, doc);
+      }, function (math, doc) {doc.safe.sanitize(math, doc);}]
+    }
+  },
   startup: {
     pageReady: function () {
       return MathJax.startup.defaultPageReady().then(function () {

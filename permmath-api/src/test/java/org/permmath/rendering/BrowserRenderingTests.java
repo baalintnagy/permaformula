@@ -14,6 +14,26 @@ import org.permmath.url.ImageDescriptor;
 @EnabledIfSystemProperty(named = "rendering.tests", matches = "true")
 class BrowserRenderingTests {
     @Test
+    void mathJaxSafeModeBlocksGeneratedActiveLinksAndRetainsSafeMath() throws Exception {
+        try (var renderer = imageRenderer(new PermMathProperties("http://localhost:8086", 800, 2000),
+                new BrowserSettings(Path.of("../.runtime/browsers"), Duration.ofSeconds(30), false))) {
+            String html = "<p>\\(\\href{javascript:alert(1)}{probe}\\)</p>"
+                    + "<p>\\(\\href{file:///etc/passwd}{file}\\)</p>"
+                    + "<p>\\(\\href{data:text/html,evil}{data}\\)</p>"
+                    + "<p>\\(\\href{https://example.com/math}{safe}\\)</p><p>`sqrt(x^2)`</p>";
+            try (var input = renderer.getImage(new ImageDescriptor(html, 320, null, null)).getInputStream()) {
+                String raw = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                assertFalse(raw.contains("javascript:alert"));
+                assertFalse(raw.contains("file:///"));
+                assertFalse(raw.contains("data:text/html"));
+                Files.writeString(Path.of("target/safe-math-raw.svg"), raw);
+                String safe = SvgOutputPolicy.sanitize(raw);
+                assertTrue(safe.contains("https://example.com/math"));
+                assertTrue(parse(safe).getElementsByTagNameNS("http://www.w3.org/2000/svg", "path").getLength() > 0);
+            }
+        }
+    }
+    @Test
     void hostileContentCannotExecuteOrContactLoopback() throws Exception {
         var hits = new java.util.concurrent.atomic.AtomicInteger();
         var tripwire = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
@@ -61,17 +81,21 @@ class BrowserRenderingTests {
             var directory = Path.of("target/rendering");
             Files.createDirectories(directory);
             var destination = directory.resolve("chromium.svg");
-            try (var input = image.getInputStream()) { Files.write(destination, input.readAllBytes()); }
+            try (var input = image.getInputStream()) {
+                String raw = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                Files.writeString(directory.resolve("chromium-raw.svg"), raw);
+                Files.writeString(destination, SvgOutputPolicy.sanitize(raw));
+            }
             var decoded = parse(Files.readString(destination));
             assertEquals("svg", decoded.getDocumentElement().getLocalName());
             assertEquals("1000", decoded.getDocumentElement().getAttribute("width"));
             assertTrue(Integer.parseInt(decoded.getDocumentElement().getAttribute("height")) > 100);
             assertTrue(decoded.getElementsByTagNameNS("http://www.w3.org/2000/svg", "foreignObject").getLength() > 0);
             assertTrue(decoded.getElementsByTagNameNS("http://www.w3.org/2000/svg", "path").getLength() > 0);
-            assertTrue(Files.readString(destination).contains("background-color:rgb(48, 48, 48)"));
-            assertTrue(Files.readString(destination).contains("color:rgb(248, 249, 250)"),
+            assertTrue(Files.readString(destination).contains("background-color:rgb(48,48,48)"));
+            assertTrue(Files.readString(destination).contains("color:rgb(248,249,250)"),
                     "Title must use the external Bootstrap light color");
-            assertTrue(Files.readString(destination).contains("color:rgb(108, 117, 125)"),
+            assertTrue(Files.readString(destination).contains("color:rgb(108,117,125)"),
                     "Paragraph must use the external Bootstrap secondary color");
             verifySvgImagePreview(destination);
         }
@@ -126,6 +150,18 @@ class BrowserRenderingTests {
 
     private static void verifySvgImagePreview(Path svgFile) throws Exception {
         var browsers = Path.of("../.runtime/browsers").toAbsolutePath();
+        var server = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        byte[] svg = Files.readAllBytes(svgFile);
+        server.createContext("/preview.svg", exchange -> {
+            exchange.getResponseHeaders().set("Content-Type", "image/svg+xml");
+            exchange.getResponseHeaders().set("Content-Security-Policy", SvgOutputPolicy.CSP);
+            exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
+            exchange.getResponseHeaders().set("Referrer-Policy", "no-referrer");
+            exchange.sendResponseHeaders(200, svg.length);
+            try (var body = exchange.getResponseBody()) { body.write(svg); }
+        });
+        server.start();
+        String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/preview.svg";
         try (var playwright = com.microsoft.playwright.Playwright.create(
                 new com.microsoft.playwright.Playwright.CreateOptions().setEnv(java.util.Map.of(
                         "PLAYWRIGHT_BROWSERS_PATH", browsers.toString(), "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1")))) {
@@ -133,8 +169,7 @@ class BrowserRenderingTests {
                     .setExecutablePath(Path.of(playwright.chromium().executablePath())).setHeadless(true))) {
                 var page = browser.newPage();
                 page.setViewportSize(1000, 800);
-                String data = java.util.Base64.getEncoder().encodeToString(Files.readAllBytes(svgFile));
-                page.setContent("<body style='margin:0'><img id='preview' src='data:image/svg+xml;base64," + data + "'></body>");
+                page.setContent("<body style='margin:0'><img id='preview' src='" + url + "'></body>");
                 page.waitForFunction("document.getElementById('preview').complete");
                 assertEquals(1000, ((Number) page.evaluate("document.getElementById('preview').naturalWidth")).intValue());
                 var screenshot = svgFile.resolveSibling(svgFile.getFileName() + ".png");
@@ -161,7 +196,17 @@ class BrowserRenderingTests {
                 assertTrue(redMath > 10 && cyanMath > 10, "Formula colors must survive SVG image embedding");
                 assertTrue(rightmostRed > 300 && rightmostCyan > 250,
                         "Formula glyphs must retain their horizontal positioning, rather than overlap at the origin");
+                page.navigate(url);
+                assertEquals("rect(1px, 1px, 1px, 1px)",
+                        page.locator("mjx-assistive-mml").first().evaluate("element => getComputedStyle(element).clip"),
+                        "Accessibility MathML must remain clipped rather than duplicate the vector formula");
+                var direct = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(page.screenshot()));
+                var directBackground = new java.awt.Color(direct.getRGB(5, 5));
+                assertTrue(directBackground.getRed() < 80 && directBackground.getGreen() < 80
+                        && directBackground.getBlue() < 80, "CSP must preserve styled SVG when opened directly");
             }
+        } finally {
+            server.stop(0);
         }
     }
 }

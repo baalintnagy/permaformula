@@ -49,9 +49,9 @@ public class GeneratedImageService {
                 Objects.requireNonNullElse(descriptor.imageWidth(), defaults.defaultImageWidth()),
                 Objects.requireNonNullElse(descriptor.styleRefs(), List.of()),
                 Objects.requireNonNullElse(descriptor.style(), ""));
-        return store.getOrGenerate(key("html-svg-v4:presentation-policy-3", effective), () -> {
+        return store.getOrGenerate(key("html-svg-v5:presentation-policy-3:" + SvgOutputPolicy.VERSION, effective), () -> {
             try (var input = htmlRenderer.getImage(effective).getInputStream()) {
-                return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+                return SvgOutputPolicy.sanitize(new String(input.readAllBytes(), StandardCharsets.UTF_8));
             }
         });
     }
@@ -61,8 +61,8 @@ public class GeneratedImageService {
             throw new IllegalArgumentException("Formula must not be blank");
         }
         var identity = new ImageDescriptor(formula, null, null, null);
-        return store.getOrGenerate(key("formula-svg-v1:mathjax-3.2.2", identity),
-                () -> formulaRenderer.render(formula));
+        return store.getOrGenerate(key("formula-svg-v2:mathjax-3.2.2:" + SvgOutputPolicy.VERSION, identity),
+                () -> SvgOutputPolicy.sanitize(formulaRenderer.render(formula)));
     }
 
     private String key(String format, ImageDescriptor descriptor) throws IOException {

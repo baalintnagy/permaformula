@@ -9,6 +9,7 @@ import java.util.List;
 
 import org.jspecify.annotations.Nullable;
 import org.permmath.rendering.GeneratedImageService;
+import org.permmath.rendering.SvgOutputPolicy;
 import org.permmath.url.ImageDescriptor;
 import org.permmath.url.UrlService;
 import org.permmath.validation.ValidImageWidth;
@@ -41,8 +42,7 @@ public class PermMathController {
     public ResponseEntity<String> getImg(
             @Parameter(description = "Plain ASCIIMath formula, URL-encoded as a query parameter", example = "sqrt(x^2 + y^2)")
             @NotBlank @RequestParam String formula) throws IOException {
-        return ok().contentType(org.springframework.http.MediaType.parseMediaType("image/svg+xml;charset=UTF-8"))
-                .body(generatedImageService.getImg(formula));
+        return svgResponse(generatedImageService.getImg(formula));
     }
 
     @Operation(summary = "Create a compressed image permalink",
@@ -77,10 +77,7 @@ public class PermMathController {
             @Parameter(description = "Compressed descriptor from the ubcq parameter of a /url permalink. Paste the decoded parameter value into Swagger; it handles URL encoding.",
                     example = "H4sIAAAAAAACCqtWSssvKs3NSVSyUkqoiDNKUNJRysxNTE8Nz0wpyVCyMjIyqAUAxqPtbyQAAAA=")
             @NotBlank @RequestParam String ubcq) throws IOException {
-        return ok()
-                .contentType(org.springframework.http.MediaType.parseMediaType("image/svg+xml;charset=UTF-8"))
-                .body(generatedImageService.getImage(
-                        urlService.decodeUbcq(ubcq)));
+        return svgResponse(generatedImageService.getImage(urlService.decodeUbcq(ubcq)));
 
     }
 
@@ -92,6 +89,14 @@ public class PermMathController {
             @Parameter(description = "Compressed descriptor from the ubcq parameter of a /url permalink. Supply the payload, not the full permalink.")
             @NotBlank @RequestParam String ubcq) throws IOException {
         return urlService.decodeUbcq(ubcq);
+    }
+
+    private static ResponseEntity<String> svgResponse(String svg) {
+        return ok().contentType(org.springframework.http.MediaType.parseMediaType("image/svg+xml;charset=UTF-8"))
+                .header("Content-Security-Policy", SvgOutputPolicy.CSP)
+                .header("X-Content-Type-Options", "nosniff")
+                .header("Referrer-Policy", "no-referrer")
+                .body(svg);
     }
 
 }

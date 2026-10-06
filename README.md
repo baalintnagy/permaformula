@@ -164,6 +164,15 @@ and keep MathJax formulas as vector paths. They are intended for browsers;
 SVG tools that do not support `foreignObject` should use `/img` for individual
 formulas. Ordinary HTML text still uses the viewer's fonts.
 
+Both renderers enable MathJax's safe extension. The API independently validates
+SVG before caching or serving it, using secure JDK StAX XML parsing, OWASP URL
+filtering and ph-css. The presentation policy preserves computed styles,
+foreignObject, MathML, glyph paths, local fragment references and HTTPS links.
+Active elements, unsafe links, external resources, DTDs and XML entities are
+rejected; unsupported CSS declarations are removed. Output is limited to 8 MiB,
+depth 128 and 20,000 elements. Both cache identities include the output-policy
+version. `/image` and `/img` send sandbox CSP, `nosniff` and `no-referrer` headers.
+
 External stylesheets are fetched by a controlled HTTP client, with HTTPS on port 443, normal TLS certificate/hostname verification, and public IP addresses only. The connection uses the validated DNS addresses, so it cannot re-resolve an unchecked address. Every redirect is validated; HTTP downgrades, credentials and private/loopback/link-local/reserved destinations are rejected. CSS imports use the same fetcher and resolve relative to the final stylesheet URL.
 
 Limits are 8 top-level references, 16 fetched resources including imports, 3 redirects per resource, 3 import levels, 1 MiB per response, 4 MiB combined decoded CSS, and a shared 15-second fetch deadline. Responses must be `text/css`; compressed responses are rejected (requests ask for identity encoding). CSS resource URLs, external fonts, executable expressions and unknown at-rules are removed.

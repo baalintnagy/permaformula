@@ -50,6 +50,22 @@ class PermMathControllerTests {
     }
 
     @Test
+    void bothSvgEndpointsSendRestrictiveHeaders() throws Exception {
+        when(renderer.getImg("x")).thenReturn("<svg/>");
+        when(renderer.getImage(any())).thenReturn("<svg/>");
+        String link = urlService.getImageUrl("x", null, null, null);
+        for (var request : List.of(get("/img").param("formula", "x"), followLink(link))) {
+            mvc.perform(request).andExpect(status().isOk())
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                            .string("Content-Security-Policy", org.permmath.rendering.SvgOutputPolicy.CSP))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                            .string("X-Content-Type-Options", "nosniff"))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                            .string("Referrer-Policy", "no-referrer"));
+        }
+    }
+
+    @Test
     void urlAcceptsCorrectlySpelledImageWidth() throws Exception {
         mvc.perform(get("/url").param("formula", "x").param("imageWidth", "640"))
                 .andExpect(status().isOk())
