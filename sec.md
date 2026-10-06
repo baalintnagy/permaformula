@@ -4,7 +4,7 @@ Reviewed the current Maven modules, rendering policies, gRPC service and Docker 
 
 This is a source review with focused local rendering probes, not a penetration test, a full dependency vulnerability scan or verification of production infrastructure. Deployment controls outside this repository remain unverified. Previous browser-enabled Maven verification: 111 tests, 110 passed and one opt-in Swagger UI test skipped, including output-policy and response-header regressions. Existing coverage includes gRPC transport/cancellation, correlation and supervised process termination/recovery. Styled SVG is also checked visually and in Chromium both as an image and as a document with the delivery CSP.
 
-The submitted HTML/CSS execution paths have been substantially hardened, and external styles remain supported through controlled fetching. Generated SVG passes an independent API-side presentation policy before caching or delivery. Decompression/endpoint payload limits (11), parser/render budgets (12) and Compose's independent stylesheet egress boundary (3) are implemented. Next priorities are **per-client request/cache-miss controls and production verification**; non-cooperative API work still needs consideration (13).
+The submitted HTML/CSS execution paths have been substantially hardened, and external styles remain supported through controlled fetching. Generated SVG passes an independent API-side presentation policy before caching or delivery. Decompression/endpoint payload limits (11), parser/render budgets (12), per-client request/cache-miss controls (13–14) and Compose's independent stylesheet egress boundary (3) are implemented. Next priorities are **delivery-origin isolation and production verification**; non-cooperative API work still needs consideration (13).
 
 ## Findings
 
@@ -54,7 +54,8 @@ plain internal network still allows access to host services on its bridge addres
 [Squid destination ACLs](https://www.squid-cache.org/Doc/config/acl/).
 
 Arbitrary public HTTPS hosts remain allowed, so this is still a bounded public-site
-fetcher. Per-client rate limits and an optional domain allowlist remain improvements.
+fetcher. Per-client render quotas are implemented under 13; an optional domain
+allowlist remains an improvement for deployments that do not need arbitrary hosts.
 Standalone/Eclipse direct mode and deployments outside Compose require equivalent
 independent controls. Native proxy/kernel vulnerabilities and production host/network
 policies remain operational concerns. Java CSS processing may still ignore
@@ -225,15 +226,44 @@ Worker interruption and network/gRPC cancellation are attempted on timeout. Slot
 are released only after the operation exits, so non-cooperative DNS/parsers cannot
 create unlimited lingering tasks through repeated timeouts. They can still retain
 slots and consume CPU within the API JVM; stronger termination guarantees require
-process isolation. Per-client request rates, proxy connection
-limits and response delivery remain open. Compose's independent API egress
+process isolation. Proxy connection limits and response delivery remain open.
+Compose's independent API egress
 restrictions are implemented under 3.
+
+Per-client admission uses Bucket4j 8.16.0: 600 requests/minute with burst 120 and
+32 concurrent HTTP requests, plus 60 cache-miss render attempts/minute with burst
+10 and one concurrent generation. These limits are configurable under
+`permmath.rate-limit`. All endpoints consume request tokens before decoding;
+cached and shared in-flight results spend no generation tokens. Failed/rejected
+render attempts spend tokens. Client generation slots release only when the actual
+worker exits, and active request/worker leases pin limiter state beyond idle expiry.
+Quota/concurrency rejection returns HTTP 429 with `Retry-After` and `no-store`;
+global capacity rejection remains HTTP 503. The request concurrency cap bounds
+servlet threads waiting for shared images without introducing a work queue.
+
+Guava parses/canonicalizes literal IPs without DNS. Forwarding is disabled at the
+framework/container level; only configured literal trusted peer IPs may supply a
+single literal `X-Forwarded-For` address. Malformed, duplicate or missing trusted
+headers fail HTTP 400; untrusted headers are ignored. Compose pins nginx's private
+IP, trusts only that IP and overwrites incoming forwarding headers. Production
+must verify the peer identity and any upstream NAT/load-balancer real-IP policy.
+IPv4-mapped IPv6 identities normalize to IPv4, preventing alternate spellings from
+granting another quota.
+
+Caffeine state has an admission cap of 100,000 clients and 1h idle expiry by
+default. Expiry must cover full refill; active state cannot expire. A full registry
+rejects new identities without evicting existing clients and granting fresh
+allowances. State is local/in-memory: restarts reset quotas, replicas multiply the
+effective allowance, and NAT clients share a quota. A shared Bucket4j backend is
+needed for fleet-wide enforcement. Distributed clients can still consume global
+capacity; these controls are not authenticated-user fairness or volumetric DDoS
+protection. The renderer's existing single-job global admission remains unchanged.
 
 ### 14. Cache abuse and persistence — partially mitigated
 
 Caffeine has a configurable weight budget (256 MiB by default, capped at 25% of JVM maximum heap), estimates string/key memory, shares generation for identical keys and does not cache failed generations. HTML keys include `presentation-policy-3`; both HTML and formula keys now also include `svg-output-policy-2`, with updated format versions. Expiry is 60 days **after access**, so repeated hits can extend residency.
 
-Renderer/API admission, 16 MiB output caps and final validation before storage bound artifact size and concurrent generation. Cache weight does not cap transient API allocations; per-client miss rate limits remain useful. External stylesheet contents can change without a URL/key change; define refresh/TTL semantics if freshness matters. Current storage is in-memory; future persistence would require purge/quarantine support.
+Renderer/API admission, per-client request/render quotas, 16 MiB output caps and final validation before storage bound artifact size and concurrent generation. Cache weight does not cap transient API allocations. External stylesheet contents can change without a URL/key change; define refresh/TTL semantics if freshness matters. Current storage is in-memory; future persistence would require purge/quarantine support.
 
 ### 15. Formula-only renderer abuse — supervised isolation and output policy implemented
 
@@ -280,11 +310,30 @@ Both browser suites, including external Bootstrap styles, passed. A subsequent
 renderer startup regression passed with the readiness marker on stdout, allowing
 Eclipse launch groups to proceed to API startup.
 
+## Client rate-limit verification
+
+Final browser-enabled `mvn -o -Drendering.tests=true verify` passed: 175 tests,
+174 passed and one opt-in Swagger UI test skipped. The 23 new regressions cover
+request/render quota isolation and refill, trusted-header validation, startup
+configuration, request and worker concurrency, worker retention after request
+closure, bounded state admission/expiry, shared in-flight cache results, cached
+image availability after render-token exhaustion, and shared HTML/formula quotas.
+
+The rebuilt Linux API/ingress passed both Docker smoke scripts on the separate
+test subnet: public Bootstrap styles and formulas render, direct egress and
+forbidden/mixed DNS destinations remain blocked, and changing forwarded headers
+through nginx cannot bypass request/render quotas. HTTP 429 includes positive
+`Retry-After` and `no-store`; cached SVG retains its CSP. Dynamic Docker addresses
+are allocated outside nginx's fixed trusted IP range. Normal and test Compose
+configurations and `git diff --check` passed. Temporary test containers/networks
+were removed. Production peer identity, NAT policy and replica-wide quotas still
+require deployment-specific verification. The work queue remains a TODO.
+
 ## Recommended next work
 
 1. Maintain decompression and endpoint validation regressions (11); individual payload limits are implemented.
 2. Maintain the implemented DOM/CSS/math and dimension budgets (12); non-cooperative API work may need process isolation (13). TODO: Add a bounded work queue with configurable capacity/wait limits, cancellation, the existing end-to-end deadline, and cache-hit bypass of queued generation. Keep immediate rejection when the queue is full.
 3. Verify isolated renderer and implemented API/proxy network controls on production hosts (3–6); maintain proxy ACL/package regressions.
-4. Add delivery-origin isolation, cache-miss controls and operational patch/privacy policies (8, 14, 16).
+4. Add delivery-origin isolation and operational patch/privacy policies (8, 16); define external-style freshness semantics and shared rate-limit state if replicas are deployed (13–14).
 
 The target architecture remains an API, a controlled stylesheet fetcher and a restricted rendering worker. It preserves external styling while putting limits and independent validation around untrusted content.

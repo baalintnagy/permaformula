@@ -42,9 +42,23 @@ mode does not provide an independent network boundary.
 The proxies use a digest-pinned Alpine base and distribution packages, read-only
 filesystems, dropped capabilities and private 32 MiB tmpfs. Squid has 128 MiB memory,
 0.5 CPU, 32 PIDs and an 8,192 file-descriptor limit; nginx has 256 MiB, 0.5 CPU and
-32 PIDs. Keep their packages patched. Public-site fetching and client rate limits
-remain separate concerns. Other deployment platforms need equivalent mandatory
+32 PIDs. Keep their packages patched. Other deployment platforms need equivalent mandatory
 proxy routing, network isolation and destination ACLs.
+
+nginx overwrites `X-Forwarded-For` with its socket client address and removes
+`Forwarded` and `X-Real-IP`. Its API-private IP is pinned to
+`PERMMATH_INGRESS_IP` (default `172.30.86.2`) and is the API's only trusted forwarding
+peer. The network subnet is `PERMMATH_API_SUBNET` (default `172.30.86.0/24`), with
+dynamic allocation restricted to `PERMMATH_API_DYNAMIC_RANGE` (default
+`172.30.86.128/25`). Keep the pinned ingress IP inside the subnet and outside the
+dynamic range. Change all three together if they conflict with host networks, and use distinct subnets
+for simultaneous Compose projects. `docker/egress/smoke.env` supplies a separate
+test subnet. Existing deployments need `docker compose down` followed by
+`docker compose up --build -d` to recreate the network when applying these IPAM
+changes. Keep `SERVER_FORWARD_HEADERS_STRATEGY=none`; application or Tomcat
+forwarding rewrites would hide the actual peer from this trust check. An upstream
+load balancer/NAT must preserve client IPs or have an explicitly reviewed nginx
+real-IP configuration; arbitrary incoming forwarded headers are never appended.
 
 ## Execution limits
 
@@ -57,8 +71,21 @@ and `PERMMATH_API_WORK_FETCH_CONCURRENCY`. `PERMMATH_API_WORK_TIMEOUT` defaults 
 60s across preparation, fetching, shared-image waits and rendering. Cache hits skip
 generation/fetching but decoding and identity preparation still use bounded slots.
 Timeout returns HTTP 504 and interrupts work; non-cooperative DNS/parsers retain
-their slots until exit. These are per-instance concurrency limits, not client rate
-limits or proof of forcible API parser termination.
+their slots until exit. These do not forcibly terminate API parsers.
+
+Bucket4j additionally limits each client to 600 requests/minute with a burst of
+120 and 32 concurrent requests, and 60 new render attempts/minute with a burst of
+10 and one concurrent generation. Configure `PERMMATH_RATE_LIMIT_REQUESTS_PER_MINUTE`,
+`REQUEST_BURST`, `REQUEST_CONCURRENCY`, `GENERATIONS_PER_MINUTE`, `GENERATION_BURST`
+and `GENERATION_CONCURRENCY` under that same prefix. Cache hits/shared results
+spend only request tokens; both image endpoints share the render quota. HTTP 429
+includes `Retry-After` and `Cache-Control: no-store`. Client state is capped at
+100,000 identities (`PERMMATH_RATE_LIMIT_MAXIMUM_CLIENTS`) and expires after 1h
+idle (`PERMMATH_RATE_LIMIT_EXPIRE_AFTER_ACCESS`), only after full bucket refill and
+with no active requests/workers. Capacity exhaustion rejects new identities rather
+than resetting existing quotas. Limits are in memory per API instance; replicas
+need a shared Bucket4j backend, and clients behind NAT share quotas. No work queue
+has been added.
 
 Content and SVG payloads are limited to 16 MiB; the gRPC envelope allows 64 KiB extra. Each job has a 1 GiB JVM heap; the supervisor has 256 MiB. Browser/native allocations are additionally bounded by the container. API decompression and endpoint inputs have separate byte/JSON limits; API admission separately bounds concurrent parsing and preparation. See `sec.md`.
 
@@ -92,6 +119,20 @@ DNS answers using a test-only dnsmasq fixture. It then renders formula and Boots
 HTML through nginx and checks SVG headers/styles. It removes only fixtures it creates;
 the caller shuts down the separate Compose project. CDN checks require internet
 availability. This is not a complete native-proxy vulnerability or DNS-race audit.
+
+To verify rate limits through nginx, use a fresh project with test-only small
+quotas (do not apply this override to normal deployments):
+
+```powershell
+docker compose --env-file docker/egress/smoke.env -p permmath-rate-smoke -f compose.yaml -f docker/rate-limit/smoke.override.yaml up --build -d
+./scripts/test-rate-limits.ps1
+docker compose --env-file docker/egress/smoke.env -p permmath-rate-smoke -f compose.yaml -f docker/rate-limit/smoke.override.yaml down --volumes
+```
+
+The script checks HTTP 429 headers, continued cached SVG access after render-token
+exhaustion and that changing incoming forwarding headers cannot grant another
+allowance. The egress and rate-limit projects use the same test port/subnet; shut
+down one before starting the other.
 
 The socket healthcheck verifies listener-file presence for startup ordering; it is not a render probe. Monitor render latency/errors/restarts separately. After an abnormal shutdown a stale socket is removed on restart. Use `docker compose down --volumes` to remove this deployment's transient socket volume.
 

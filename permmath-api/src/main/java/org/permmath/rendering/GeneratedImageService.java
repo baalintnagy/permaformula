@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.NotBlank;
 import org.permmath.PermMathProperties;
+import org.permmath.ratelimit.ClientRateLimits;
 import org.permmath.rendering.cache.GeneratedImageStore;
 import org.permmath.url.ImageDescriptor;
 import org.springframework.stereotype.Service;
@@ -54,11 +55,11 @@ public class GeneratedImageService {
             PreparationComplexity.css(effective.style());
             return new Prepared(effective, key("html-svg-v9:complexity-policy-2:html-to-image-1.11.13:presentation-policy-3:" + SvgOutputPolicy.VERSION, effective));
         });
-        return store.getOrGenerate(prepared.key(), () -> work.generate(() -> {
+        return store.getOrGenerate(prepared.key(), () -> work.generate(ClientRateLimits.generation(() -> {
             try (var input = htmlRenderer.getImage(prepared.descriptor()).getInputStream()) {
                 return SvgOutputPolicy.sanitize(new String(input.readAllBytes(), StandardCharsets.UTF_8));
             }
-        }));
+        })));
     }
 
     public String getImg(@NotBlank String formula) throws IOException {
@@ -69,7 +70,8 @@ public class GeneratedImageService {
             return key("formula-svg-v4:complexity-policy-2:mathjax-3.2.2:" + SvgOutputPolicy.VERSION, identity);
         });
         return store.getOrGenerate(cacheKey,
-                () -> work.generate(() -> SvgOutputPolicy.sanitize(formulaRenderer.render(formula))));
+                () -> work.generate(ClientRateLimits.generation(
+                        () -> SvgOutputPolicy.sanitize(formulaRenderer.render(formula)))));
     }
 
     private String key(String format, ImageDescriptor descriptor) throws IOException {

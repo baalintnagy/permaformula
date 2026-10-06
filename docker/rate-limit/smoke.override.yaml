@@ -1,0 +1,8 @@
+# Test-only quotas. Run with compose.yaml and a fresh, separate project.
+services:
+  permmath:
+    environment:
+      PERMMATH_RATE_LIMIT_REQUESTS_PER_MINUTE: "1"
+      PERMMATH_RATE_LIMIT_REQUEST_BURST: "6"
+      PERMMATH_RATE_LIMIT_GENERATIONS_PER_MINUTE: "1"
+      PERMMATH_RATE_LIMIT_GENERATION_BURST: "1"

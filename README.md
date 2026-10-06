@@ -179,6 +179,40 @@ preparation, rendering and final SVG validation. Fetch slots separately cover
 stylesheet batches and their imports; documents without references do not use them.
 These limits apply per API instance. Occupied capacity returns HTTP 503 immediately.
 
+Per-client admission uses Bucket4j token buckets before decoding and before actual
+cache-miss generation, plus concurrency caps. All endpoints, including cached SVGs,
+consume request tokens; new HTML and formula render attempts share generation
+tokens. Cached and shared in-flight results consume no generation tokens. Rejected
+or failed generation attempts are not refunded. Configure these defaults under
+`permmath.rate-limit` (or the matching `PERMMATH_RATE_LIMIT_*` environment variables):
+
+| Setting | Default |
+| --- | --- |
+| `requests-per-minute` / `request-burst` | 600 / 120 |
+| `request-concurrency` | 32 |
+| `generations-per-minute` / `generation-burst` | 60 / 10 |
+| `generation-concurrency` | 1 |
+| `maximum-clients` / `expire-after-access` | 100,000 / 1h |
+| `trusted-proxies` | Empty list |
+
+Buckets refill continuously. Limit responses use HTTP 429, `Retry-After` in seconds
+and `Cache-Control: no-store`; global admission still returns HTTP 503. The request
+concurrency cap also covers duplicate callers waiting for a shared image. A worker
+keeps its client generation slot until it actually exits, including after timeout.
+Caffeine stores client state with bounded admission; a full registry rejects new
+clients without evicting active allowances. Idle expiry must cover full refill of
+both buckets, and active requests/workers pin their state until completion.
+
+Client identity is the canonical socket IP, parsed by Guava without DNS lookups.
+Only explicitly configured literal proxy IPs may supply one literal
+`X-Forwarded-For` value; missing, duplicate, list or malformed trusted headers return
+HTTP 400. Other forwarding headers are ignored. Keep
+`server.forward-headers-strategy=none` and disable container-native remote-address
+rewriting. Compose pins and trusts only nginx's private IP; nginx overwrites
+`X-Forwarded-For`. Direct Eclipse requests use the peer address. Clients sharing a
+NAT address share an allowance. Limits are per API instance and reset on restart;
+multiple API replicas need a shared Bucket4j backend for a fleet-wide quota.
+
 TODO: Add a bounded work queue with a configurable capacity and maximum wait time.
 Queued work must consume the same request deadline, support cancellation, and reject
 requests promptly when full. Keep cache hits independent of the generation queue.
@@ -197,8 +231,9 @@ generation. Failed or timed-out generations are not cached.
 Cancellation interrupts workers and gRPC. If DNS or a parser ignores interruption,
 its admission slot remains occupied until that work exits. This bounds lingering
 work but cannot forcibly stop it inside the API JVM. The deadline covers application
-work, not slow HTTP request transmission or response delivery. Proxy rate/connection
-limits, API egress rules and parser/layout complexity limits remain separate controls.
+work, not slow HTTP request transmission or response delivery. Proxy connection
+and delivery limits remain separate controls alongside the implemented client
+limits, Compose egress rules and parser/layout complexity budgets.
 
 Rendering waits for MathJax, fonts, and images, with a configurable timeout
 (`permmath.rendering.timeout`, default `30s`). User HTML is sanitized with a presentation element/attribute allowlist. External and inline CSS are parsed with ph-css and filtered by a presentation property/function allowlist. CSS variables, responsive media rules, supports rules, cascade layers and nested styles are retained. External stylesheets retain their application order; inline CSS follows them. Submitted images, SVG, links, scripts, forms and embedded documents are removed.

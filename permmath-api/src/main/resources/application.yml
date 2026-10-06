@@ -1,5 +1,7 @@
 server:
     port: 8086
+    # Identity is resolved by our explicit trusted-peer policy, before request parsing.
+    forward-headers-strategy: none
 
 springdoc:
     api-docs:
@@ -7,6 +9,16 @@ springdoc:
         version: OPENAPI_3_0
 
 permmath:
+    rate-limit:
+        requests-per-minute: 600
+        request-burst: 120
+        request-concurrency: 32
+        generations-per-minute: 60
+        generation-burst: 10
+        generation-concurrency: 1
+        maximum-clients: 100000
+        expire-after-access: 1h
+        trusted-proxies: []
     host: "http://localhost:8086"
     image-cache:
         maximum-size: 256MB

@@ -32,7 +32,10 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-    networks: [api-private, ingress-public]
+    networks:
+      api-private:
+        ipv4_address: "${PERMMATH_INGRESS_IP:-172.30.86.2}"
+      ingress-public: {}
     tmpfs: ["/tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777"]
     mem_limit: 256m
     memswap_limit: 256m
@@ -108,6 +111,7 @@ services:
       PERMMATH_HOST: "${PERMMATH_HOST:-http://localhost:5000}"
       PERMMATH_STYLESHEET_FETCH_PROXY_REQUIRED: "true"
       PERMMATH_STYLESHEET_FETCH_PROXY: "http://stylesheet-egress:3128"
+      PERMMATH_RATE_LIMIT_TRUSTED_PROXIES: "${PERMMATH_INGRESS_IP:-172.30.86.2}"
     stop_grace_period: 20s
     logging:
       driver: json-file
@@ -117,6 +121,10 @@ volumes:
 networks:
   api-private:
     internal: true
+    ipam:
+      config:
+        - subnet: "${PERMMATH_API_SUBNET:-172.30.86.0/24}"
+          ip_range: "${PERMMATH_API_DYNAMIC_RANGE:-172.30.86.128/25}"
     driver_opts:
       com.docker.network.bridge.gateway_mode_ipv4: isolated
   stylesheet-public:
