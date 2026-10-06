@@ -21,7 +21,7 @@ The API defaults to four preparation operations, two unique image generations an
 two stylesheet batches, with no queue and HTTP 503 on occupied capacity. Configure
 `PERMMATH_API_WORK_PREPARATION_CONCURRENCY`, `PERMMATH_API_WORK_GENERATION_CONCURRENCY`
 and `PERMMATH_API_WORK_FETCH_CONCURRENCY`. `PERMMATH_API_WORK_TIMEOUT` defaults to
-30s across preparation, fetching, shared-image waits and rendering. Cache hits skip
+60s across preparation, fetching, shared-image waits and rendering. Cache hits skip
 generation/fetching but decoding and identity preparation still use bounded slots.
 Timeout returns HTTP 504 and interrupts work; non-cooperative DNS/parsers retain
 their slots until exit. These are per-instance concurrency limits, not client rate

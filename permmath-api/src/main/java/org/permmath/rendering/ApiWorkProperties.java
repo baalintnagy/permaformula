@@ -9,7 +9,7 @@ public record ApiWorkProperties(
         @DefaultValue("4") int preparationConcurrency,
         @DefaultValue("2") int generationConcurrency,
         @DefaultValue("2") int fetchConcurrency,
-        @DefaultValue("30s") Duration timeout) {
+        @DefaultValue("60s") Duration timeout) {
     public ApiWorkProperties {
         if (preparationConcurrency < 1 || generationConcurrency < 1 || fetchConcurrency < 1
                 || timeout == null || timeout.isNegative() || timeout.isZero()
@@ -19,6 +19,6 @@ public record ApiWorkProperties(
     }
 
     public static ApiWorkProperties defaults() {
-        return new ApiWorkProperties(4, 2, 2, Duration.ofSeconds(30));
+        return new ApiWorkProperties(4, 2, 2, Duration.ofSeconds(60));
     }
 }

@@ -143,7 +143,7 @@ decompression/JSON decoding, URL creation and identity serialization; generation
 covers HTML/CSS preparation, rendering and final SVG validation. Fetch admission
 covers imports and is skipped for documents without stylesheet references.
 
-A servlet-filter deadline defaults to 30 seconds and is propagated to workers.
+A servlet-filter deadline defaults to 60 seconds and is propagated to workers.
 Fetches use the smaller of their 15-second budget and the remaining API deadline;
 gRPC uses the smaller of the rendering timeout and remaining API deadline. Expiry
 returns HTTP 504. Duplicate cache waiters have bounded waits and cannot cancel
@@ -199,7 +199,7 @@ Eclipse launch groups to proceed to API startup.
 ## Recommended next work
 
 1. Maintain decompression and endpoint validation regressions (11); individual payload limits are implemented.
-2. Bound DOM/CSS/math complexity and rendered height (12). API preparation/fetch admission, request deadlines and output caps are implemented; non-cooperative API work may need process isolation (13).
+2. Bound DOM/CSS/math complexity and rendered height (12). API preparation/fetch admission, request deadlines and output caps are implemented; non-cooperative API work may need process isolation (13). TODO: Add a bounded work queue with configurable capacity/wait limits, cancellation, the existing end-to-end deadline, and cache-hit bypass of queued generation. Keep immediate rejection when the queue is full.
 3. Verify isolated renderer controls on production hosts and add independent API-fetcher egress controls (3–6).
 4. Add delivery-origin isolation, cache-miss controls and operational patch/privacy policies (8, 14, 16).
 

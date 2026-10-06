@@ -170,7 +170,7 @@ permmath:
         preparation-concurrency: 4
         generation-concurrency: 2
         fetch-concurrency: 2
-        timeout: 30s
+        timeout: 60s
 ```
 
 Preparation slots cover descriptor decoding, permalink creation and cache-identity
@@ -178,6 +178,11 @@ serialization. Generation slots cover unique cache misses, including HTML/CSS
 preparation, rendering and final SVG validation. Fetch slots separately cover
 stylesheet batches and their imports; documents without references do not use them.
 These limits apply per API instance. Occupied capacity returns HTTP 503 immediately.
+
+TODO: Add a bounded work queue with a configurable capacity and maximum wait time.
+Queued work must consume the same request deadline, support cancellation, and reject
+requests promptly when full. Keep cache hits independent of the generation queue.
+
 The renderer still admits one job by default; overlapping generations may therefore
 receive its own HTTP 503. These settings do not increase renderer concurrency.
 

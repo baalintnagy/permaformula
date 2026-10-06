@@ -45,7 +45,7 @@ public class CaffeineImageStore implements GeneratedImageStore {
         var pending = loading.putIfAbsent(key, completion);
         if (pending != null) {
             try {
-                return pending.get(org.permmath.rendering.WorkDeadline.remainingNanos(java.time.Duration.ofSeconds(30)),
+                return pending.get(org.permmath.rendering.WorkDeadline.remainingNanos(java.time.Duration.ofSeconds(60)),
                         TimeUnit.NANOSECONDS);
             } catch (java.util.concurrent.TimeoutException timeout) {
                 throw new org.springframework.web.server.ResponseStatusException(

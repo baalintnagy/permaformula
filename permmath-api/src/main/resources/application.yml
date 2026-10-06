@@ -15,7 +15,7 @@ permmath:
         preparation-concurrency: 4
         generation-concurrency: 2
         fetch-concurrency: 2
-        timeout: 30s
+        timeout: 60s
     rendering:
         target: localhost:9090
         timeout: 30s
