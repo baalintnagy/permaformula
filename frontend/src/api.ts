@@ -72,7 +72,7 @@ export async function createPermalink(
     url.pathname !== '/image' ||
     !url.searchParams.has('ubcq')
   ) {
-    throw new Error('The server returned an invalid image permalink.');
+    throw new Error('The server returned an invalid SVG permalink.');
   }
   return url.href;
 }

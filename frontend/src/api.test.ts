@@ -78,7 +78,7 @@ describe('image requests', () => {
     );
     await expect(createPermalink(request)).rejects.toThrow('Content exceeds limit');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('javascript:alert(1)')));
-    await expect(createPermalink(request)).rejects.toThrow('invalid image permalink');
+    await expect(createPermalink(request)).rejects.toThrow('invalid SVG permalink');
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(new Response('https://images.example/image?ubcq=abc%2Bdef')),

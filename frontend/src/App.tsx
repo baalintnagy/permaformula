@@ -243,7 +243,7 @@ export function App() {
       });
       if (!response.ok) throw new Error(await responseError(response));
       if (!response.headers.get('content-type')?.includes('image/svg+xml'))
-        throw new Error('The server did not return an SVG image.');
+        throw new Error('The server did not return an SVG.');
       const blob = await response.blob();
       if (controller.signal.aborted) return;
       const url = URL.createObjectURL(blob);
@@ -252,7 +252,7 @@ export function App() {
       setImage({ url, formula: submittedFormula });
     } catch (error) {
       if (!controller.signal.aborted)
-        setFormulaError(error instanceof Error ? error.message : 'Unable to render the image.');
+        setFormulaError(error instanceof Error ? error.message : 'Unable to render the SVG.');
     } finally {
       formulaLock.current = false;
       setFormulaBusy(false);
@@ -279,7 +279,7 @@ export function App() {
       });
       if (!response.ok) throw new Error(await responseError(response));
       if (!response.headers.get('content-type')?.includes('image/svg+xml'))
-        throw new Error('The server did not return an SVG image.');
+        throw new Error('The server did not return an SVG.');
       const blob = await response.blob();
       if (controller.signal.aborted) return;
       const objectUrl = URL.createObjectURL(blob);
@@ -290,7 +290,7 @@ export function App() {
       setGeneratedInput(submittedInput);
     } catch (error) {
       if (!controller.signal.aborted)
-        setComposerError(error instanceof Error ? error.message : 'Unable to generate the image.');
+        setComposerError(error instanceof Error ? error.message : 'Unable to generate the SVG.');
     } finally {
       composerLock.current = false;
       setComposerBusy(false);
@@ -377,16 +377,27 @@ export function App() {
               <div className="panel-note">Updates as you type.</div>
             </div>
           </div>
-          <div className="action-panel">
-            <CopyUrl url={imgUrl} label="Expression SVG URL" />
+          <div className="composer-actions">
+            <p>
+              <span className="live-dot" />
+              Ready
+              <small>Generate an SVG to view here and share.</small>
+            </p>
             <button
               className="primary-button"
               disabled={!formula.trim() || formulaBusy}
               onClick={renderFormula}
             >
-              <span>{formulaBusy ? 'Rendering…' : 'Render image'}</span>
+              <span>{formulaBusy ? 'Generating…' : 'Generate SVG'}</span>
               <Icon name="arrow" />
             </button>
+          </div>
+          <div className="permalink-result panel">
+            <CopyUrl url={imgUrl} label="Expression SVG URL" />
+            <a href={imgUrl} target="_blank" rel="noopener noreferrer" className="text-button">
+              Open SVG
+              <Icon name="external" />
+            </a>
           </div>
           {formulaError && (
             <div className="error-message" role="alert">
@@ -396,7 +407,7 @@ export function App() {
           {image && (
             <div className="server-result panel">
               <PanelHeading
-                title="Generated image"
+                title="Generated SVG"
                 badge={image.formula !== formula ? 'PREVIOUS INPUT' : 'SVG'}
               />
               <div className="result-canvas">
@@ -580,15 +591,15 @@ export function App() {
                 imageWidth={widthValid ? width : 500}
               />
               <div className="panel-note">
-                Updates as you type. Preview scrolls at the selected width. 
-				(Server-side sanitization may change the final image.)
+                Updates as you type. Preview scrolls at the selected width. (Server-side
+                sanitization may change the final SVG.)
               </div>
             </div>
           </div>
           <div className="composer-actions">
             <p>
               <span className="live-dot" />
-              Ready when you are.
+              Ready
               <small>Generate an SVG to view here and share.</small>
             </p>
             <button
@@ -596,7 +607,7 @@ export function App() {
               disabled={composerBusy || !html.trim() || !widthValid || !refsValid}
               onClick={generateImage}
             >
-              {composerBusy ? 'Generating…' : 'Generate image'}
+              {composerBusy ? 'Generating…' : 'Generate SVG'}
               <Icon name="arrow" />
             </button>
           </div>
@@ -622,20 +633,20 @@ export function App() {
                   rel="noopener noreferrer"
                   className="text-button result-highlight"
                 >
-                  Open image
+                  Open SVG
                   <Icon name="external" />
                 </a>
               </div>
               <div className="generated-viewer panel result-highlight">
-                <PanelHeading title="Generated image" badge="SVG" />
+                <PanelHeading title="Generated SVG" badge="SVG" />
                 <p className="generated-status" role="status">
                   {inputIdentity === generatedInput
                     ? 'Your SVG is ready.'
-                    : 'Showing the previous image. Generate again to apply your changes.'}
+                    : 'Showing the previous SVG. Generate again to apply your changes.'}
                 </p>
                 <div className="generated-scroll">
                   <iframe
-                    title="Generated SVG image"
+                    title="Generated SVG"
                     src={generatedImage.url}
                     sandbox=""
                     referrerPolicy="no-referrer"

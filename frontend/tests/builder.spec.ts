@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 const svg =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="50"><text x="10" y="30">Rendered image</text></svg>';
+  '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="50"><text x="10" y="30">Rendered SVG</text></svg>';
 const permalink = 'http://127.0.0.1:5173/image?ubcq=test%2Bpayload';
 
 test('color picker applies on double-click and outside click', async ({ page }) => {
@@ -99,7 +99,21 @@ test('local math previews, exact query encoding, server rendering and new-tab pe
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
     await page.getByLabel('Expression SVG URL', { exact: true }).inputValue(),
   );
-  await page.getByRole('button', { name: 'Render image', exact: true }).click();
+  const formulaSection = page.locator('#formula');
+  const formulaLink = formulaSection.getByRole('link', { name: 'Open SVG', exact: true });
+  const currentFormulaUrl = await page
+    .getByLabel('Expression SVG URL', { exact: true })
+    .inputValue();
+  await expect(formulaLink).toBeVisible();
+  await expect(formulaLink).toHaveAttribute('href', currentFormulaUrl);
+  await expect(formulaLink).toHaveAttribute('target', '_blank');
+  expect(requests.some((url) => new URL(url).pathname === '/img')).toBe(false);
+  const formulaPopupPromise = page.waitForEvent('popup');
+  await formulaLink.click();
+  const formulaPopup = await formulaPopupPromise;
+  await formulaPopup.waitForURL(currentFormulaUrl);
+  await formulaPopup.close();
+  await formulaSection.getByRole('button', { name: 'Generate SVG', exact: true }).click();
   await expect(
     page.getByRole('img', { name: `Rendered formula: ${formula}`, exact: true }),
   ).toBeVisible();
@@ -115,25 +129,21 @@ test('local math previews, exact query encoding, server rendering and new-tab pe
   await page.getByLabel('Canvas width').fill('720');
   let popupCount = 0;
   page.on('popup', () => popupCount++);
-  await page.getByRole('button', { name: 'Generate image' }).click();
-  await expect(
-    page.frameLocator('iframe[title="Generated SVG image"]').locator('svg'),
-  ).toBeVisible();
+  await page.locator('#composer').getByRole('button', { name: 'Generate SVG' }).click();
+  await expect(page.frameLocator('iframe[title="Generated SVG"]').locator('svg')).toBeVisible();
   expect(popupCount).toBe(0);
   await expect(page.locator('.generated-viewer')).toHaveCSS('animation-name', 'result-ready');
   await page.getByLabel('Canvas width').fill('500');
-  await expect(page.getByText('Showing the previous image.')).toBeVisible();
+  await expect(page.getByText('Showing the previous SVG.')).toBeVisible();
   await page.getByLabel('Canvas width').fill('720');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(page.locator('.generated-viewer')).toHaveCSS('animation-name', 'none');
-  await page.getByRole('button', { name: 'Generate image' }).click();
-  await expect(
-    page.frameLocator('iframe[title="Generated SVG image"]').locator('svg'),
-  ).toBeVisible();
+  await page.locator('#composer').getByRole('button', { name: 'Generate SVG' }).click();
+  await expect(page.frameLocator('iframe[title="Generated SVG"]').locator('svg')).toBeVisible();
   await expect(page.getByText('Your SVG is ready.', { exact: true })).toBeVisible();
   expect(popupCount).toBe(0);
   const popupPromise = page.waitForEvent('popup');
-  await page.getByRole('link', { name: 'Open image', exact: true }).click();
+  await page.locator('#composer').getByRole('link', { name: 'Open SVG', exact: true }).click();
   const popup = await popupPromise;
   await popup.waitForURL(permalink);
   await expect(page.getByLabel('Generated SVG URL', { exact: true })).toHaveValue(permalink);
@@ -194,14 +204,18 @@ test('validation and server rendering failures are visible', async ({ page }) =>
     route.fulfill({ contentType: 'text/plain', body: permalink }),
   );
   await page.goto('/');
-  await page.getByRole('button', { name: 'Render image', exact: true }).click();
+  await page.locator('#formula').getByRole('button', { name: 'Generate SVG', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveText('Invalid formula input');
   await page.getByLabel('Canvas width').fill('219');
-  await expect(page.getByRole('button', { name: 'Generate image' })).toBeDisabled();
+  await expect(
+    page.locator('#composer').getByRole('button', { name: 'Generate SVG' }),
+  ).toBeDisabled();
   await page.getByLabel('Canvas width').fill('500');
   await page.getByRole('button', { name: 'Add stylesheet' }).click();
   await page.getByLabel('Stylesheet URL 1').fill('http://example.com/style.css');
-  await expect(page.getByRole('button', { name: 'Generate image' })).toBeDisabled();
+  await expect(
+    page.locator('#composer').getByRole('button', { name: 'Generate SVG' }),
+  ).toBeDisabled();
   await page.getByRole('button', { name: 'Remove stylesheet 1' }).click();
   await page.route('**/image?**', (route) =>
     route.fulfill({
@@ -210,20 +224,19 @@ test('validation and server rendering failures are visible', async ({ page }) =>
       body: JSON.stringify({ detail: 'Unable to render HTML' }),
     }),
   );
-  await page.getByRole('button', { name: 'Generate image' }).click();
+  await page.locator('#composer').getByRole('button', { name: 'Generate SVG' }).click();
   await expect(page.locator('#composer').getByRole('alert')).toHaveText('Unable to render HTML');
-  await expect(page.getByRole('link', { name: 'Open image', exact: true })).toHaveCount(0);
+  await expect(
+    page.locator('#composer').getByRole('link', { name: 'Open SVG', exact: true }),
+  ).toHaveCount(0);
   await page.route('**/image?**', (route) =>
     route.fulfill({ contentType: 'image/svg+xml', body: svg }),
   );
-  await page.getByRole('button', { name: 'Generate image' }).click();
+  await page.locator('#composer').getByRole('button', { name: 'Generate SVG' }).click();
+  await expect(page.frameLocator('iframe[title="Generated SVG"]').locator('svg')).toBeVisible();
   await expect(
-    page.frameLocator('iframe[title="Generated SVG image"]').locator('svg'),
-  ).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Open image', exact: true })).toHaveAttribute(
-    'href',
-    permalink,
-  );
+    page.locator('#composer').getByRole('link', { name: 'Open SVG', exact: true }),
+  ).toHaveAttribute('href', permalink);
 });
 
 test('initial builder renders in desktop and mobile light/dark layouts', async ({ page }) => {
