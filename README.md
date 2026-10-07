@@ -88,7 +88,7 @@ Simply send a GET request to the relevant endpoint with your desired parameters.
 
 Generate a permalink with /url, then request the returned link to render it.
 
-The default production deployment uses one hostname for the Studio UI, API and
+The default production deployment uses one hostname for the Builder UI, API and
 images. Configure `PERMMATH_HOST` to its public HTTPS origin (a provider-assigned
 hostname is sufficient). Compose exposes nginx on `127.0.0.1:5000`; terminate TLS
 in front of that listener. `/image` and `/img` still pass through credential-stripping
@@ -104,7 +104,7 @@ for both profiles, security properties and validation.
 
 ### Web UI
 
-PermMath Studio is a responsive React/TypeScript frontend with light/dark themes,
+PermMath Builder is a responsive React/TypeScript frontend with light/dark themes,
 live ASCIIMath and HTML/CSS previews, ordered external stylesheet references,
 and explicit server image generation. Compose builds and serves it at the API
 origin (`http://localhost:5000` by default). Node.js is used at build time only.
@@ -182,7 +182,7 @@ cache-management endpoint or distributed render lock. See
 
 Chromium renders styled HTML with locally bundled MathJax 3.2.2 (SVG output).
 It is the sole HTML rendering backend; no engine selection is required. All image endpoints return SVG. Styled HTML is embedded using SVG foreignObject; `/img` returns pure formula SVG.
-`imageWidth` is the layout width in pixels; image height follows the content.
+`imageWidth` is the layout width in pixels (500 by default); image height follows the content.
 The legacy `default-dpi` setting is retained for configuration compatibility but
 browser rendering uses CSS pixels rather than that value.
 

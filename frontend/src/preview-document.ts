@@ -14,7 +14,7 @@ export function previewDocument(
     html,
     css = '',
     styleRefs = [],
-    imageWidth = 800,
+    imageWidth = 500,
   }: {
     formula?: string;
     html?: string;

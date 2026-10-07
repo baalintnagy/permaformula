@@ -97,7 +97,7 @@ docker compose up --build -d
 ```
 
 Terminate HTTPS in front of `127.0.0.1:${PORT:-5000}`. One public hostname serves
-the Studio, API, Swagger and exact `/image` and `/img` routes. No image port is
+the Builder, API, Swagger and exact `/image` and `/img` routes. No image port is
 published and `PERMMATH_IMAGE_HOST` is deliberately ignored by this Compose file:
 permalinks always use `PERMMATH_HOST`. A provider-assigned hostname is sufficient;
 buying domains is optional. The repository does not provision production TLS.

@@ -58,14 +58,42 @@ public class PermMathController {
     @GetMapping(path = "/url", produces = { TEXT_PLAIN_VALUE, APPLICATION_JSON_VALUE })
     public String getUrl(
         @Parameter(description = "HTML content with backtick-delimited ASCIIMath for /image",
-            example = "\n\t<div class=\"div-root\">\n    <h1 class=\"display-5 text-light\">A title for the formulas</h1>\n    <p class=\"lead text-secondary\">A paragraph for the formulas</p>\n    <p class=\"example-formula\">\n        `sum_(i=1)^n i^3=((n(n+1))/2)^2`\n    </p>\n    <p class=\"num-sys-formula\">\n        <strong>\n            `x=ubrace(sum_(i=0)^(|__log_bn__|) v(s_i)b^i)_(n in NN) + ubrace(sum_(i=1)^oo v(s_i)b^(-i))_(q in [0,1) sub RR)`\n        </strong>\n    </p>\n    <p class=\"fourier-formula\">    \n        `F(omega) = int_{-oo}^{oo} f(t) e^{-i omega t} dt`\n    </p>\n    </div>\n\n")
+            example = """
+                <div class="math-card">
+                  <span class="eyebrow">MATHEMATICAL IDENTITY</span>
+                  <h1>The sum of cubes</h1>
+                  <p>The sum has a closed form:</p>
+                  <div class="equation">
+                    `sum_(i=1)^n i^3 = ((n(n+1))/2)^2`
+                  </div>
+                  <p class="caption">The sum of the first n cubes equals
+                    the square of the n-th triangular number.</p>
+                </div>""")
         @NotBlank @RequestParam String formula,
-        @Parameter(description = "HTML layout width in CSS pixels, from 220 to 4000. Defaults to the configured width (800 by default).", example = "800") @Nullable @ValidImageWidth @RequestParam(required = false) Integer imageWidth,
-        @Parameter(description = "External HTTPS stylesheet URLs in application order. Fetched with SSRF checks and sanitized before rendering. Repeat for multiple stylesheets.",
-                    example = "[\"https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css\"]")
+        @Parameter(description = "HTML layout width in CSS pixels, from 220 to 4000. Defaults to the configured width (500 by default).", example = "500") @Nullable @ValidImageWidth @RequestParam(required = false) Integer imageWidth,
+        @Parameter(description = "External HTTPS stylesheet URLs in application order. Fetched with SSRF checks and sanitized before rendering. Repeat for multiple stylesheets.")
         @Nullable @RequestParam(required = false) List<@NotBlank String> styleRefs,
         @Parameter(description = "Presentation CSS stylesheet. Unsupported rules and properties are removed by /image.",
-                    example = "\n    body {\n        padding:0; \n        margin:0; \n        border:0;\n    }\n\t.div-root {\n        padding: 20px; \n        font-family: Arial, sans-serif; \n        -webkit-font-smoothing: antialiased; \n        -moz-osx-font-smoothing: grayscale; \n        background-color: #303030; \n        color: white;\n    }\n    .example-formula {\n        font-size:18px;\n    }\n    .num-sys-formula {\n        color: rgb(207, 123, 123); \n        font-size:25px;\n    }\n    .fourier-formula {\n        color: rgb(59, 201, 212); \n        font-size:25px;\n    }\n")
+                    example = """
+                body { margin: 0; padding: 0; }
+                .math-card {
+                  padding: 48px;
+                  background: #edf3fb;
+                  color: #263b54;
+                  font-family: Georgia, serif;
+                }
+                .eyebrow {
+                  font: 11px Arial, sans-serif;
+                  letter-spacing: 2px;
+                  color: #496f9f;
+                }
+                h1 { font-size: 36px; margin: 18px 0; }
+                p { line-height: 1.7; }
+                .equation {
+                  padding: 24px 0;
+                  font-size: 25px;
+                }
+                .caption { color: #687d96; font-size: 14px; }""")
         @Nullable @RequestParam(required = false) String style) throws IOException {
         return urlService.getImageUrl(formula, imageWidth, styleRefs, style);
     }

@@ -14,7 +14,7 @@ import jakarta.validation.constraints.NotBlank;
 public record PermMathProperties(
         @NotBlank String host,
         String imageHost,
-        @DefaultValue("800") int defaultImageWidth,
+        @DefaultValue("500") int defaultImageWidth,
         @DefaultValue("2000.0") float defaultDpi) {
 
     @ConstructorBinding

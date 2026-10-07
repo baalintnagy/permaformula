@@ -46,7 +46,7 @@ class StudioUiTests {
     @BeforeEach
     void useTestServerOrigin() {
         origin = "http://localhost:" + port;
-        ReflectionTestUtils.setField(urls, "permMathProperties", new PermMathProperties(origin, 800, 2000));
+        ReflectionTestUtils.setField(urls, "permMathProperties", new PermMathProperties(origin, 500, 2000));
     }
 
     @Test
@@ -86,8 +86,15 @@ class StudioUiTests {
             assertThat(page.locator(".server-result img")).isVisible();
             page.waitForFunction("document.querySelector('.server-result img')?.naturalWidth > 0");
 
-            var imageTab = page.waitForPopup(() -> page.getByRole(AriaRole.BUTTON,
-                    new Page.GetByRoleOptions().setName("Generate & open image")).click());
+            page.getByRole(AriaRole.BUTTON,
+                    new Page.GetByRoleOptions().setName("Generate image")).click();
+            // The SVG response CSP prohibits Playwright's injected selector script.
+            assertThat(page.locator("iframe[title='Generated SVG image']")).isVisible();
+            assertTrue(page.locator("iframe[title='Generated SVG image']").getAttribute("src").startsWith("blob:"));
+            page.locator(".generated-viewer").screenshot(new com.microsoft.playwright.Locator.ScreenshotOptions()
+                    .setPath(Path.of("target/studio/generated-viewer.png")));
+            var imageTab = page.waitForPopup(() -> page.getByRole(AriaRole.LINK,
+                    new Page.GetByRoleOptions().setName("Open image").setExact(true)).click());
             imageTab.waitForURL(origin + "/image?**");
             imageTab.waitForLoadState(LoadState.LOAD);
             // Inspect the actual response rather than injecting a DOM selector into a sandboxed SVG document.
@@ -100,9 +107,10 @@ class StudioUiTests {
                 assertTrue(imageResponse.body().contains("The sum of cubes"));
                 assertTrue(imageResponse.body().contains("<path"));
             }
-            assertThat(page.getByLabel("Generated image permalink", new Page.GetByLabelOptions()
+            assertThat(page.getByLabel("Generated SVG URL", new Page.GetByLabelOptions()
                     .setExact(true))).hasValue(imageTab.url());
             Files.createDirectories(Path.of("target/studio"));
+            page.bringToFront();
             page.evaluate("window.scrollTo({top:0,behavior:'instant'})");
             page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("target/studio/studio.png")).setFullPage(true));
         }

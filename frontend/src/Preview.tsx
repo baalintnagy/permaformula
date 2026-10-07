@@ -72,7 +72,7 @@ export function Preview({
           sandbox="allow-scripts"
           referrerPolicy="no-referrer"
           srcDoc={source}
-          style={formula === undefined ? { width: imageWidth || 800 } : undefined}
+          style={formula === undefined ? { width: imageWidth || 500 } : undefined}
         />
       </div>
       {formula !== undefined && (

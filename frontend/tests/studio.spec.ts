@@ -16,7 +16,7 @@ test('color picker applies on double-click and outside click', async ({ page }) 
   await expect(page.getByRole('dialog', { name: 'CSS color picker' })).toHaveCount(0);
   await page.getByLabel('Change CSS color #112233', { exact: true }).click();
   await page.getByLabel('Selected color', { exact: true }).fill('#445566');
-  await page.getByRole('heading', { name: 'HTML image composer' }).click();
+  await page.getByRole('heading', { name: 'Formula + HTML + CSS' }).click();
   await expect(editor).toContainText('#445566');
   await page.getByLabel('Change CSS color #445566', { exact: true }).click();
   await page
@@ -47,7 +47,7 @@ test('wrapping links, formula zoom and CSS color edits', async ({ page }) => {
   await page
     .getByRole('textbox', { name: 'ASCIIMath formula', exact: true })
     .fill('x+'.repeat(80) + '1');
-  const url = page.getByLabel('Formula image URL', { exact: true });
+  const url = page.getByLabel('Expression SVG URL', { exact: true });
   await expect.poll(() => url.evaluate((field) => field.clientHeight)).toBeGreaterThan(40);
   expect(await url.evaluate((field) => field.scrollWidth <= field.clientWidth)).toBe(true);
 });
@@ -91,13 +91,13 @@ test('local math previews, exact query encoding, server rendering and new-tab pe
   await expect
     .poll(async () =>
       new URL(
-        await page.getByLabel('Formula image URL', { exact: true }).inputValue(),
+        await page.getByLabel('Expression SVG URL', { exact: true }).inputValue(),
       ).searchParams.get('formula'),
     )
     .toBe(formula);
-  await page.getByRole('button', { name: 'Copy Formula image URL', exact: true }).click();
+  await page.getByRole('button', { name: 'Copy Expression SVG URL', exact: true }).click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
-    await page.getByLabel('Formula image URL', { exact: true }).inputValue(),
+    await page.getByLabel('Expression SVG URL', { exact: true }).inputValue(),
   );
   await page.getByRole('button', { name: 'Render image', exact: true }).click();
   await expect(
@@ -113,11 +113,30 @@ test('local math previews, exact query encoding, server rendering and new-tab pe
   await page.getByLabel('Stylesheet URL 2').fill('https://example.com/two.css');
   await page.getByRole('button', { name: 'Move stylesheet 2 up' }).click();
   await page.getByLabel('Canvas width').fill('720');
+  let popupCount = 0;
+  page.on('popup', () => popupCount++);
+  await page.getByRole('button', { name: 'Generate image' }).click();
+  await expect(
+    page.frameLocator('iframe[title="Generated SVG image"]').locator('svg'),
+  ).toBeVisible();
+  expect(popupCount).toBe(0);
+  await expect(page.locator('.generated-viewer')).toHaveCSS('animation-name', 'result-ready');
+  await page.getByLabel('Canvas width').fill('500');
+  await expect(page.getByText('Showing the previous image.')).toBeVisible();
+  await page.getByLabel('Canvas width').fill('720');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(page.locator('.generated-viewer')).toHaveCSS('animation-name', 'none');
+  await page.getByRole('button', { name: 'Generate image' }).click();
+  await expect(
+    page.frameLocator('iframe[title="Generated SVG image"]').locator('svg'),
+  ).toBeVisible();
+  await expect(page.getByText('Your SVG is ready.', { exact: true })).toBeVisible();
+  expect(popupCount).toBe(0);
   const popupPromise = page.waitForEvent('popup');
-  await page.getByRole('button', { name: 'Generate & open image' }).click();
+  await page.getByRole('link', { name: 'Open image', exact: true }).click();
   const popup = await popupPromise;
   await popup.waitForURL(permalink);
-  await expect(page.getByLabel('Generated image permalink', { exact: true })).toHaveValue(
+  await expect(page.getByLabel('Generated SVG URL', { exact: true })).toHaveValue(
     permalink,
   );
   const request = new URL(requests.find((url) => new URL(url).pathname === '/url')!);
@@ -165,7 +184,7 @@ test('theme persists, mobile layout fits, and user HTML stays isolated', async (
   await page.screenshot({ path: 'test-results/studio-desktop.png', fullPage: true });
 });
 
-test('validation, ProblemDetail failures and popup fallback are visible', async ({ page }) => {
+test('validation and server rendering failures are visible', async ({ page }) => {
   await page.route('**/img?**', (route) =>
     route.fulfill({
       status: 400,
@@ -180,17 +199,29 @@ test('validation, ProblemDetail failures and popup fallback are visible', async 
   await page.getByRole('button', { name: 'Render image', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveText('Invalid formula input');
   await page.getByLabel('Canvas width').fill('219');
-  await expect(page.getByRole('button', { name: 'Generate & open image' })).toBeDisabled();
-  await page.getByLabel('Canvas width').fill('800');
+  await expect(page.getByRole('button', { name: 'Generate image' })).toBeDisabled();
+  await page.getByLabel('Canvas width').fill('500');
   await page.getByRole('button', { name: 'Add stylesheet' }).click();
   await page.getByLabel('Stylesheet URL 1').fill('http://example.com/style.css');
-  await expect(page.getByRole('button', { name: 'Generate & open image' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Generate image' })).toBeDisabled();
   await page.getByRole('button', { name: 'Remove stylesheet 1' }).click();
-  await page.evaluate(() => {
-    window.open = () => null;
-  });
-  await page.getByRole('button', { name: 'Generate & open image' }).click();
-  await expect(page.getByText('Your browser blocked the new tab.')).toBeVisible();
+  await page.route('**/image?**', (route) =>
+    route.fulfill({
+      status: 400,
+      contentType: 'application/problem+json',
+      body: JSON.stringify({ detail: 'Unable to render HTML' }),
+    }),
+  );
+  await page.getByRole('button', { name: 'Generate image' }).click();
+  await expect(page.locator('#composer').getByRole('alert')).toHaveText('Unable to render HTML');
+  await expect(page.getByRole('link', { name: 'Open image', exact: true })).toHaveCount(0);
+  await page.route('**/image?**', (route) =>
+    route.fulfill({ contentType: 'image/svg+xml', body: svg }),
+  );
+  await page.getByRole('button', { name: 'Generate image' }).click();
+  await expect(
+    page.frameLocator('iframe[title="Generated SVG image"]').locator('svg'),
+  ).toBeVisible();
   await expect(page.getByRole('link', { name: 'Open image', exact: true })).toHaveAttribute(
     'href',
     permalink,
@@ -208,7 +239,7 @@ test('initial studio renders in desktop and mobile light/dark layouts', async ({
   await page.getByRole('button', { name: 'Switch to dark theme' }).click();
   await page.screenshot({ path: 'test-results/studio-dark-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByRole('heading', { name: 'Formula playground' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Simple expression' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/studio-dark-mobile.png', fullPage: true });
   await page.getByRole('button', { name: 'Switch to light theme' }).click();

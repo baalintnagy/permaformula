@@ -65,7 +65,7 @@ try {
     $studio = Get-Response "$BaseUrl/"
     Assert-Status $studio 200
     if ((Text $studio) -notmatch 'PermMath' -or $studio.Content.Headers.ContentType.MediaType -ne 'text/html') {
-        throw 'API origin must serve the Studio UI'
+        throw 'API origin must serve the Builder UI'
     }
     Assert-Status (Get-Response "$BaseUrl/mathjax/tex-svg.js") 200
     Assert-Status (Get-Response "$ImageUrl/mathjax/tex-svg.js") 404

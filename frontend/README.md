@@ -1,4 +1,4 @@
-# PermMath Studio
+# PermMath Builder
 
 Static React/TypeScript UI for the existing Java API. Node.js 24 is used only for development and builds. There is no frontend runtime server in production.
 
@@ -68,5 +68,5 @@ After building the frontend, `mvn -o -pl permmath-api -am '-Dtest=StudioUiTests'
 - User HTML is sanitized with DOMPurify, then placed in an opaque-origin iframe (`sandbox="allow-scripts"`, without `allow-same-origin`). Only nonce-authorized preview code and bundled MathJax can execute. External HTTPS CSS/fonts can load; images, scripts supplied by the user, forms, navigation, and API requests are blocked.
 - CSS is assigned as text to a stylesheet, never interpolated into HTML. App theme changes do not alter the white image canvas.
 - External stylesheets load directly in the browser for preview; the renderer fetches and sanitizes them separately. Network availability, CSS sanitization, and browser behavior can make the preview differ from final output. The generated server image is authoritative.
-- `/img` is fetched anonymously on user action and displayed as an image blob. `/url` is called on user action; the returned `/image` permalink opens in a tab reserved during the click, with an explicit link fallback for popup blockers.
+- `/img` is fetched anonymously on user action and displayed as an image blob. Generate image calls `/url`, then fetches the returned `/image` SVG anonymously into a sandboxed viewer. A brief highlight signals completion; reduced-motion users receive a static outline. The Open image link supports Ctrl-click or middle-click to open a background tab.
 - Inputs are not saved automatically. Only the theme preference is persisted.

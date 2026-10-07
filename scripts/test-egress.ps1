@@ -68,7 +68,7 @@ try {
     if ($formula.StatusCode -ne 200 -or $formulaSvg -notmatch '<svg') { throw 'Formula ingress failed' }
     $html = [uri]::EscapeDataString('<p class="text-danger">Egress verified `x^2`</p>')
     $css = [uri]::EscapeDataString('https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css')
-    $url = (Invoke-WebRequest "$BaseUrl/url?formula=$html&imageWidth=800&styleRefs=$css" -TimeoutSec 10).Content
+    $url = (Invoke-WebRequest "$BaseUrl/url?formula=$html&imageWidth=500&styleRefs=$css" -TimeoutSec 10).Content
     $image = Invoke-WebRequest $url -TimeoutSec 60
     $svg = if ($image.Content -is [string]) { $image.Content } else { [Text.Encoding]::UTF8.GetString($image.Content) }
     if ($svg -notmatch 'Egress verified' -or $svg -notmatch 'rgb\(220,\s*53,\s*69\)') { throw 'External Bootstrap styling failed' }

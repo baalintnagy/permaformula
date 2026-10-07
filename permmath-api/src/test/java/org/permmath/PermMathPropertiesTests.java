@@ -20,7 +20,7 @@ class PermMathPropertiesTests {
         runner.run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context.getBean(PermMathProperties.class))
-                    .isEqualTo(new PermMathProperties("https://math.example.com", 800, 2000.0f));
+                    .isEqualTo(new PermMathProperties("https://math.example.com", 500, 2000.0f));
         });
     }
 

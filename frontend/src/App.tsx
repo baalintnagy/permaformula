@@ -1,18 +1,18 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Editor } from './Editor';
 import { Preview } from './Preview';
-import { createPermalink, formulaUrl, responseError, validStyleRef } from './api';
+import { createPermalink, formulaUrl, imageRequestUrl, responseError, validStyleRef } from './api';
 
 const initialFormula = 'sum_(i=1)^n i^3 = ((n(n+1))/2)^2';
 const initialHtml = `<div class="math-card">
-  <span class="eyebrow">A LITTLE MATHEMATICAL BEAUTY</span>
+  <span class="eyebrow">MATHEMATICAL IDENTITY</span>
   <h1>The sum of cubes</h1>
-  <p>A familiar series. An elegant identity.</p>
+  <p>The sum has a closed form:</p>
   <div class="equation">
     \`sum_(i=1)^n i^3 = ((n(n+1))/2)^2\`
   </div>
   <p class="caption">The sum of the first n cubes equals
-    the square of the nth triangular number.</p>
+    the square of the n-th triangular number.</p>
 </div>`;
 const initialCss = `body { margin: 0; padding: 0; }
 .math-card {
@@ -37,9 +37,11 @@ p { line-height: 1.7; }
 function Icon({
   name,
 }: {
-  name: 'sun' | 'moon' | 'arrow' | 'copy' | 'check' | 'plus' | 'external';
+  name: 'sun' | 'moon' | 'arrow' | 'copy' | 'check' | 'plus' | 'external' | 'formula' | 'code';
 }) {
   const paths = {
+    formula: <path d="M18 4H6l7 8-7 8h12" />,
+    code: <path d="m8 6-6 6 6 6m8-12 6 6-6 6M14 4l-4 16" />,
     sun: (
       <>
         <circle cx="12" cy="12" r="4" />
@@ -172,7 +174,7 @@ export function App() {
   const [html, setHtml] = useState(initialHtml);
   const [css, setCss] = useState(initialCss);
   const [styleRefs, setStyleRefs] = useState<string[]>([]);
-  const [imageWidth, setImageWidth] = useState('800');
+  const [imageWidth, setImageWidth] = useState('500');
   const [activeEditor, setActiveEditor] = useState<'html' | 'css'>('html');
   const [image, setImage] = useState<{ url: string; formula: string } | null>(null);
   const [formulaBusy, setFormulaBusy] = useState(false);
@@ -181,7 +183,13 @@ export function App() {
   const [generatedInput, setGeneratedInput] = useState('');
   const [composerBusy, setComposerBusy] = useState(false);
   const [composerError, setComposerError] = useState('');
-  const [openFallback, setOpenFallback] = useState(false);
+  const [generatedImage, setGeneratedImage] = useState<{
+    url: string;
+    width: number;
+    revision: number;
+  } | null>(null);
+  const generatedObject = useRef('');
+  const generationRevision = useRef(0);
   const imageObject = useRef('');
   const formulaAbort = useRef<AbortController | null>(null);
   const composerAbort = useRef<AbortController | null>(null);
@@ -206,6 +214,7 @@ export function App() {
       formulaAbort.current?.abort();
       composerAbort.current?.abort();
       if (imageObject.current) URL.revokeObjectURL(imageObject.current);
+      if (generatedObject.current) URL.revokeObjectURL(generatedObject.current);
     },
     [],
   );
@@ -219,7 +228,7 @@ export function App() {
     formulaAbort.current = controller;
     const submittedFormula = formula;
     try {
-      const response = await fetch(formulaUrl(submittedFormula, window.location.origin), {
+      const response = await fetch(imageRequestUrl(formulaUrl(submittedFormula)), {
         signal: controller.signal,
         credentials: 'omit',
         headers: { Accept: 'image/svg+xml' },
@@ -245,20 +254,8 @@ export function App() {
   async function generateImage() {
     if (composerLock.current) return;
     composerLock.current = true;
-    // Reserve the tab during the user gesture, before the asynchronous API call.
-    const tab = window.open('about:blank', '_blank');
-    if (tab) {
-      tab.opener = null;
-      tab.document.title = 'PermMath — Generating image';
-      tab.document.body.textContent = 'Generating your image…';
-      // Request a background tab while the user gesture is still active.
-      // Browsers ultimately decide whether scripted focus changes are allowed.
-      tab.blur();
-      window.focus();
-    }
     setComposerBusy(true);
     setComposerError('');
-    setOpenFallback(false);
     const controller = new AbortController();
     composerAbort.current = controller;
     const submittedInput = inputIdentity;
@@ -267,20 +264,25 @@ export function App() {
         { html, css, styleRefs, imageWidth: width },
         controller.signal,
       );
-      if (controller.signal.aborted) {
-        tab?.close();
-        return;
-      }
+      const response = await fetch(imageRequestUrl(url), {
+        signal: controller.signal,
+        credentials: 'omit',
+        headers: { Accept: 'image/svg+xml' },
+      });
+      if (!response.ok) throw new Error(await responseError(response));
+      if (!response.headers.get('content-type')?.includes('image/svg+xml'))
+        throw new Error('The server did not return an SVG image.');
+      const blob = await response.blob();
+      if (controller.signal.aborted) return;
+      const objectUrl = URL.createObjectURL(blob);
+      if (generatedObject.current) URL.revokeObjectURL(generatedObject.current);
+      generatedObject.current = objectUrl;
+      setGeneratedImage({ url: objectUrl, width, revision: ++generationRevision.current });
       setPermalink(url);
       setGeneratedInput(submittedInput);
-      if (tab && !tab.closed) tab.location.replace(url);
-      else setOpenFallback(true);
     } catch (error) {
-      tab?.close();
       if (!controller.signal.aborted)
-        setComposerError(
-          error instanceof Error ? error.message : 'Unable to generate the permalink.',
-        );
+        setComposerError(error instanceof Error ? error.message : 'Unable to generate the image.');
     } finally {
       composerLock.current = false;
       setComposerBusy(false);
@@ -304,7 +306,7 @@ export function App() {
         <a className="brand" href="#">
           <span className="brand-mark">∑</span>
           <span>
-            PermMath<span className="brand-sub">STUDIO</span>
+            PermMath<span className="brand-sub">BUILDER</span>
           </span>
         </a>
         <nav aria-label="Workspaces">
@@ -322,11 +324,11 @@ export function App() {
       </header>
       <main>
         <div className="intro">
-          <span className="eyebrow">FROM EXPRESSION TO IMAGE</span>
+          <span className="eyebrow">FORMULA TO SCALABLE VECTOR GRAPHICS</span>
           <h1>
-            Give your ideas <span>a clear form.</span>
+            Publish <span>math</span> easily.
           </h1>
-          <p>Write math. Style HTML. Create an image you can share anywhere.</p>
+          <p>Write ASCIIMath. Define style. Share anywhere.</p>
           <div className="intro-meta">
             <span className="live-dot" /> Live local previews{' '}
             <span className="meta-divider">/</span> SVG output
@@ -335,10 +337,12 @@ export function App() {
 
         <section id="formula" className="workspace" aria-labelledby="formula-heading">
           <div className="section-heading">
-            <div className="section-number">01</div>
+            <div className="section-icon">
+              <Icon name="formula" />
+            </div>
             <div>
-              <h2 id="formula-heading">Formula playground</h2>
-              <p>A single expression, beautifully rendered.</p>
+              <h2 id="formula-heading">Simple expression</h2>
+              <p>A single expression.</p>
             </div>
             <span className="section-tag">ASCIIMATH → SVG</span>
           </div>
@@ -358,13 +362,13 @@ export function App() {
               </div>
             </div>
             <div className="panel preview-panel">
-              <PanelHeading title="Live preview" badge="LOCAL" />
+              <PanelHeading title="Live preview" badge="SVG" />
               <Preview formula={formula} />
               <div className="panel-note">Updates as you type. No server request.</div>
             </div>
           </div>
           <div className="action-panel">
-            <CopyUrl url={imgUrl} label="Formula image URL" />
+            <CopyUrl url={imgUrl} label="Expression SVG URL" />
             <button
               className="primary-button"
               disabled={!formula.trim() || formulaBusy}
@@ -382,7 +386,7 @@ export function App() {
           {image && (
             <div className="server-result panel">
               <PanelHeading
-                title="Server image"
+                title="Generated image"
                 badge={image.formula !== formula ? 'PREVIOUS INPUT' : 'SVG'}
               />
               <div className="result-canvas">
@@ -398,9 +402,11 @@ export function App() {
 
         <section id="composer" className="workspace" aria-labelledby="composer-heading">
           <div className="section-heading">
-            <div className="section-number">02</div>
+            <div className="section-icon">
+              <Icon name="code" />
+            </div>
             <div>
-              <h2 id="composer-heading">HTML image composer</h2>
+              <h2 id="composer-heading">Formula + HTML + CSS</h2>
               <p>Bring layout, typography, and formulas together.</p>
             </div>
             <span className="section-tag">HTML + CSS → SVG</span>
@@ -538,7 +544,7 @@ export function App() {
               </div>
             </div>
             <div className="panel preview-panel">
-              <PanelHeading title="Live preview" badge="LOCAL" />
+              <PanelHeading title="Live preview" badge="HTML" />
               <div className="canvas-toolbar">
                 <label>
                   Canvas width{' '}
@@ -555,7 +561,6 @@ export function App() {
                     <span>px</span>
                   </div>
                 </label>
-                <span>White canvas</span>
               </div>
               {!widthValid && (
                 <p className="field-error width-error">
@@ -566,7 +571,7 @@ export function App() {
                 html={html}
                 css={css}
                 styleRefs={styleRefs.map((ref) => ref.trim())}
-                imageWidth={widthValid ? width : 800}
+                imageWidth={widthValid ? width : 500}
               />
               <div className="panel-note">
                 Preview scrolls at the selected width. Server sanitization may change the final
@@ -578,15 +583,15 @@ export function App() {
             <p>
               <span className="live-dot" />
               Ready when you are.
-              <small>Generate a permalink and open the server image in a new tab.</small>
+              <small>Generate an SVG to view here and share.</small>
             </p>
             <button
               className="primary-button"
               disabled={composerBusy || !html.trim() || !widthValid || !refsValid}
               onClick={generateImage}
             >
-              {composerBusy ? 'Generating…' : 'Generate & open image'}
-              <Icon name="external" />
+              {composerBusy ? 'Generating…' : 'Generate image'}
+              <Icon name="arrow" />
             </button>
           </div>
           {composerError && (
@@ -594,25 +599,44 @@ export function App() {
               {composerError}
             </div>
           )}
-          {permalink && (
-            <div className="permalink-result panel">
-              <CopyUrl
-                url={permalink}
-                label={
-                  inputIdentity === generatedInput
-                    ? 'Generated image permalink'
-                    : 'Generated image permalink (previous input)'
-                }
-              />
-              <a href={permalink} target="_blank" rel="noopener noreferrer" className="text-button">
-                Open image
-                <Icon name="external" />
-              </a>
-              {openFallback && (
-                <p role="status">
-                  Your browser blocked the new tab. Use “Open image” to view the result.
+          {generatedImage && (
+            <div className="generated-result" key={generatedImage.revision}>
+              <div className="permalink-result panel">
+                <CopyUrl
+                  url={permalink}
+                  label={
+                    inputIdentity === generatedInput
+                      ? 'Generated SVG URL'
+                      : 'Generated SVG URL (previous input)'
+                  }
+                />
+                <a
+                  href={permalink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-button result-highlight"
+                >
+                  Open image
+                  <Icon name="external" />
+                </a>
+              </div>
+              <div className="generated-viewer panel result-highlight">
+                <PanelHeading title="Generated image" badge="SVG" />
+                <p className="generated-status" role="status">
+                  {inputIdentity === generatedInput
+                    ? 'Your SVG is ready.'
+                    : 'Showing the previous image. Generate again to apply your changes.'}
                 </p>
-              )}
+                <div className="generated-scroll">
+                  <iframe
+                    title="Generated SVG image"
+                    src={generatedImage.url}
+                    sandbox=""
+                    referrerPolicy="no-referrer"
+                    style={{ width: generatedImage.width }}
+                  />
+                </div>
+              </div>
             </div>
           )}
         </section>

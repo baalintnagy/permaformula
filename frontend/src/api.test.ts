@@ -1,11 +1,31 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { createPermalink, formulaUrl, permalinkRequest, validStyleRef } from './api';
+import {
+  createPermalink,
+  formulaUrl,
+  imageRequestUrl,
+  permalinkRequest,
+  validStyleRef,
+} from './api';
 import { previewDocument } from './preview-document';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
 
 describe('image requests', () => {
+  it('uses the development proxy without changing the encoded image payload', () => {
+    vi.stubEnv('DEV', true);
+    expect(imageRequestUrl('http://localhost:8086/image?ubcq=a%2Bb%2F%3D')).toBe(
+      '/image?ubcq=a%2Bb%2F%3D',
+    );
+    expect(imageRequestUrl('http://localhost:8086/img?formula=x%2By')).toBe('/img?formula=x%2By');
+    vi.stubEnv('DEV', false);
+    expect(imageRequestUrl('https://images.example/image?ubcq=a%2Bb')).toBe(
+      'https://images.example/image?ubcq=a%2Bb',
+    );
+  });
   it('round-trips original formula characters without double encoding', () => {
     const formula = 'x + y = 50% & α\n"quoted" #?';
     const url = new URL(formulaUrl(formula, 'https://math.example'));
@@ -46,7 +66,7 @@ describe('image requests', () => {
       expect(validStyleRef(url)).toBe(false);
   });
   it('surfaces ProblemDetail errors and rejects invalid permalink schemes', async () => {
-    const request = { html: '<p>x</p>', css: '', styleRefs: [], imageWidth: 800 };
+    const request = { html: '<p>x</p>', css: '', styleRefs: [], imageWidth: 500 };
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(

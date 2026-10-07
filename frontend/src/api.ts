@@ -14,6 +14,14 @@ export interface ComposerRequest {
   imageWidth: number;
 }
 
+export function imageRequestUrl(permalink: string): string {
+  const url = new URL(permalink, window.location.origin);
+  // Vite proxies image endpoints; direct API fetches would require CORS in development.
+  if (import.meta.env.DEV && ['/image', '/img'].includes(url.pathname))
+    return url.pathname + url.search;
+  return url.href;
+}
+
 export function validStyleRef(value: string): boolean {
   try {
     const url = new URL(value);

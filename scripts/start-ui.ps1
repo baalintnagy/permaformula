@@ -21,7 +21,7 @@ try {
         & npm.cmd ci
         if ($LASTEXITCODE -ne 0) { throw 'Frontend dependency installation failed.' }
     }
-    Write-Host "PermMath Studio: http://127.0.0.1:$Port"
+    Write-Host "PermMath Builder: http://127.0.0.1:$Port"
     Write-Host 'Start the renderer and API in Eclipse. The UI uses the API on port 8086 by default.'
     Write-Host 'Override with -ApiOrigin or frontend/.env.local. Ctrl+C stops only the UI.'
     & npm.cmd run dev -- --port $Port --strictPort
