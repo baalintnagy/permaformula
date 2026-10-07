@@ -50,9 +50,9 @@ function editorTheme(dark: boolean) {
         '.cm-activeLine, .cm-activeLineGutter': {
           backgroundColor: dark ? '#ffffff06' : '#47556906',
         },
-        '.cm-cursor': { borderLeftColor: dark ? '#b2a2ff' : '#6845df' },
+        '.cm-cursor': { borderLeftColor: dark ? '#9bbfea' : '#496f9f' },
         '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection': {
-          backgroundColor: dark ? '#5c438b70' : '#dcd2fa',
+          backgroundColor: dark ? '#496f9f70' : '#d5e3f5',
         },
         '.cm-tooltip': { backgroundColor: dark ? '#242c3f' : '#fff', border: '1px solid #8993a5' },
         '.cm-panels': { backgroundColor: dark ? '#242c3f' : '#f2f4f8', color: 'inherit' },
@@ -61,7 +61,7 @@ function editorTheme(dark: boolean) {
     ),
     syntaxHighlighting(
       HighlightStyle.define([
-        { tag: [tags.keyword, tags.tagName], color: dark ? '#c1a1ff' : '#7743ba' },
+        { tag: [tags.keyword, tags.tagName], color: dark ? '#a9c9f0' : '#496f9f' },
         { tag: [tags.string, tags.attributeValue], color: dark ? '#a7d99e' : '#38784b' },
         { tag: [tags.number, tags.atom], color: dark ? '#f5c17c' : '#a85a15' },
         { tag: [tags.attributeName, tags.propertyName], color: dark ? '#94c6ff' : '#246ba2' },

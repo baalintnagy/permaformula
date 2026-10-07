@@ -17,14 +17,14 @@ const initialHtml = `<div class="math-card">
 const initialCss = `body { margin: 0; padding: 0; }
 .math-card {
   padding: 48px;
-  background: #f5f3ff;
-  color: #272044;
+  background: #edf3fb;
+  color: #263b54;
   font-family: Georgia, serif;
 }
 .eyebrow {
   font: 11px Arial, sans-serif;
   letter-spacing: 2px;
-  color: #7455b9;
+  color: #496f9f;
 }
 h1 { font-size: 36px; margin: 18px 0; }
 p { line-height: 1.7; }
@@ -32,7 +32,7 @@ p { line-height: 1.7; }
   padding: 24px 0;
   font-size: 25px;
 }
-.caption { color: #746a8c; font-size: 14px; }`;
+.caption { color: #687d96; font-size: 14px; }`;
 
 function Icon({
   name,

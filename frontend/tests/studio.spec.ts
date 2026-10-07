@@ -31,7 +31,7 @@ test('local math previews, exact query encoding, server rendering and new-tab pe
   ).toBeVisible();
   await expect(
     page.frameLocator('iframe[title="HTML live preview"]').locator('.math-card'),
-  ).toHaveCSS('background-color', 'rgb(245, 243, 255)');
+  ).toHaveCSS('background-color', 'rgb(237, 243, 251)');
   await expect(
     page.frameLocator('iframe[title="Formula live preview"]').locator('mjx-assistive-mml'),
   ).toHaveCSS('position', 'absolute');

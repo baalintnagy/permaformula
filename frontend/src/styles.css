@@ -1,18 +1,20 @@
 :root {
   font-family: Inter, 'Segoe UI', Arial, sans-serif;
   color: #253149;
-  background: #f6f7fb;
+  background: #f5f7fb;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --bg: #f6f7fb;
+  --bg: #f5f7fb;
   --surface: #ffffff;
-  --surface-alt: #fafbfe;
+  --surface-alt: #f8fafd;
   --text: #253149;
   --muted: #79849a;
-  --border: #e5e8f1;
-  --accent: #7356d8;
-  --accent-soft: #efebfb;
+  --border: #e2e8f1;
+  --accent: #496f9f;
+  --accent-soft: #e9f0fa;
+  --button-bg: #496f9f;
+  --button-hover: #3c608d;
   --header: #ffffffdc;
   --shadow: 0 3px 10px #24304903;
   color-scheme: light;
@@ -27,8 +29,8 @@
   --text: #e4e9f4;
   --muted: #96a2b9;
   --border: #2a3448;
-  --accent: #b19af8;
-  --accent-soft: #302844;
+  --accent: #9bbfea;
+  --accent-soft: #25374f;
   --header: #111723eb;
   --shadow: none;
 }
@@ -409,7 +411,7 @@ code {
 }
 .primary-button {
   border: 0;
-  background: #7554d6;
+  background: var(--button-bg);
   color: white;
   border-radius: 9px;
   padding: 13px 17px;
@@ -425,7 +427,7 @@ code {
     transform 0.15s;
 }
 .primary-button:hover:not(:disabled) {
-  background: #6544c5;
+  background: var(--button-hover);
   transform: translateY(-1px);
 }
 .action-panel > .primary-button {
