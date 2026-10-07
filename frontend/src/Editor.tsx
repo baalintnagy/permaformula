@@ -6,6 +6,7 @@ import { html } from '@codemirror/lang-html';
 import { css } from '@codemirror/lang-css';
 import { StreamLanguage, syntaxHighlighting, HighlightStyle } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
+import { colorPickers } from './color-picker';
 
 const asciiMath = StreamLanguage.define({
   token(stream) {
@@ -99,6 +100,7 @@ export function Editor({
         extensions: [
           basicSetup,
           language === 'html' ? html() : language === 'css' ? css() : asciiMath,
+          language === 'css' ? colorPickers : [],
           theme.current.of(editorTheme(dark)),
           EditorView.lineWrapping,
           EditorView.contentAttributes.of({

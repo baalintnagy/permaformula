@@ -84,7 +84,19 @@ function CopyUrl({ url, label }: { url: string; label: string }) {
   const id = useId();
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const field = input.current;
+    if (!field) return;
+    const resize = () => {
+      field.style.height = 'auto';
+      field.style.height = `${field.scrollHeight}px`;
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(field);
+    resize();
+    return () => observer.disconnect();
+  }, [url]);
   useEffect(() => {
     setCopied(false);
     setError(false);
@@ -108,10 +120,11 @@ function CopyUrl({ url, label }: { url: string; label: string }) {
     <div className="url-output">
       <label htmlFor={id}>{label}</label>
       <div className="url-row">
-        <input
+        <textarea
           id={id}
           ref={input}
           readOnly
+          rows={1}
           value={url}
           onFocus={(event) => event.target.select()}
         />
@@ -238,6 +251,10 @@ export function App() {
       tab.opener = null;
       tab.document.title = 'PermMath — Generating image';
       tab.document.body.textContent = 'Generating your image…';
+      // Request a background tab while the user gesture is still active.
+      // Browsers ultimately decide whether scripted focus changes are allowed.
+      tab.blur();
+      window.focus();
     }
     setComposerBusy(true);
     setComposerError('');

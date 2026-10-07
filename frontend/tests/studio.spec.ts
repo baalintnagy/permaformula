@@ -4,6 +4,54 @@ const svg =
   '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="50"><text x="10" y="30">Rendered image</text></svg>';
 const permalink = 'http://127.0.0.1:5173/image?ubcq=test%2Bpayload';
 
+test('color picker applies on double-click and outside click', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('tab', { name: /CSS/ }).click();
+  const editor = page.getByRole('textbox', { name: 'CSS source', exact: true });
+  await page.getByLabel('Change CSS color #edf3fb', { exact: true }).click();
+  await page.getByLabel('Selected color', { exact: true }).fill('#112233');
+  await expect(editor).toContainText('#edf3fb');
+  await page.getByLabel('Selected color', { exact: true }).dblclick();
+  await expect(editor).toContainText('#112233');
+  await expect(page.getByRole('dialog', { name: 'CSS color picker' })).toHaveCount(0);
+  await page.getByLabel('Change CSS color #112233', { exact: true }).click();
+  await page.getByLabel('Selected color', { exact: true }).fill('#445566');
+  await page.getByRole('heading', { name: 'HTML image composer' }).click();
+  await expect(editor).toContainText('#445566');
+  await page.getByLabel('Change CSS color #445566', { exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'CSS color picker' })
+    .locator('canvas')
+    .dblclick({ position: { x: 100, y: 70 } });
+  await expect(page.getByRole('dialog', { name: 'CSS color picker' })).toHaveCount(0);
+  await expect(editor).not.toContainText('#445566');
+});
+
+test('wrapping links, formula zoom and CSS color edits', async ({ page }) => {
+  await page.goto('/');
+  const formulaFrame = page.frameLocator('iframe[title="Formula live preview"]');
+  await expect(formulaFrame.locator('svg')).toBeVisible();
+  await page.getByRole('slider', { name: 'Formula preview zoom' }).fill('200');
+  await expect(formulaFrame.locator('#formula-preview')).toHaveCSS('font-size', '32px');
+  await page.getByRole('tab', { name: /CSS/ }).click();
+  const picker = page.getByLabel('Change CSS color #edf3fb', { exact: true });
+  await expect(picker).toBeVisible();
+  await picker.fill('#123456');
+  await expect(page.getByRole('textbox', { name: 'CSS source', exact: true })).toContainText(
+    '#123456',
+  );
+  await expect(
+    page.frameLocator('iframe[title="HTML live preview"]').locator('.math-card'),
+  ).toHaveCSS('background-color', 'rgb(18, 52, 86)');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page
+    .getByRole('textbox', { name: 'ASCIIMath formula', exact: true })
+    .fill('x+'.repeat(80) + '1');
+  const url = page.getByLabel('Formula image URL', { exact: true });
+  await expect.poll(() => url.evaluate((field) => field.clientHeight)).toBeGreaterThan(40);
+  expect(await url.evaluate((field) => field.scrollWidth <= field.clientWidth)).toBe(true);
+});
+
 test('local math previews, exact query encoding, server rendering and new-tab permalink flow', async ({
   page,
 }) => {

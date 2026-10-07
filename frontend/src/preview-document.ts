@@ -78,6 +78,12 @@ export function previewDocument(
     ${links}<style id="user-css"></style>
     <script nonce="${nonce}">
       const payload=${payload};
+      window.addEventListener('message',event=>{
+        if(event.source!==parent || event.data?.type!=='permmath-zoom' || payload.formula===undefined)return;
+        const zoom=event.data.zoom;
+        if(typeof zoom==='number' && Number.isFinite(zoom) && zoom>=50 && zoom<=250)
+          document.getElementById('formula-preview').style.fontSize=zoom+'%';
+      });
       document.getElementById('user-css').textContent=payload.css;
       window.MathJax={loader:{load:['input/asciimath','ui/safe'],paths:{mathjax:${JSON.stringify(assets.slice(0, -1))}}},
         options:{enableMenu:false,safeOptions:{allow:{URLs:'none',classes:'safe',cssIDs:'none',styles:'safe'}}},

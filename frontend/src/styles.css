@@ -46,7 +46,8 @@ body {
   min-width: 320px;
 }
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 button,
@@ -333,7 +334,80 @@ code {
   color-scheme: light;
 }
 .formula-preview {
-  height: 193px;
+  height: 227px;
+}
+.formula-zoom {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--muted);
+  font-size: 10px;
+}
+.formula-zoom input {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+.formula-zoom output {
+  min-width: 35px;
+  text-align: right;
+}
+.cm-color-picker {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin-right: 5px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  vertical-align: middle;
+  background: transparent;
+  cursor: pointer;
+}
+.cm-color-picker::-webkit-color-swatch-wrapper {
+  padding: 1px;
+}
+.cm-color-picker::-webkit-color-swatch {
+  border: 0;
+  border-radius: 1px;
+}
+.color-panel {
+  position: fixed;
+  z-index: 30;
+  width: 224px;
+  padding: 11px;
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 28px #17203326;
+}
+.color-panel canvas {
+  width: 200px;
+  height: 140px;
+  cursor: crosshair;
+  border-radius: 4px;
+}
+.color-panel input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.color-panel input:not([type='range']) {
+  padding: 6px;
+  background: var(--surface-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.color-panel small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
 }
 .formula-preview .preview-scroll {
   height: 164px;
@@ -374,7 +448,7 @@ code {
   align-items: center;
   margin-top: 8px;
 }
-.url-row input {
+.url-row textarea {
   min-width: 0;
   flex: 1;
   border: 0;
@@ -384,7 +458,9 @@ code {
     11px 'Cascadia Code',
     Consolas,
     monospace;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  resize: none;
+  overflow: hidden;
   padding: 3px 0;
   width: 100%;
 }
@@ -692,7 +768,7 @@ footer svg {
     height: 150px;
   }
   .formula-preview {
-    height: 210px;
+    height: 244px;
   }
   .formula-preview .preview-scroll {
     height: 181px;

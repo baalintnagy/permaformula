@@ -16,6 +16,7 @@ export function Preview({
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [source, setSource] = useState('');
+  const [zoom, setZoom] = useState(100);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const refsIdentity = JSON.stringify(styleRefs || []);
   const document = useMemo(
@@ -43,6 +44,11 @@ export function Preview({
     return () => window.removeEventListener('message', onMessage);
   }, []);
   useEffect(() => {
+    if (formula !== undefined && status === 'ready') {
+      frame.current?.contentWindow?.postMessage({ type: 'permmath-zoom', zoom }, '*');
+    }
+  }, [zoom, status, formula]);
+  useEffect(() => {
     if (!source || status !== 'loading') return;
     const timer = window.setTimeout(() => setStatus('error'), 15000);
     return () => window.clearTimeout(timer);
@@ -69,6 +75,21 @@ export function Preview({
           style={formula === undefined ? { width: imageWidth || 800 } : undefined}
         />
       </div>
+      {formula !== undefined && (
+        <label className="formula-zoom">
+          Zoom
+          <input
+            type="range"
+            min="50"
+            max="250"
+            step="10"
+            value={zoom}
+            aria-label="Formula preview zoom"
+            onChange={(event) => setZoom(Number(event.target.value))}
+          />
+          <output>{zoom}%</output>
+        </label>
+      )}
     </div>
   );
 }
