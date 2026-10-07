@@ -733,8 +733,11 @@
   }
 
   // complexity-limits.js
-  var limits = Object.freeze(globalThis.PermMathComplexity);
-  if (!limits) throw new Error("Missing rendering complexity policy");
+  var policy = globalThis.PermMathComplexity;
+  if (!policy || typeof policy !== "object") {
+    throw new Error("Missing rendering complexity policy");
+  }
+  var limits = Object.freeze(policy);
   function validateMathInput(source) {
     if (source.length > limits.MATH_CHARS) throw new Error("Math expression exceeds size limit");
   }
@@ -744,7 +747,7 @@
     while (pending.length) {
       const [node, depth] = pending.pop();
       if (++count > nodeLimit || depth > depthLimit)
-        throw new Error(label + " exceeds complexity limits");
+        throw new Error(`${label} exceeds complexity limits`);
       for (const child of children(node)) pending.push([child, depth + 1]);
     }
     return count;
@@ -785,7 +788,9 @@
     const bounds = source.getBoundingClientRect();
     const height = Math.max(
       1,
-      Math.ceil(bounds.height + parseFloat(computed.marginTop) + parseFloat(computed.marginBottom))
+      Math.ceil(
+        bounds.height + Number.parseFloat(computed.marginTop) + Number.parseFloat(computed.marginBottom)
+      )
     );
     const width = window.innerWidth;
     validateDimensions(
@@ -809,11 +814,19 @@
     return !["SCRIPT", "LINK", "STYLE"].includes(node.nodeName.toUpperCase());
   }
   function decodeSvg(dataUrl) {
-    const markup = decodeURIComponent(dataUrl.substring(dataUrl.indexOf(",") + 1));
-    return new DOMParser().parseFromString(markup, "image/svg+xml");
+    const prefix = "data:image/svg+xml;charset=utf-8,";
+    if (!dataUrl.startsWith(prefix)) throw new Error("Invalid SVG data URL");
+    const markup = decodeURIComponent(dataUrl.slice(prefix.length));
+    const svg = new DOMParser().parseFromString(markup, "image/svg+xml");
+    if (svg.querySelector("parsererror") || svg.documentElement.localName !== "svg" || svg.documentElement.namespaceURI !== "http://www.w3.org/2000/svg") {
+      throw new Error("Invalid SVG document");
+    }
+    return svg;
   }
   function normalizeSvg(svg) {
-    svg.querySelector("foreignObject").removeAttribute("externalResourcesRequired");
+    svg.querySelectorAll("foreignObject").forEach((node) => {
+      node.removeAttribute("externalResourcesRequired");
+    });
     svg.querySelectorAll("script,link,style").forEach((node) => node.remove());
     return new XMLSerializer().serializeToString(svg.documentElement);
   }
@@ -868,6 +881,35 @@
     sanitizeMath(math, document2);
   }
 
+  // browser-assets.js
+  async function waitForAssets(document2) {
+    await Promise.all([document2.fonts.ready, ...Array.from(document2.images, waitForImage)]);
+  }
+  function waitForImage(image) {
+    if (image.complete) {
+      return image.naturalWidth ? Promise.resolve() : Promise.reject(imageError(image));
+    }
+    return new Promise((resolve, reject) => {
+      const cleanup = () => {
+        image.removeEventListener("load", onLoad);
+        image.removeEventListener("error", onError);
+      };
+      const onLoad = () => {
+        cleanup();
+        resolve();
+      };
+      const onError = () => {
+        cleanup();
+        reject(imageError(image));
+      };
+      image.addEventListener("load", onLoad, { once: true });
+      image.addEventListener("error", onError, { once: true });
+    });
+  }
+  function imageError(image) {
+    return new Error(`Image failed: ${image.currentSrc || image.src}`);
+  }
+
   // browser-entry.js
   var renderer = { state: "loading", svg: null, error: null };
   window.PermMathRenderer = renderer;
@@ -883,28 +925,17 @@
     try {
       validateDom(document.body);
       await window.MathJax.startup.defaultPageReady();
-      await waitForAssets();
+      await waitForAssets(document);
       validateDom(document.body);
       if (document.querySelector("mjx-merror")) throw new Error("Invalid math expression");
-      renderer.svg = await exportStyledSvg();
-      renderer.state = "ready";
+      const svg = await exportStyledSvg();
+      if (renderer.state !== "error") {
+        renderer.svg = svg;
+        renderer.state = "ready";
+      }
     } catch (error) {
       failRender(error);
     }
-  }
-  async function waitForAssets() {
-    await Promise.all([document.fonts.ready, ...Array.from(document.images, waitForImage)]);
-  }
-  function waitForImage(image) {
-    if (image.complete) {
-      return image.naturalWidth ? Promise.resolve() : Promise.reject(new Error("Image failed: " + image.src));
-    }
-    return new Promise((resolve, reject) => {
-      image.addEventListener("load", resolve, { once: true });
-      image.addEventListener("error", () => reject(new Error("Image failed: " + image.src)), {
-        once: true
-      });
-    });
   }
   function handleScriptError(event) {
     if (event.target instanceof HTMLScriptElement && event.target.id === "mathjax-script") {
@@ -912,6 +943,7 @@
     }
   }
   function failRender(error) {
+    renderer.svg = null;
     renderer.error = String(error);
     renderer.state = "error";
   }

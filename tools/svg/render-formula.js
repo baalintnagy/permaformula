@@ -31,8 +31,8 @@ export function render(formula) {
     limits.RENDER_DEPTH,
     'Math SVG',
   );
-  const width = parseFloat(adaptor.getAttribute(svg, 'width')) * limits.EX_PIXELS;
-  const height = parseFloat(adaptor.getAttribute(svg, 'height')) * limits.EX_PIXELS;
+  const width = Number.parseFloat(adaptor.getAttribute(svg, 'width')) * limits.EX_PIXELS;
+  const height = Number.parseFloat(adaptor.getAttribute(svg, 'height')) * limits.EX_PIXELS;
   validateDimensions(width, height);
   const result = adaptor.outerHTML(svg);
   if (result.length > limits.SVG_BYTES) throw new Error('SVG exceeds size limit');

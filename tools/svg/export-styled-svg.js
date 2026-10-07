@@ -24,7 +24,11 @@ function measureContent(source) {
   const bounds = source.getBoundingClientRect();
   const height = Math.max(
     1,
-    Math.ceil(bounds.height + parseFloat(computed.marginTop) + parseFloat(computed.marginBottom)),
+    Math.ceil(
+      bounds.height +
+        Number.parseFloat(computed.marginTop) +
+        Number.parseFloat(computed.marginBottom),
+    ),
   );
   const width = window.innerWidth;
   validateDimensions(
@@ -56,13 +60,25 @@ function includeNode(node) {
 }
 
 function decodeSvg(dataUrl) {
-  const markup = decodeURIComponent(dataUrl.substring(dataUrl.indexOf(',') + 1));
-  return new DOMParser().parseFromString(markup, 'image/svg+xml');
+  const prefix = 'data:image/svg+xml;charset=utf-8,';
+  if (!dataUrl.startsWith(prefix)) throw new Error('Invalid SVG data URL');
+  const markup = decodeURIComponent(dataUrl.slice(prefix.length));
+  const svg = new DOMParser().parseFromString(markup, 'image/svg+xml');
+  if (
+    svg.querySelector('parsererror') ||
+    svg.documentElement.localName !== 'svg' ||
+    svg.documentElement.namespaceURI !== 'http://www.w3.org/2000/svg'
+  ) {
+    throw new Error('Invalid SVG document');
+  }
+  return svg;
 }
 
 function normalizeSvg(svg) {
   // The library emits this obsolete SVG 1.1 attribute; no external resources are supported.
-  svg.querySelector('foreignObject').removeAttribute('externalResourcesRequired');
+  svg.querySelectorAll('foreignObject').forEach((node) => {
+    node.removeAttribute('externalResourcesRequired');
+  });
   // Match the existing export contract: computed inline styles, no stylesheet nodes.
   // This also excludes pseudo-element styles synthesized by the library after cloning.
   svg.querySelectorAll('script,link,style').forEach((node) => node.remove());

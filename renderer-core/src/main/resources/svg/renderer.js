@@ -33955,16 +33955,19 @@ var PermMathSvg = (() => {
   __export(render_formula_exports, {
     render: () => render
   });
-  var import_mathjax = __toESM(require_mathjax());
-  var import_asciimath = __toESM(require_asciimath());
-  var import_svg = __toESM(require_svg());
-  var import_liteAdaptor = __toESM(require_liteAdaptor());
-  var import_html = __toESM(require_html());
-  var import_SafeHandler = __toESM(require_SafeHandler());
+  var import_mathjax = __toESM(require_mathjax(), 1);
+  var import_asciimath = __toESM(require_asciimath(), 1);
+  var import_svg = __toESM(require_svg(), 1);
+  var import_liteAdaptor = __toESM(require_liteAdaptor(), 1);
+  var import_html = __toESM(require_html(), 1);
+  var import_SafeHandler = __toESM(require_SafeHandler(), 1);
 
   // complexity-limits.js
-  var limits = Object.freeze(globalThis.PermMathComplexity);
-  if (!limits) throw new Error("Missing rendering complexity policy");
+  var policy = globalThis.PermMathComplexity;
+  if (!policy || typeof policy !== "object") {
+    throw new Error("Missing rendering complexity policy");
+  }
+  var limits = Object.freeze(policy);
   function validateMathInput(source) {
     if (source.length > limits.MATH_CHARS) throw new Error("Math expression exceeds size limit");
   }
@@ -33974,7 +33977,7 @@ var PermMathSvg = (() => {
     while (pending.length) {
       const [node, depth] = pending.pop();
       if (++count > nodeLimit || depth > depthLimit)
-        throw new Error(label + " exceeds complexity limits");
+        throw new Error(`${label} exceeds complexity limits`);
       for (const child of children(node)) pending.push([child, depth + 1]);
     }
     return count;
@@ -34054,8 +34057,8 @@ var PermMathSvg = (() => {
       limits.RENDER_DEPTH,
       "Math SVG"
     );
-    const width = parseFloat(adaptor.getAttribute(svg, "width")) * limits.EX_PIXELS;
-    const height = parseFloat(adaptor.getAttribute(svg, "height")) * limits.EX_PIXELS;
+    const width = Number.parseFloat(adaptor.getAttribute(svg, "width")) * limits.EX_PIXELS;
+    const height = Number.parseFloat(adaptor.getAttribute(svg, "height")) * limits.EX_PIXELS;
     validateDimensions(width, height);
     const result = adaptor.outerHTML(svg);
     if (result.length > limits.SVG_BYTES) throw new Error("SVG exceeds size limit");

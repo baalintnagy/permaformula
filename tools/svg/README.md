@@ -39,8 +39,10 @@ included in `renderer-core/src/main/resources/html-to-image-LICENSE`.
 |---|---|
 | `render-formula.js` | GraalJS ASCIIMath entry point, exposed as `PermMathSvg.render`. |
 | `browser-entry.js` | Browser MathJax setup, readiness, export and error handling. |
+| `browser-assets.js` | Font/image readiness and image listener cleanup. |
 | `export-styled-svg.js` | Named functions for content measurement and html-to-image export normalization. |
 | `mathjax-safety.js` | Shared safe protocols and ASCIIMath render action for both entry points. |
+| `complexity-limits.js` | Shared policy, tree, input and dimension validation. |
 | `browser-guards.js` | Browser channel restrictions installed before page scripts. |
 | `build.mjs` | Build or verify checked-in bundles with esbuild. |
 
@@ -57,7 +59,8 @@ npm run build
 npm run check
 ```
 
-`check` runs ESLint, Prettier's formatting check and an in-memory esbuild comparison
+`check` runs ESLint, Prettier's formatting check, Node asset-readiness and complexity
+boundary tests, and an in-memory esbuild comparison
 against all three checked-in bundles. It fails on missing/stale bundles without
 rewriting them. Generated files carry notices identifying their source; do not
 format or lint vendor bundles. Dependencies are pinned in `package-lock.json`.

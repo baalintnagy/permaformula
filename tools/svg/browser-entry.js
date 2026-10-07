@@ -1,6 +1,7 @@
 import { exportStyledSvg } from './export-styled-svg.js';
 import { safeMathOptions } from './mathjax-safety.js';
 import { limits, validateDom } from './complexity-limits.js';
+import { waitForAssets } from './browser-assets.js';
 
 const renderer = { state: 'loading', svg: null, error: null };
 window.PermMathRenderer = renderer;
@@ -17,32 +18,17 @@ async function renderPage() {
   try {
     validateDom(document.body);
     await window.MathJax.startup.defaultPageReady();
-    await waitForAssets();
+    await waitForAssets(document);
     validateDom(document.body);
     if (document.querySelector('mjx-merror')) throw new Error('Invalid math expression');
-    renderer.svg = await exportStyledSvg();
-    renderer.state = 'ready';
+    const svg = await exportStyledSvg();
+    if (renderer.state !== 'error') {
+      renderer.svg = svg;
+      renderer.state = 'ready';
+    }
   } catch (error) {
     failRender(error);
   }
-}
-
-async function waitForAssets() {
-  await Promise.all([document.fonts.ready, ...Array.from(document.images, waitForImage)]);
-}
-
-function waitForImage(image) {
-  if (image.complete) {
-    return image.naturalWidth
-      ? Promise.resolve()
-      : Promise.reject(new Error('Image failed: ' + image.src));
-  }
-  return new Promise((resolve, reject) => {
-    image.addEventListener('load', resolve, { once: true });
-    image.addEventListener('error', () => reject(new Error('Image failed: ' + image.src)), {
-      once: true,
-    });
-  });
 }
 
 function handleScriptError(event) {
@@ -52,6 +38,7 @@ function handleScriptError(event) {
 }
 
 function failRender(error) {
+  renderer.svg = null;
   renderer.error = String(error);
   renderer.state = 'error';
 }
