@@ -8,6 +8,7 @@ ENTRYPOINT ["squid", "-N", "-f", "/etc/squid/squid.conf"]
 FROM alpine:3.23@sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0 AS ingress
 RUN apk add --no-cache nginx gettext-envsubst
 COPY --chmod=0444 docker/ingress/nginx.conf /etc/nginx/nginx.conf.template
+COPY --chmod=0444 docker/ingress/nginx.single-host.conf /etc/nginx/nginx.single-host.conf.template
 COPY --chmod=0444 docker/ingress/api-proxy.conf docker/ingress/image-proxy.conf /etc/nginx/
 COPY --chmod=0555 docker/ingress/entrypoint.sh /usr/local/bin/ingress-entrypoint
 USER nginx

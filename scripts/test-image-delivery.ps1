@@ -108,7 +108,7 @@ try {
     $upstreamCreated = $true
     docker run -d --name $ingress --network $network --read-only --cap-drop ALL --security-opt no-new-privileges:true `
         --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m,mode=1777 -p 127.0.0.1::8080 -p 127.0.0.1::8081 `
-        -e PERMMATH_HOST=http://api.example.test -e PERMMATH_IMAGE_HOST=http://images.example.test $image | Out-Null
+        -e PERMMATH_DEPLOYMENT_PROFILE=separate-origins -e PERMMATH_HOST=http://api.example.test -e PERMMATH_IMAGE_HOST=http://images.example.test $image | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Cannot start header ingress' }
     $ingressCreated = $true
     $ports = (docker inspect $ingress | ConvertFrom-Json)[0].NetworkSettings.Ports

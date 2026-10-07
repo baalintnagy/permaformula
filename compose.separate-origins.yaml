@@ -1,0 +1,149 @@
+services:
+  stylesheet-egress:
+    build: {context: ., dockerfile: docker/egress/Dockerfile, target: egress}
+    init: true
+    restart: on-failure
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [api-private, stylesheet-public]
+    tmpfs: ["/tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777"]
+    mem_limit: 128m
+    memswap_limit: 128m
+    cpus: 0.5
+    pids_limit: 32
+    ulimits:
+      core: 0
+      nofile: {soft: 8192, hard: 8192}
+    healthcheck:
+      test: [CMD-SHELL, "nc -z 127.0.0.1 3128"]
+      interval: 5s
+      timeout: 2s
+      retries: 3
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  ingress:
+    build: {context: ., dockerfile: docker/egress/Dockerfile, target: ingress}
+    depends_on:
+      permmath: {condition: service_started}
+    init: true
+    restart: on-failure
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks:
+      api-private:
+        ipv4_address: "${PERMMATH_INGRESS_IP:-172.30.86.2}"
+      ingress-public: {}
+    tmpfs: ["/tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777"]
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.5
+    pids_limit: 32
+    ports:
+      - "127.0.0.1:${PORT:-5000}:8080"
+      - "127.0.0.1:${IMAGE_PORT:-5001}:8081"
+    environment:
+      PERMMATH_HOST: "${PERMMATH_HOST:-http://localhost:${PORT:-5000}}"
+      PERMMATH_IMAGE_HOST: "${PERMMATH_IMAGE_HOST:-http://localhost:${IMAGE_PORT:-5001}}"
+      PERMMATH_DEPLOYMENT_PROFILE: "separate-origins"
+      PERMMATH_INGRESS_CLIENT_CONNECTIONS: "${PERMMATH_INGRESS_CLIENT_CONNECTIONS:-64}"
+      PERMMATH_INGRESS_TOTAL_CONNECTIONS: "${PERMMATH_INGRESS_TOTAL_CONNECTIONS:-128}"
+      PERMMATH_INGRESS_HEADER_TIMEOUT_SECONDS: "${PERMMATH_INGRESS_HEADER_TIMEOUT_SECONDS:-15}"
+      PERMMATH_INGRESS_BODY_TIMEOUT_SECONDS: "${PERMMATH_INGRESS_BODY_TIMEOUT_SECONDS:-30}"
+      PERMMATH_INGRESS_SEND_TIMEOUT_SECONDS: "${PERMMATH_INGRESS_SEND_TIMEOUT_SECONDS:-30}"
+      PERMMATH_INGRESS_KEEPALIVE_TIMEOUT_SECONDS: "${PERMMATH_INGRESS_KEEPALIVE_TIMEOUT_SECONDS:-15}"
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  renderer:
+    build:
+      context: .
+      target: renderer
+    init: true
+    restart: on-failure
+    network_mode: none
+    environment:
+      RENDERER_QUEUE_CAPACITY: "${RENDERER_QUEUE_CAPACITY:-16}"
+      RENDERER_QUEUE_MAX_RETAINED_BYTES: "${RENDERER_QUEUE_MAX_RETAINED_BYTES:-67108864}"
+      RENDERER_QUEUE_WAIT_SECONDS: "${RENDERER_QUEUE_WAIT_SECONDS:-15}"
+    user: "10002:10002"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./docker/seccomp-chromium.json
+    volumes:
+      - render-socket:/run/permmath
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,size=512m,mode=1777
+    shm_size: 512m
+    mem_limit: 3g
+    memswap_limit: 3g
+    cpus: 2.0
+    pids_limit: 256
+    ulimits:
+      core: 0
+      nofile: {soft: 8192, hard: 8192}
+    healthcheck:
+      test: [CMD-SHELL, "test -S /run/permmath/render.sock"]
+      interval: 5s
+      timeout: 2s
+      retries: 3
+      start_period: 10s
+    stop_grace_period: 10s
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  permmath:
+    build:
+      context: .
+      target: runtime
+    depends_on:
+      renderer: {condition: service_healthy}
+      stylesheet-egress: {condition: service_healthy}
+    init: true
+    user: "10001:10001"
+    group_add: ["10002"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - render-socket:/run/permmath:ro
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,size=512m,mode=1777
+    mem_limit: 2g
+    memswap_limit: 2g
+    cpus: 2.0
+    pids_limit: 256
+    ulimits:
+      core: 0
+      nofile: {soft: 8192, hard: 8192}
+    networks: [api-private]
+    environment:
+      PORT: "5000"
+      PERMMATH_HOST: "${PERMMATH_HOST:-http://localhost:${PORT:-5000}}"
+      PERMMATH_IMAGE_HOST: "${PERMMATH_IMAGE_HOST:-http://localhost:${IMAGE_PORT:-5001}}"
+      PERMMATH_STYLESHEET_FETCH_PROXY_REQUIRED: "true"
+      PERMMATH_IMAGE_DELIVERY_REQUIRED: "true"
+      PERMMATH_IMAGE_DELIVERY_SEPARATE_ORIGIN_REQUIRED: "true"
+      PERMMATH_STYLESHEET_FETCH_PROXY: "http://stylesheet-egress:3128"
+      PERMMATH_RATE_LIMIT_TRUSTED_PROXIES: "${PERMMATH_INGRESS_IP:-172.30.86.2}"
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+volumes:
+  render-socket:
+networks:
+  api-private:
+    internal: true
+    ipam:
+      config:
+        - subnet: "${PERMMATH_API_SUBNET:-172.30.86.0/24}"
+          ip_range: "${PERMMATH_API_DYNAMIC_RANGE:-172.30.86.128/25}"
+    driver_opts:
+      com.docker.network.bridge.gateway_mode_ipv4: isolated
+  stylesheet-public:
+  ingress-public:

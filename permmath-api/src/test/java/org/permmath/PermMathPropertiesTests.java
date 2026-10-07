@@ -47,9 +47,18 @@ class PermMathPropertiesTests {
     @ParameterizedTest
     @ValueSource(strings = {"file:///images", "https://user:pass@images.example.net", "https://images.example.net/path",
             "https://images.example.net?x=1", "https://images.example.net#part", "http://images.example.net:0",
-            "https://images.example.net:65536", "https://math.example.com", "https://MATH.example.com:443/"})
-    void rejectsInvalidOrSameImageOriginAtStartup(String origin) {
+            "https://images.example.net:65536"})
+    void rejectsInvalidImageOriginAtStartup(String origin) {
         runner.withPropertyValues("permmath.image-host=" + origin).run(context -> assertThat(context).hasFailed());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"https://math.example.com", "https://MATH.example.com:443/"})
+    void acceptsEquivalentImageOriginsForSingleHostDeployment(String origin) {
+        runner.withPropertyValues("permmath.image-host=" + origin).run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context.getBean(PermMathProperties.class).sameImageOrigin()).isTrue();
+        });
     }
 
     @Configuration(proxyBeanMethods = false)

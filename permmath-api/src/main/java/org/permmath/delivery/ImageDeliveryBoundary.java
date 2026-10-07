@@ -30,8 +30,11 @@ public class ImageDeliveryBoundary implements WebMvcConfigurer {
         this.delivery = delivery;
         this.origins = origins;
         this.clients = clients;
-        if (delivery.required() && (origins.host().equals(origins.imageHost()) || clients.trustedProxies().isEmpty())) {
-            throw new IllegalArgumentException("Required image delivery needs a separate image-host and trusted ingress IP");
+        if (delivery.separateOriginRequired() && (!delivery.required() || origins.sameImageOrigin())) {
+            throw new IllegalArgumentException("Separate-origin delivery requires the image delivery boundary and a distinct image-host");
+        }
+        if (delivery.required() && clients.trustedProxies().isEmpty()) {
+            throw new IllegalArgumentException("Required image delivery needs a trusted ingress IP");
         }
     }
 
@@ -52,10 +55,14 @@ public class ImageDeliveryBoundary implements WebMvcConfigurer {
                             && markers.hasMoreElements() && "1".equals(markers.nextElement()) && !markers.hasMoreElements()) {
                         return true;
                     }
+                    response.setHeader("Cache-Control", "no-store");
+                    if (origins.sameImageOrigin()) {
+                        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                        return false;
+                    }
                     response.setStatus(HttpServletResponse.SC_TEMPORARY_REDIRECT);
                     response.setHeader("Location", origins.imageHost() + request.getRequestURI()
                             + (request.getQueryString() == null ? "" : "?" + request.getQueryString()));
-                    response.setHeader("Cache-Control", "no-store");
                     return false;
                 }
             });

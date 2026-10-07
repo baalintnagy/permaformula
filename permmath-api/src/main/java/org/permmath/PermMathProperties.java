@@ -21,12 +21,9 @@ public record PermMathProperties(
     public PermMathProperties {
         host = origin(host, "host");
         if (imageHost == null) {
-            imageHost = host; // Standalone development retains a single origin unless explicitly configured.
+            imageHost = host; // Single-host deployment is the default.
         } else {
             imageHost = origin(imageHost, "image-host");
-            if (sameOrigin(URI.create(host), URI.create(imageHost))) {
-                throw new IllegalArgumentException("Configured image-host must use a different origin from host");
-            }
         }
     }
 
@@ -52,7 +49,9 @@ public record PermMathProperties(
         return result.endsWith("/") ? result.substring(0, result.length() - 1) : result;
     }
 
-    private static boolean sameOrigin(URI left, URI right) {
+    public boolean sameImageOrigin() {
+        URI left = URI.create(host);
+        URI right = URI.create(imageHost);
         return left.getScheme().equalsIgnoreCase(right.getScheme()) && left.getHost().equalsIgnoreCase(right.getHost())
                 && port(left) == port(right);
     }

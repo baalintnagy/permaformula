@@ -87,6 +87,12 @@ class ImageDeliveryBoundaryTests {
         Assertions.assertThrows(IllegalArgumentException.class,
                 () -> new ImageDeliveryBoundary(new ImageDeliveryProperties(true), local, noProxy));
         var separate = new PermMathProperties("https://math.example.com", "https://math-images.example.net", 800, 2000.0f);
+        var trusted = new ClientRateLimitProperties(600, 120, 32, 60, 10, 1,
+                100000, Duration.ofHours(1), List.of("172.30.86.2"));
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> new ImageDeliveryBoundary(new ImageDeliveryProperties(true, true), local, trusted));
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> new ImageDeliveryBoundary(new ImageDeliveryProperties(false, true), separate, trusted));
         Assertions.assertThrows(IllegalArgumentException.class,
                 () -> new ImageDeliveryBoundary(new ImageDeliveryProperties(true), separate, noProxy));
     }
