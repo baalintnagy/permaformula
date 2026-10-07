@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Editor } from './Editor';
 import { Preview } from './Preview';
 import { createPermalink, formulaUrl, imageRequestUrl, responseError, validStyleRef } from './api';
@@ -148,13 +148,21 @@ function CopyUrl({ url, label }: { url: string; label: string }) {
   );
 }
 
+function AsciiMathLink() {
+  return (
+    <a className="asciimath-link" href="https://asciimath.org/" target="_blank" rel="noreferrer">
+      AsciiMath
+    </a>
+  );
+}
+
 function PanelHeading({
   title,
   detail,
   badge,
 }: {
   title: string;
-  detail?: string;
+  detail?: ReactNode;
   badge?: string;
 }) {
   return (
@@ -328,7 +336,9 @@ export function App() {
           <h1>
             Publish <span>math</span> easily.
           </h1>
-          <p>Write ASCIIMath. Define style. Share anywhere.</p>
+          <p>
+            Write <AsciiMathLink />. Define style. Share anywhere.
+          </p>
           <div className="intro-meta">
             <span className="live-dot" /> Live local previews{' '}
             <span className="meta-divider">/</span> SVG output
@@ -344,13 +354,15 @@ export function App() {
               <h2 id="formula-heading">Simple expression</h2>
               <p>A single expression.</p>
             </div>
-            <span className="section-tag">ASCIIMATH → SVG</span>
+            <span className="section-tag">
+              <AsciiMathLink /> → SVG
+            </span>
           </div>
           <div className="workspace-grid formula-grid">
             <div className="panel">
-              <PanelHeading title="Expression" detail="ASCIIMath" badge="SOURCE" />
+              <PanelHeading title="Expression" detail={<AsciiMathLink />} badge="SOURCE" />
               <Editor
-                label="ASCIIMath formula"
+                label="AsciiMath formula"
                 language="asciimath"
                 value={formula}
                 onChange={setFormula}
@@ -478,7 +490,7 @@ export function App() {
                   />
                 </div>
                 <div className="editor-hint">
-                  Wrap ASCIIMath in backticks: <code>`sqrt(x)`</code>
+                  Wrap <AsciiMathLink /> in backticks: <code>`sqrt(x)`</code>
                   <span>Esc to leave editor</span>
                 </div>
               </div>

@@ -219,6 +219,11 @@ main {
   font-size: 12px;
   margin: 0;
 }
+.asciimath-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .section-tag {
   color: var(--muted);
   font-size: 9px;

@@ -10,7 +10,7 @@ import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 import org.permmath.contract.ComplexityPolicy;
 
-/** Browser-free ASCIIMath conversion using MathJax's lightweight DOM adapter. */
+/** Browser-free AsciiMath conversion using MathJax's lightweight DOM adapter. */
 public class AsciiMathRenderer implements AutoCloseable {
     private final ComplexityPolicy policy;
     private Context context;

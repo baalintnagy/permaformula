@@ -45,7 +45,7 @@ test('wrapping links, formula zoom and CSS color edits', async ({ page }) => {
   ).toHaveCSS('background-color', 'rgb(18, 52, 86)');
   await page.setViewportSize({ width: 390, height: 844 });
   await page
-    .getByRole('textbox', { name: 'ASCIIMath formula', exact: true })
+    .getByRole('textbox', { name: 'AsciiMath formula', exact: true })
     .fill('x+'.repeat(80) + '1');
   const url = page.getByLabel('Expression SVG URL', { exact: true });
   await expect.poll(() => url.evaluate((field) => field.clientHeight)).toBeGreaterThan(40);
@@ -87,7 +87,7 @@ test('local math previews, exact query encoding, server rendering and new-tab pe
   expect(requests).toHaveLength(0);
 
   const formula = 'sqrt(x^2 + y^2) + α & 50%';
-  await page.getByRole('textbox', { name: 'ASCIIMath formula', exact: true }).fill(formula);
+  await page.getByRole('textbox', { name: 'AsciiMath formula', exact: true }).fill(formula);
   await expect
     .poll(async () =>
       new URL(

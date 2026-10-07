@@ -1,9 +1,9 @@
 # MathRenderAPI
 
-MathRenderAPI generates SVG images from compressed formula and styled HTML descriptors. Its permalink generator accepts ASCIIMath or HTML and optional CSS, then stores the descriptor in a compressed URL payload.
+MathRenderAPI generates SVG images from compressed formula and styled HTML descriptors. Its permalink generator accepts [AsciiMath](https://asciimath.org/) or HTML and optional CSS, then stores the descriptor in a compressed URL payload.
 
 ## Features
-- Generate images from ASCIIMath-encoded formulas
+- Generate images from [AsciiMath](https://asciimath.org/)-encoded formulas
 - Customize formula appearance with CSS
 - Create permalinks for any formula
 - Generate images from previously created permalinks
@@ -13,8 +13,8 @@ MathRenderAPI generates SVG images from compressed formula and styled HTML descr
 | Endpoint | Purpose |
 |---|---|
 | `GET /url?formula=...` | Generate a compressed permalink. Optional `imageWidth`, `style`, and repeated external HTTPS `styleRefs` parameters. |
-| `GET /image?ubcq=...` | Render compressed styled HTML with backtick-delimited ASCIIMath as SVG. |
-| `GET /img?formula=...` | Render an uncompressed plain ASCIIMath formula as standalone SVG, without a browser. |
+| `GET /image?ubcq=...` | Render compressed styled HTML with backtick-delimited [AsciiMath](https://asciimath.org/) as SVG. |
+| `GET /img?formula=...` | Render an uncompressed plain [AsciiMath](https://asciimath.org/) formula as standalone SVG, without a browser. |
 | `GET /url-encode?text=...` | Encode text as a UTF-8 query parameter value and return plain text. |
 
 `/image` uses `ubcq`: a GZIP-compressed UTF-8 JSON image descriptor,
@@ -43,7 +43,7 @@ with no-store, nosniff and no-referrer headers and uses no rendering quota or ca
 
 ### Formula-only SVG: `/img`
 
-Send plain ASCIIMath directly, without HTML or backtick delimiters:
+Send plain [AsciiMath](https://asciimath.org/) directly, without HTML or backtick delimiters:
 
 ```sh
 curl --get --data-urlencode 'formula=sqrt(x^2 + y^2)' http://localhost:8086/img --output formula.svg
@@ -105,7 +105,7 @@ for both profiles, security properties and validation.
 ### Web UI
 
 PermMath Builder is a responsive React/TypeScript frontend with light/dark themes,
-live ASCIIMath and HTML/CSS previews, ordered external stylesheet references,
+live [AsciiMath](https://asciimath.org/) and HTML/CSS previews, ordered external stylesheet references,
 and explicit server image generation. Compose builds and serves it at the API
 origin (`http://localhost:5000` by default). Node.js is used at build time only.
 
@@ -467,7 +467,7 @@ SVG budgets larger than the transport limit are rejected.
 The renderer forwards its resolved policy to disposable JVMs and injects the same
 values into Chromium and GraalJS before their bundles run. JavaScript contains no
 duplicate defaults. The resolved policy fingerprint participates in cache keys.
-MathJax supplies expression discovery and native TeX expansion limits; ASCIIMath
+MathJax supplies expression discovery and native TeX expansion limits; [AsciiMath](https://asciimath.org/)
 has no native pre-parse nesting cap. Its byte/character budget, compiled-tree checks
 and isolated worker deadline/memory limits remain necessary. Parser errors and
 exceeded math budgets reject the render instead of exporting an error image.

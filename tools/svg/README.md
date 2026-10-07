@@ -1,11 +1,11 @@
 # SVG bundles
 
-This bundles MathJax 3.2.2's ASCIIMath input, SVG output, and lightweight DOM
+This bundles MathJax 3.2.2's [AsciiMath](https://asciimath.org/) input, SVG output, and lightweight DOM
 adapter into a script for GraalJS. No browser, Node process, network access,
 or JavaScript host access is needed at runtime.
 
 MathJax's `SafeHandler` restricts generated URLs and styles. A render action also
-applies its safe filtering to ASCIIMath trees, because the upstream TeX filters do
+applies its safe filtering to [AsciiMath](https://asciimath.org/) trees, because the upstream TeX filters do
 not cover that input processor. HTTPS hyperlinks and local glyph fragments remain
 supported. The API independently validates the resulting SVG before caching it.
 
@@ -37,11 +37,11 @@ included in `renderer-core/src/main/resources/html-to-image-LICENSE`.
 
 | Source | Purpose |
 |---|---|
-| `render-formula.js` | GraalJS ASCIIMath entry point, exposed as `PermMathSvg.render`. |
+| `render-formula.js` | GraalJS [AsciiMath](https://asciimath.org/) entry point, exposed as `PermMathSvg.render`. |
 | `browser-entry.js` | Browser MathJax setup, readiness, export and error handling. |
 | `browser-assets.js` | Font/image readiness and image listener cleanup. |
 | `export-styled-svg.js` | Named functions for content measurement and html-to-image export normalization. |
-| `mathjax-safety.js` | Shared safe protocols and ASCIIMath render action for both entry points. |
+| `mathjax-safety.js` | Shared safe protocols and [AsciiMath](https://asciimath.org/) render action for both entry points. |
 | `complexity-limits.js` | Shared policy, tree, input and dimension validation. |
 | `browser-guards.js` | Browser channel restrictions installed before page scripts. |
 | `build.mjs` | Build or verify checked-in bundles with esbuild. |
