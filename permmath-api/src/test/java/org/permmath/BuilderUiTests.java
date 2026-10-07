@@ -31,10 +31,10 @@ import com.microsoft.playwright.options.LoadState;
 
 /** Opt-in UI checks using packaged assets, real endpoint responses, and both rendering engines. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "spring.application.name=permmath-studio-tests")
+        properties = "spring.application.name=permmath-builder-tests")
 @Import(RenderGatewayTestConfiguration.class)
 @EnabledIfSystemProperty(named = "ui.tests", matches = "true")
-class StudioUiTests {
+class BuilderUiTests {
     @LocalServerPort
     private int port;
 
@@ -50,7 +50,7 @@ class StudioUiTests {
     }
 
     @Test
-    void servesPackagedStudioAndItsMathJaxAssets() throws Exception {
+    void servesPackagedBuilderAndItsMathJaxAssets() throws Exception {
         try (var client = HttpClient.newHttpClient()) {
             var index = client.send(HttpRequest.newBuilder(URI.create(origin + "/")).build(),
                     HttpResponse.BodyHandlers.ofString());
@@ -67,7 +67,7 @@ class StudioUiTests {
     }
 
     @Test
-    void studioGeneratesRealFormulaAndStyledHtmlImages() throws Exception {
+    void builderGeneratesRealFormulaAndStyledHtmlImages() throws Exception {
         try (var playwright = Playwright.create(new Playwright.CreateOptions().setEnv(Map.of(
                 "PLAYWRIGHT_BROWSERS_PATH", Path.of("../.runtime/browsers").toAbsolutePath().toString(),
                 "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1")));
@@ -92,7 +92,7 @@ class StudioUiTests {
             assertThat(page.locator("iframe[title='Generated SVG image']")).isVisible();
             assertTrue(page.locator("iframe[title='Generated SVG image']").getAttribute("src").startsWith("blob:"));
             page.locator(".generated-viewer").screenshot(new com.microsoft.playwright.Locator.ScreenshotOptions()
-                    .setPath(Path.of("target/studio/generated-viewer.png")));
+                    .setPath(Path.of("target/builder/generated-viewer.png")));
             var imageTab = page.waitForPopup(() -> page.getByRole(AriaRole.LINK,
                     new Page.GetByRoleOptions().setName("Open image").setExact(true)).click());
             imageTab.waitForURL(origin + "/image?**");
@@ -109,10 +109,10 @@ class StudioUiTests {
             }
             assertThat(page.getByLabel("Generated SVG URL", new Page.GetByLabelOptions()
                     .setExact(true))).hasValue(imageTab.url());
-            Files.createDirectories(Path.of("target/studio"));
+            Files.createDirectories(Path.of("target/builder"));
             page.bringToFront();
             page.evaluate("window.scrollTo({top:0,behavior:'instant'})");
-            page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("target/studio/studio.png")).setFullPage(true));
+            page.screenshot(new Page.ScreenshotOptions().setPath(Path.of("target/builder/builder.png")).setFullPage(true));
         }
     }
 }

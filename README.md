@@ -223,7 +223,7 @@ java --enable-native-access=ALL-UNNAMED -jar permmath-api/target/permmath-api-1.
 
 The renderer binds to loopback port 9090. The API defaults to TLS for TCP; see [deployment configuration](docker/README.md) for mutual TLS and the network-isolated Docker Unix socket. Chromium is resolved only within `PLAYWRIGHT_BROWSERS_PATH` (default `.runtime/browsers`), not an installed Chrome/Edge browser. Playwright 1.59.0 selects the matching browser build.
 
-Opt-in browser tests run with `mvn verify '-Drendering.tests=true'` after installation. The styled example fetches Bootstrap from its public HTTPS CDN; comparison images go into module `target/rendering` directories. Normal tests do not launch Chromium.
+Opt-in browser tests run with `mvn verify '-Drendering.tests=true'` after installation. The styled example matches the Builder and Swagger request at 500 pixels wide; comparison images go into module `target/rendering` directories. Normal tests do not launch Chromium.
 
 Eclipse launch groups can start the renderer first, wait for standard output
 matching `event=renderer_ready transport=tcp`, then launch the API with

@@ -136,9 +136,7 @@ test('local math previews, exact query encoding, server rendering and new-tab pe
   await page.getByRole('link', { name: 'Open image', exact: true }).click();
   const popup = await popupPromise;
   await popup.waitForURL(permalink);
-  await expect(page.getByLabel('Generated SVG URL', { exact: true })).toHaveValue(
-    permalink,
-  );
+  await expect(page.getByLabel('Generated SVG URL', { exact: true })).toHaveValue(permalink);
   const request = new URL(requests.find((url) => new URL(url).pathname === '/url')!);
   expect(request.searchParams.get('formula')).toContain('`sum_(i=1)^n');
   expect(request.searchParams.get('style')).toContain('.math-card');
@@ -178,10 +176,10 @@ test('theme persists, mobile layout fits, and user HTML stays isolated', async (
     true,
   );
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
-  await page.screenshot({ path: 'test-results/studio-mobile.png', fullPage: true });
+  await page.screenshot({ path: 'test-results/builder-mobile.png', fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1100 });
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
-  await page.screenshot({ path: 'test-results/studio-desktop.png', fullPage: true });
+  await page.screenshot({ path: 'test-results/builder-desktop.png', fullPage: true });
 });
 
 test('validation and server rendering failures are visible', async ({ page }) => {
@@ -228,23 +226,23 @@ test('validation and server rendering failures are visible', async ({ page }) =>
   );
 });
 
-test('initial studio renders in desktop and mobile light/dark layouts', async ({ page }) => {
+test('initial builder renders in desktop and mobile light/dark layouts', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1100 });
   await page.goto('/');
   await expect(page.frameLocator('iframe[title="HTML live preview"]').locator('svg')).toBeVisible();
   await expect(
     page.frameLocator('iframe[title="Formula live preview"]').locator('svg'),
   ).toBeVisible();
-  await page.screenshot({ path: 'test-results/studio-light-desktop.png', fullPage: true });
+  await page.screenshot({ path: 'test-results/builder-light-desktop.png', fullPage: true });
   await page.getByRole('button', { name: 'Switch to dark theme' }).click();
-  await page.screenshot({ path: 'test-results/studio-dark-desktop.png', fullPage: true });
+  await page.screenshot({ path: 'test-results/builder-dark-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole('heading', { name: 'Simple expression' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/studio-dark-mobile.png', fullPage: true });
+  await page.screenshot({ path: 'test-results/builder-dark-mobile.png', fullPage: true });
   await page.getByRole('button', { name: 'Switch to light theme' }).click();
-  await page.screenshot({ path: 'test-results/studio-light-mobile.png', fullPage: true });
+  await page.screenshot({ path: 'test-results/builder-light-mobile.png', fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1100 });
   await page.locator('#composer').scrollIntoViewIfNeeded();
-  await page.screenshot({ path: 'test-results/studio-composer-desktop.png' });
+  await page.screenshot({ path: 'test-results/builder-composer-desktop.png' });
 });

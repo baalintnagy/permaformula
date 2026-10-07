@@ -59,7 +59,7 @@ npm run test:browser
 
 Browser checks require Playwright Chromium (use `npx playwright install chromium` if it is not installed). The browser suite starts Vite and mocks image API responses; it validates real local MathJax rendering, API request encoding, tab navigation, iframe isolation, theme persistence, and mobile layout.
 
-After building the frontend, `mvn -o -pl permmath-api -am '-Dtest=StudioUiTests' '-Dsurefire.failIfNoSpecifiedTests=false' '-Dui.tests=true' test` runs an additional integration suite against a real Spring Boot server with the existing test rendering gateway. It checks packaged asset delivery and both real SVG generation flows. This requires the repository's Chromium installation (`scripts/install-rendering.ps1`).
+After building the frontend, `mvn -o -pl permmath-api -am '-Dtest=BuilderUiTests' '-Dsurefire.failIfNoSpecifiedTests=false' '-Dui.tests=true' test` runs an additional integration suite against a real Spring Boot server with the existing test rendering gateway. It checks packaged asset delivery and both real SVG generation flows. This requires the repository's Chromium installation (`scripts/install-rendering.ps1`).
 
 ## Preview and delivery
 

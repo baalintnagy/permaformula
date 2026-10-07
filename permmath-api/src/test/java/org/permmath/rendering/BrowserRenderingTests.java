@@ -33,8 +33,6 @@ import com.microsoft.playwright.Playwright;
 import com.sun.net.httpserver.HttpServer;
 
 import io.swagger.v3.oas.annotations.Parameter;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.json.JsonMapper;
 
 @EnabledIfSystemProperty(named = "rendering.tests", matches = "true")
 class BrowserRenderingTests {
@@ -164,20 +162,18 @@ class BrowserRenderingTests {
     }
 
     @Test
-    void rendersOriginalStyledHtmlExample() throws Exception {
+    void rendersBuilderSwaggerExample() throws Exception {
         var method = PermMathController.class.getMethod("getUrl", String.class,
                 Integer.class, List.class, String.class);
         var parameters = method.getParameters();
-        var mapper = JsonMapper.builder().build();
-        var refs = mapper.readValue(parameters[2].getAnnotation(Parameter.class).example(),
-                new TypeReference<List<String>>() {});
+        List<String> refs = List.of();
         var example = new ImageDescriptor(
                 parameters[0].getAnnotation(Parameter.class).example(), null, refs,
                 parameters[3].getAnnotation(Parameter.class).example());
         var settings = new BrowserSettings(Path.of("../.runtime/browsers"), Duration.ofSeconds(30), false);
         try (var renderer = imageRenderer(
                 new PermMathProperties("http://localhost:8086", 800, 2000), settings)) {
-            var image = renderer.getImage(new ImageDescriptor(example.forumla(), 1000, example.styleRefs(), example.style()));
+            var image = renderer.getImage(new ImageDescriptor(example.forumla(), 500, example.styleRefs(), example.style()));
             var directory = Path.of("target/rendering");
             Files.createDirectories(directory);
             var destination = directory.resolve("chromium.svg");
@@ -188,15 +184,14 @@ class BrowserRenderingTests {
             }
             var decoded = parse(Files.readString(destination));
             assertEquals("svg", decoded.getDocumentElement().getLocalName());
-            assertEquals("1000", decoded.getDocumentElement().getAttribute("width"));
+            assertEquals("500", decoded.getDocumentElement().getAttribute("width"));
             assertTrue(Integer.parseInt(decoded.getDocumentElement().getAttribute("height")) > 100);
             assertTrue(decoded.getElementsByTagNameNS("http://www.w3.org/2000/svg", "foreignObject").getLength() > 0);
             assertTrue(decoded.getElementsByTagNameNS("http://www.w3.org/2000/svg", "path").getLength() > 0);
-            assertTrue(Files.readString(destination).contains("rgb(48,48,48)"));
-            assertTrue(Files.readString(destination).contains("color:rgb(248,249,250)"),
-                    "Title must use the external Bootstrap light color");
-            assertTrue(Files.readString(destination).contains("color:rgb(108,117,125)"),
-                    "Paragraph must use the external Bootstrap secondary color");
+            assertTrue(Files.readString(destination).contains("rgb(237,243,251)"),
+                    "Card must use the Builder example background");
+            assertTrue(Files.readString(destination).contains("The sum has a closed form:"));
+            assertTrue(Files.readString(destination).contains("n-th triangular number"));
             verifySvgImagePreview(destination);
         }
     }
@@ -273,39 +268,33 @@ class BrowserRenderingTests {
                 page.setViewportSize(1000, 800);
                 page.setContent("<body style='margin:0'><img id='preview' src='" + url + "'></body>");
                 page.waitForFunction("document.getElementById('preview').complete");
-                assertEquals(1000, ((Number) page.evaluate("document.getElementById('preview').naturalWidth")).intValue());
+                assertEquals(500, ((Number) page.evaluate("document.getElementById('preview').naturalWidth")).intValue());
                 var screenshot = svgFile.resolveSibling(svgFile.getFileName() + ".png");
                 page.locator("#preview").screenshot(new Locator.ScreenshotOptions().setPath(screenshot));
                 var image = ImageIO.read(screenshot.toFile());
                 var background = new Color(image.getRGB(5, 5));
-                assertTrue(background.getRed() < 80 && background.getGreen() < 80 && background.getBlue() < 80);
-                int redMath = 0, cyanMath = 0;
-                int rightmostRed = 0, rightmostCyan = 0;
-                for (int y = 0; y < image.getHeight(); y++) {
+                assertEquals(new Color(237, 243, 251), background,
+                        "Card background must survive SVG image embedding");
+                int darkPixels = 0, rightmostDark = 0;
+                for (int y = 160; y < Math.min(330, image.getHeight()); y++) {
                     for (int x = 0; x < image.getWidth(); x++) {
                         var color = new Color(image.getRGB(x, y));
-                        if (color.getRed() > 150 && color.getRed() > color.getGreen() * 1.3
-                                && color.getRed() > color.getBlue() * 1.3) {
-                            redMath++;
-                            rightmostRed = Math.max(rightmostRed, x);
-                        }
-                        if (color.getGreen() > 150 && color.getBlue() > 150 && color.getRed() < 120) {
-                            cyanMath++;
-                            rightmostCyan = Math.max(rightmostCyan, x);
+                        if (color.getRed() < 100 && color.getGreen() < 120 && color.getBlue() < 150) {
+                            darkPixels++;
+                            rightmostDark = Math.max(rightmostDark, x);
                         }
                     }
                 }
-                assertTrue(redMath > 10 && cyanMath > 10, "Formula colors must survive SVG image embedding");
-                assertTrue(rightmostRed > 300 && rightmostCyan > 250,
-                        "Formula glyphs must retain their horizontal positioning, rather than overlap at the origin");
+                assertTrue(darkPixels > 100 && rightmostDark > 200,
+                        "Rendered content must retain its color and horizontal positioning");
                 page.navigate(url);
                 assertEquals("rect(1px, 1px, 1px, 1px)",
                         page.locator("mjx-assistive-mml").first().evaluate("element => getComputedStyle(element).clip"),
                         "Accessibility MathML must remain clipped rather than duplicate the vector formula");
                 var direct = ImageIO.read(new ByteArrayInputStream(page.screenshot()));
                 var directBackground = new Color(direct.getRGB(5, 5));
-                assertTrue(directBackground.getRed() < 80 && directBackground.getGreen() < 80
-                        && directBackground.getBlue() < 80, "CSP must preserve styled SVG when opened directly");
+                assertEquals(new Color(237, 243, 251), directBackground,
+                        "CSP must preserve styled SVG when opened directly");
             }
         } finally {
             server.stop(0);

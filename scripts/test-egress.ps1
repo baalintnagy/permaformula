@@ -13,7 +13,13 @@ try {
     }
     $apiId = docker compose -p $ProjectName ps -q permmath
     $api = (docker inspect $apiId | ConvertFrom-Json)[0]
-    if (@($api.NetworkSettings.Networks.PSObject.Properties).Count -ne 1) { throw 'API has an extra network' }
+    $apiNetworks = @($api.NetworkSettings.Networks.PSObject.Properties.Name)
+    $expectedNetworks = @($privateNetwork, "${ProjectName}_cache-private")
+    if (@(Compare-Object $expectedNetworks $apiNetworks).Count -ne 0) { throw 'API has an unexpected network' }
+    $cacheNetwork = (docker network inspect "${ProjectName}_cache-private" | ConvertFrom-Json)[0]
+    if (!$cacheNetwork.Internal -or $cacheNetwork.Options.'com.docker.network.bridge.gateway_mode_ipv4' -ne 'isolated') {
+        throw 'Cache network must be internal with isolated gateway mode'
+    }
     $probeImage = 'alpine:3.23@sha256:85fe1e81d6758c208f3e1eed4338a1997e19d4be002d4dd32d3100c9a8c010a0'
     $probePath = Join-Path $taskRoot 'docker/egress/probe.sh'
     function Invoke-Probe([string[]]$ProbeArguments) {
