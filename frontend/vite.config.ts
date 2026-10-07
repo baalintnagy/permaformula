@@ -32,7 +32,6 @@ export default defineConfig(({ mode }) => {
           {
             target: apiOrigin,
             changeOrigin: true,
-            followRedirects: true,
           },
         ]),
       ),

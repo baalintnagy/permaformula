@@ -619,7 +619,7 @@ export function App() {
         <footer>
           <span className="footer-brand">∑ PermMath</span>
           <p>Made for expressions worth sharing.</p>
-          <a href="/swagger-ui.html">
+          <a href="/swagger-ui/index.html">
             API documentation
             <Icon name="external" />
           </a>
