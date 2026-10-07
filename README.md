@@ -121,14 +121,21 @@ See [frontend setup and checks](frontend/README.md).
 ### Generated image caching
 
 Both `/image` and `/img` cache successful SVG output in memory using Caffeine
-(version managed by Spring Boot). Concurrent requests for the same image share
-one generation. Errors are not cached. Entries disappear on service restart.
+and in a persistent database. Local/IDE launches default to embedded SQLite;
+Docker defaults to PostgreSQL. Concurrent requests for the same image in one API
+process share one generation. Errors are not cached. Database entries survive
+service restarts; the memory cache warms on demand.
 
 ```yaml
 permmath:
     image-cache:
         maximum-size: 256MB
         expire-after-access: 60d
+        persistence:
+            backend: sqlite # postgres in Docker, memory to disable persistence
+            sqlite-path: .runtime/image-cache.sqlite
+            maximum-size: 2GB
+            cleanup-interval: 5m
 ```
 
 The effective cache budget is the smaller of the configured maximum (256 MiB by default) and 25% of the JVM maximum heap. Startup logs report both configured and effective budgets. This reserves heap headroom for request processing; it does not bound concurrent work.
@@ -137,7 +144,9 @@ The memory budget uses an estimate of SVG string storage, keys and entry overhea
 it is not a hard limit on total JVM memory or in-flight rendering. Caffeine evicts
 entries to stay within the budget. Images larger than the budget are returned but
 not retained. Each cache hit resets the full configured TTL (60 days by default).
-Entries expire after that duration without access.
+Entries expire after that duration without access, in both layers. Successful
+memory hits synchronously refresh the database expiry too; restart does not grant
+expired entries another TTL. Expired rows are never read, even before cleanup.
 External stylesheets are fetched and sanitized during generation. Changes at the same URL become visible after eviction, expiry or restart.
 
 Keys are SHA-256 hashes of a versioned rendering identity and the effective
@@ -148,10 +157,26 @@ The HTML cache identity includes the security policy version. Bump the rendering
 change affects output before introducing persistent storage.
 
 `GeneratedImageStore` separates output storage from rendering and HTTP responses.
-It currently has a Caffeine implementation; a later implementation can add durable
-storage under the same stable keys, with memory as a front cache. No disk/database
-storage is enabled yet. Hit, miss, load and eviction counters are available through
-`CaffeineImageStore.stats()`; there is no public cache-management endpoint.
+`CaffeineImageStore` uses `JdbcImageCache` underneath it. SQLite needs no separately
+installed database and stores its file relative to the API process's working
+directory. PostgreSQL runs privately in Compose with a `cache-data` named volume,
+a restricted application role and a small connection pool. Copy `.env.example`
+to `.env` and set distinct database passwords before starting Compose.
+Liquibase applies versioned YAML schema migrations before the cache starts,
+adopting the previous JDBC schema without removing entries or resetting expiry.
+
+The persistent budget covers UTF-8 SVG payload bytes, not database/WAL/index
+overhead. Periodic cleanup removes expired and least-recently-used entries;
+temporary growth between cleanups is possible. Oversized entries are returned
+but not persisted. Stored SVG is revalidated on read; policy versions remain part
+of the stable cache key. Startup fails if the configured database cannot be
+initialized; later database errors fall back to memory/rendering with bounded
+connection/query timeouts and redacted, throttled diagnostics.
+
+Hit, miss, load and eviction counters are available through
+`CaffeineImageStore.stats()`; a memory miss can be a database hit. There is no public
+cache-management endpoint or distributed render lock. See
+[deployment configuration](docker/README.md) for configuration and database tests.
 
 ### Rendering
 

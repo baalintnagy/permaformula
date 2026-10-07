@@ -1,0 +1,88 @@
+databaseChangeLog:
+  # Existing databases from the initial JDBC implementation are adopted without
+  # deleting cache data. Each existing object is recorded as MARK_RAN.
+  - changeSet:
+      id: image-cache-001-table
+      author: permmath
+      preConditions:
+        - onFail: MARK_RAN
+        - onError: HALT
+        - not:
+            - tableExists:
+                tableName: permmath_image_cache
+      changes:
+        - createTable:
+            tableName: permmath_image_cache
+            columns:
+              - column:
+                  name: cache_key
+                  type: varchar(64)
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: permmath_image_cache_pkey
+                    nullable: false
+              - column:
+                  name: svg
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: size_bytes
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_access_at
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: expires_at
+                  type: bigint
+                  constraints:
+                    nullable: false
+      # SQLite cannot add a CHECK with ALTER TABLE; retain the previous invariant
+      # directly in the generated CREATE TABLE on both backends.
+      modifySql:
+        - regExpReplace:
+            replace: '\)$'
+            with: ', CONSTRAINT permmath_image_cache_size_positive CHECK (size_bytes > 0))'
+  - changeSet:
+      id: image-cache-002-expiry-index
+      author: permmath
+      preConditions:
+        - onFail: MARK_RAN
+        - onError: HALT
+        - not:
+            - indexExists:
+                tableName: permmath_image_cache
+                indexName: permmath_image_cache_expiry
+      changes:
+        - createIndex:
+            tableName: permmath_image_cache
+            indexName: permmath_image_cache_expiry
+            columns:
+              - column:
+                  name: expires_at
+  - changeSet:
+      id: image-cache-003-access-index
+      author: permmath
+      preConditions:
+        - onFail: MARK_RAN
+        - onError: HALT
+        - not:
+            - indexExists:
+                tableName: permmath_image_cache
+                indexName: permmath_image_cache_access
+      changes:
+        - createIndex:
+            tableName: permmath_image_cache
+            indexName: permmath_image_cache_access
+            columns:
+              - column:
+                  name: last_access_at

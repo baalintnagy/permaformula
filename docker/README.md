@@ -1,8 +1,12 @@
 # Container deployment
 
-Run `docker compose up --build -d` from the repository root with Docker's Linux engine running. The UI, API and images share `127.0.0.1:5000` by default. Set `PORT` for the local port and `PERMMATH_HOST` for the public HTTPS origin. The optional `separate-origins` profile retains two listeners.
+Copy `.env.example` to `.env`, set distinct strong database admin/application
+passwords, then run `docker compose up --build -d` from the repository root with
+Docker's Linux engine running. The UI, API and images share `127.0.0.1:5000` by
+default. Set `PORT` for the local port and `PERMMATH_HOST` for the public HTTPS
+origin. The optional `separate-origins` profile retains two listeners.
 
-## Four services
+## Five services
 
 The Maven build verifies all four modules. Docker builds separate targets:
 
@@ -10,6 +14,78 @@ The Maven build verifies all four modules. Docker builds separate targets:
 - `renderer`: gRPC service, UID/GID 10002, Chromium and GraalJS. Runs both HTML and formula jobs in disposable JVMs. Contains no API application or credentials.
 - `stylesheet-egress`: Squid 7 from Alpine packages, running as `squid`. Its native ACLs allow CONNECT to public port 443 and reject internal, metadata, reserved and transition addresses, including any blocked answer in a mixed DNS result. No port is published, no TLS interception or content cache is used, and access logging is disabled.
 - `ingress`: nginx from Alpine packages, running as `nginx`. Publishes separate API/image listeners and forwards only to the private API. Access logging is disabled to avoid recording formula/permalink queries. Proxy response timeouts are 65 seconds, beyond the API's 60-second deadline; SVG headers are preserved.
+- `cache-db`: PostgreSQL, private to the API on an isolated `cache-private` network,
+  with no published port. A persistent `cache-data` volume stores generated SVGs.
+  The API logs in as the non-superuser `permmath`; bootstrap admin credentials are
+  provided only to the database container. The database has a 512 MiB container
+  limit, 64 MiB shared buffers and 20 connections; the API pool defaults to four.
+
+## Persistent image cache
+
+Local/IDE runs use embedded SQLite at `.runtime/image-cache.sqlite`, relative to
+the process working directory. SQLite uses WAL and full commit synchronization,
+with one pooled connection. No external database is needed. Tests use memory by
+default; persistence tests use isolated temporary databases.
+
+Both Compose profiles and the runtime image default to PostgreSQL. The database
+volume survives container recreation and ordinary `docker compose down`.
+`docker compose down --volumes` also removes the persistent cache database; the
+commands below use that only for disposable smoke projects. The init script runs
+only on a new database volume; changing `.env` passwords later also requires
+changing the corresponding PostgreSQL roles. Do not repurpose the smoke passwords
+for normal deployments.
+
+The existing `permmath.image-cache.expire-after-access` (default **60d**) controls
+both memory and database idle TTL. Every successful access, including a memory
+hit, refreshes persistent expiry synchronously. Database-clock timestamps survive
+restarts; reads exclude expired rows immediately. Cleanup runs every five minutes,
+deleting expired entries then older entries exceeding the 2 GiB SVG payload budget.
+This is a soft payload budget, not a filesystem quota: indexes, table free space,
+WAL and temporary growth are additional. Database engines reuse freed space;
+deleting entries need not shrink the physical file.
+
+Configuration under `permmath.image-cache.persistence`:
+
+| Property | Default | Purpose |
+| --- | --- | --- |
+| `backend` | `sqlite` locally, `postgres` in Docker | `sqlite`, `postgres`, or `memory` |
+| `sqlite-path` | `.runtime/image-cache.sqlite` | Local persistent file |
+| `postgres-url` | `jdbc:postgresql://localhost:5432/permmath` | Compose uses `cache-db:5432` |
+| `username` | `permmath` | Restricted PostgreSQL application role |
+| `password` | empty locally | Required for PostgreSQL; Compose reads `PERMMATH_CACHE_DB_PASSWORD` |
+| `maximum-pool-size` | `4` | PostgreSQL connection limit; SQLite uses one |
+| `maximum-size` | `2GB` | Persistent UTF-8 SVG payload budget |
+| `cleanup-interval` | `5m` | Background expiry/budget cleanup |
+
+Spring environment variables use the `PERMMATH_IMAGE_CACHE_PERSISTENCE_` prefix
+(for example `...BACKEND=postgres`, `...POSTGRES_URL=jdbc:postgresql://db:5432/permmath`).
+Liquibase applies the versioned YAML changelog at
+`permmath-api/src/main/resources/db/changelog/db.changelog-master.yaml` before
+starting the cache, for both SQLite and PostgreSQL. It tracks applied changes and
+uses its migration lock for concurrent API startup. The initial changes adopt
+tables/indexes created by the previous JDBC implementation without deleting SVGs
+or changing their expiry; missing indexes are created. Memory-only mode runs no
+migrations. Add future schema changes as new YAML changesets; do not edit applied
+changesets or their IDs. PostgreSQL runs migrations as the restricted application
+role, which owns the cache and Liquibase tables. Only
+successful output is saved, and persisted SVG is revalidated on read. Existing
+versioned keys isolate renderer/sanitizer changes. No cache migration between
+SQLite and PostgreSQL is needed: missing images regenerate from their permalinks.
+
+Database startup/schema failures stop the API instead of silently disabling the
+configured backend. Runtime storage failures retain memory/rendering service;
+expiry refresh cannot be guaranteed during an outage. Diagnostics omit driver
+messages, SQL, content and credentials and are throttled. Requests in one API
+process still share a generation; multiple API processes may independently render
+the same initial miss. A shared database alone is not a distributed render lock.
+
+SQLite persistence/TTL tests run in ordinary Maven verification. The matching
+PostgreSQL tests require a **disposable database** with the `permmath` role (they
+clear the cache table), `PERMMATH_POSTGRES_TEST_PASSWORD` and:
+
+```powershell
+mvn -pl permmath-api -am "-Dtest=PostgresImageCacheTests" "-Dsurefire.failIfNoSpecifiedTests=false" "-Dpostgres.tests=true" "-Dpostgres.test-url=jdbc:postgresql://localhost:55432/permmath" test
+```
 
 ## Production profiles and image delivery
 
@@ -83,7 +159,7 @@ by Java against the destination. Squid independently resolves and checks all cac
 destination addresses used for its connection. It uses a deny list rather than a
 negated public-address allowlist, so mixed public/private answers reject the tunnel.
 
-The API joins only `api-private`, an internal bridge with gateway mode `isolated`.
+The API joins `api-private` and `cache-private`, internal bridges with gateway mode `isolated`.
 It has no external/default route, published port, or host bridge address. nginx
 provides ingress and Squid provides egress; each joins its own separate external
 network and `api-private`. The renderer still has no network. API-private peers

@@ -1,4 +1,40 @@
 services:
+  cache-db:
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    user: postgres
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [cache-private]
+    volumes:
+      - cache-data:/var/lib/postgresql/data
+      - ./docker/postgres/init-cache.sh:/docker-entrypoint-initdb.d/10-cache.sh:ro
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777
+      - /var/run/postgresql:rw,nosuid,nodev,noexec,size=16m,mode=1777
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1.0
+    pids_limit: 64
+    shm_size: 64m
+    environment:
+      POSTGRES_DB: permmath
+      POSTGRES_USER: cache_owner
+      POSTGRES_PASSWORD: "${PERMMATH_CACHE_DB_ADMIN_PASSWORD:?Set the database admin password in .env}"
+      PERMMATH_CACHE_DB_PASSWORD: "${PERMMATH_CACHE_DB_PASSWORD:?Set the database application password in .env}"
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=trust"
+    command: [postgres, -c, shared_buffers=64MB, -c, max_connections=20, -c, log_statement=none, -c, log_min_error_statement=panic]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -h 127.0.0.1 -U permmath -d permmath"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+
   stylesheet-egress:
     build: {context: ., dockerfile: docker/egress/Dockerfile, target: egress}
     init: true
@@ -99,6 +135,7 @@ services:
       context: .
       target: runtime
     depends_on:
+      cache-db: {condition: service_healthy}
       renderer: {condition: service_healthy}
       stylesheet-egress: {condition: service_healthy}
     init: true
@@ -118,9 +155,13 @@ services:
     ulimits:
       core: 0
       nofile: {soft: 8192, hard: 8192}
-    networks: [api-private]
+    networks: [api-private, cache-private]
     environment:
       PORT: "5000"
+      PERMMATH_IMAGE_CACHE_PERSISTENCE_BACKEND: postgres
+      PERMMATH_IMAGE_CACHE_PERSISTENCE_POSTGRES_URL: jdbc:postgresql://cache-db:5432/permmath
+      PERMMATH_IMAGE_CACHE_PERSISTENCE_USERNAME: permmath
+      PERMMATH_IMAGE_CACHE_PERSISTENCE_PASSWORD: "${PERMMATH_CACHE_DB_PASSWORD:?Set the database application password in .env}"
       PERMMATH_HOST: "${PERMMATH_HOST:-http://localhost:${PORT:-5000}}"
       PERMMATH_IMAGE_HOST: "${PERMMATH_HOST:-http://localhost:${PORT:-5000}}"
       PERMMATH_STYLESHEET_FETCH_PROXY_REQUIRED: "true"
@@ -132,6 +173,7 @@ services:
       driver: json-file
       options: {max-size: 10m, max-file: "3"}
 volumes:
+  cache-data:
   render-socket:
 networks:
   api-private:
@@ -140,6 +182,10 @@ networks:
       config:
         - subnet: "${PERMMATH_API_SUBNET:-172.30.86.0/24}"
           ip_range: "${PERMMATH_API_DYNAMIC_RANGE:-172.30.86.128/25}"
+    driver_opts:
+      com.docker.network.bridge.gateway_mode_ipv4: isolated
+  cache-private:
+    internal: true
     driver_opts:
       com.docker.network.bridge.gateway_mode_ipv4: isolated
   stylesheet-public:

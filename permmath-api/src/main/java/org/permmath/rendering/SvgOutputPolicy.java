@@ -97,7 +97,7 @@ public final class SvgOutputPolicy {
         }
     }
 
-    static String sanitize(String svg) throws IOException {
+    public static String sanitize(String svg) throws IOException {
         if (!StringUtils.isNotBlank(svg) || svg.length() > LIMITS.get(SVG_BYTES)
                 || InputLimits.utf8Length(svg) > LIMITS.get(SVG_BYTES)) {
             throw rejected();

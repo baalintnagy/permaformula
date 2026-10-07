@@ -1,0 +1,4 @@
+databaseChangeLog:
+  - include:
+      file: image-cache/001-image-cache.yaml
+      relativeToChangelogFile: true

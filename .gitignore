@@ -1,4 +1,7 @@
 HELP.md
+.env
+.env.*
+!.env.example
 target/
 .runtime/
 node_modules/

@@ -23,6 +23,12 @@ permmath:
     image-cache:
         maximum-size: 256MB
         expire-after-access: 60d
+        persistence:
+            # IDE/local launches need no external database. Compose overrides this to postgres.
+            backend: sqlite
+            sqlite-path: .runtime/image-cache.sqlite
+            maximum-size: 2GB
+            cleanup-interval: 5m
     api-work:
         preparation-concurrency: 4
         generation-concurrency: 2

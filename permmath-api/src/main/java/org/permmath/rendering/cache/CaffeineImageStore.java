@@ -11,6 +11,7 @@ import org.permmath.rendering.WorkDeadline;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
@@ -27,13 +28,23 @@ public class CaffeineImageStore implements GeneratedImageStore {
     private static final Logger log = LoggerFactory.getLogger(CaffeineImageStore.class);
 
     private final AsyncCache<String, String> cache;
+    private final JdbcImageCache persistent;
 
     @Autowired
+    public CaffeineImageStore(ImageCacheProperties properties, ObjectProvider<JdbcImageCache> persistent) {
+        this(properties, Ticker.systemTicker(), persistent.getIfAvailable());
+    }
+
     public CaffeineImageStore(ImageCacheProperties properties) {
-        this(properties, Ticker.systemTicker());
+        this(properties, Ticker.systemTicker(), null);
     }
 
     CaffeineImageStore(ImageCacheProperties properties, Ticker ticker) {
+        this(properties, ticker, null);
+    }
+
+    CaffeineImageStore(ImageCacheProperties properties, Ticker ticker, JdbcImageCache persistent) {
+        this.persistent = persistent;
         long effectiveBytes = properties.effectiveMaximumBytes(Runtime.getRuntime().maxMemory());
         // Conservative UTF-16 content estimate plus key and per-entry overhead.
         cache = Caffeine.newBuilder()
@@ -52,6 +63,18 @@ public class CaffeineImageStore implements GeneratedImageStore {
 
     @Override
     public String getOrGenerate(String key, Generator generator) throws IOException {
+        String svg = memoryGetOrGenerate(key, () -> {
+            String stored = persistent == null ? null : persistent.find(key);
+            if (stored != null) return stored;
+            String generated = generator.generate();
+            if (persistent != null) persistent.save(key, generated);
+            return generated;
+        });
+        if (persistent != null) persistent.accessed(key, svg);
+        return svg;
+    }
+
+    private String memoryGetOrGenerate(String key, Generator generator) throws IOException {
         boolean[] owner = { false };
         // Publish through Caffeine before running the loader, outside its atomic mapping function.
         var completion = cache.get(key, (_, _) -> {
