@@ -312,7 +312,9 @@ export function App() {
     <>
       <header className="site-header">
         <a className="brand" href="#">
-          <span className="brand-mark">∑</span>
+          <span className="brand-mark">
+            <Icon name="formula" />
+          </span>
           <span>
             PermMath<span className="brand-sub">BUILDER</span>
           </span>
@@ -334,7 +336,7 @@ export function App() {
         <div className="intro">
           <span className="eyebrow">FORMULA TO SCALABLE VECTOR GRAPHICS</span>
           <h1>
-            Publish <span>math</span> easily.
+            Publish <span>math</span> easily
           </h1>
           <p>
             Write <AsciiMathLink />. Define style. Share anywhere.
@@ -368,15 +370,11 @@ export function App() {
                 onChange={setFormula}
                 dark={dark}
               />
-              <div className="editor-hint">
-                Try <code>sqrt(x^2 + y^2)</code> or <code>int_0^1 x^2 dx</code>
-                <span>Esc to leave editor</span>
-              </div>
             </div>
             <div className="panel preview-panel">
               <PanelHeading title="Live preview" badge="SVG" />
               <Preview formula={formula} />
-              <div className="panel-note">Updates as you type. No server request.</div>
+              <div className="panel-note">Updates as you type.</div>
             </div>
           </div>
           <div className="action-panel">
@@ -489,10 +487,6 @@ export function App() {
                     dark={dark}
                   />
                 </div>
-                <div className="editor-hint">
-                  Wrap <AsciiMathLink /> in backticks: <code>`sqrt(x)`</code>
-                  <span>Esc to leave editor</span>
-                </div>
               </div>
               <div className="panel refs-panel">
                 <PanelHeading title="Stylesheet references" detail="Applied in list order" />
@@ -586,8 +580,8 @@ export function App() {
                 imageWidth={widthValid ? width : 500}
               />
               <div className="panel-note">
-                Preview scrolls at the selected width. Server sanitization may change the final
-                image.
+                Updates as you type. Preview scrolls at the selected width. 
+				(Server-side sanitization may change the final image.)
               </div>
             </div>
           </div>

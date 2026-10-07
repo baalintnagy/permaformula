@@ -108,9 +108,10 @@ button {
   width: 38px;
   height: 38px;
   border-radius: 12px;
-  font:
-    27px Georgia,
-    serif;
+}
+.brand-mark svg {
+  width: 24px;
+  height: 24px;
 }
 .brand-sub {
   font-size: 9px;
@@ -287,18 +288,6 @@ main {
 }
 .code-editor:focus-within {
   box-shadow: inset 0 0 0 2px var(--accent-soft);
-}
-.editor-hint {
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1.5;
-  padding: 12px 20px;
-  border-top: 1px solid var(--border);
-  background: var(--surface-alt);
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
 }
 code {
   font:
@@ -790,9 +779,6 @@ footer svg {
   .html-preview iframe {
     min-height: 410px;
   }
-  .editor-hint span {
-    display: none;
-  }
 }
 @media (max-width: 600px) {
   .site-header {
@@ -807,7 +793,10 @@ footer svg {
   .brand-mark {
     width: 32px;
     height: 32px;
-    font-size: 23px;
+  }
+  .brand-mark svg {
+    width: 21px;
+    height: 21px;
   }
   .brand-sub,
   .site-header nav,
