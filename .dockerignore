@@ -2,6 +2,11 @@
 .runtime
 target
 **/target
+**/node_modules
+frontend/dist
+frontend/public/mathjax
+frontend/test-results
+frontend/playwright-report
 .idea
 .vscode
 .codex

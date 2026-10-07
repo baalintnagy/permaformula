@@ -13,7 +13,8 @@ The Maven build verifies all four modules. Docker builds separate targets:
 
 ## Image delivery origins
 
-The API listener is nginx port 8080: public `/url`, `/url-encode`, Swagger UI and
+The API listener is nginx port 8080: the Studio UI at `/`, its `/assets/` and
+`/mathjax/` files, public `/url`, `/url-encode`, Swagger UI and
 OpenAPI remain available. `/url` returns links on the configured image origin.
 `/url-encode?text=...` returns a UTF-8 encoded query value as plain text, with
 4 MiB input / 12 MiB maximum encoded output, bounded preparation/deadlines,

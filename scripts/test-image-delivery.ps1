@@ -62,6 +62,13 @@ try {
         throw 'Image CORS must allow only anonymous reads from the configured API origin'
     }
     Assert-Status (Get-Response "$BaseUrl/swagger-ui/index.html") 200
+    $studio = Get-Response "$BaseUrl/"
+    Assert-Status $studio 200
+    if ((Text $studio) -notmatch 'PermMath' -or $studio.Content.Headers.ContentType.MediaType -ne 'text/html') {
+        throw 'API origin must serve the Studio UI'
+    }
+    Assert-Status (Get-Response "$BaseUrl/mathjax/tex-svg.js") 200
+    Assert-Status (Get-Response "$ImageUrl/mathjax/tex-svg.js") 404
     Assert-Status (Get-Response "$BaseUrl/decode?ubcq=bad") 404
     $encoded = Get-Response "$BaseUrl/url-encode?text=x%20%2B%20%25%20%CE%B1"
     Assert-Status $encoded 200

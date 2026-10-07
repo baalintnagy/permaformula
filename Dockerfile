@@ -1,4 +1,12 @@
 # syntax=docker/dockerfile:1.7
+FROM node:24-alpine AS frontend-build
+WORKDIR /build/frontend
+COPY frontend/package*.json ./
+RUN npm ci --no-audit --no-fund
+COPY frontend ./
+COPY renderer-core/src/main/resources/mathjax /build/renderer-core/src/main/resources/mathjax
+RUN npm run build
+
 FROM maven:3-eclipse-temurin-25@sha256:0396dcd8cd0d46a0d2026449b714b2a5bbe53cce030975b5a41f8ffa3f5f0525 AS build
 WORKDIR /build
 COPY pom.xml ./
@@ -6,6 +14,7 @@ COPY render-contract ./render-contract
 COPY renderer-core ./renderer-core
 COPY renderer-service ./renderer-service
 COPY permmath-api ./permmath-api
+COPY --from=frontend-build /build/frontend/dist ./frontend/dist
 RUN mvn -B -ntp verify dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=target/runtime-deps
 
 FROM eclipse-temurin:25-jre-noble@sha256:d9a39a23634650173f1e2bbc176227af9728587ecf0f4b62d53e9355cd7a19ab AS base

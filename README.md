@@ -111,6 +111,22 @@ See [deployment configuration](docker/README.md) for listener mappings and tests
 
 ## Getting Started for Developers
 
+### Web UI
+
+PermMath Studio is a responsive React/TypeScript frontend with light/dark themes,
+live ASCIIMath and HTML/CSS previews, ordered external stylesheet references,
+and explicit server image generation. Compose builds and serves it at the API
+origin (`http://localhost:5000` by default). Node.js is used at build time only.
+
+For Eclipse development, start the renderer and API in Eclipse, then run
+`./scripts/start-ui.ps1` from the repository root. Open `http://127.0.0.1:5173`.
+Vite reloads UI edits and proxies requests to `http://localhost:8086`; no Docker
+or frontend rebuild is required. Use `-ApiOrigin http://localhost:8090` to change
+the API origin, or set it in `frontend/.env.local`.
+For local JAR packaging, run
+`npm run build` in `frontend` before the Maven build.
+See [frontend setup and checks](frontend/README.md).
+
 ### Generated image caching
 
 Both `/image` and `/img` cache successful SVG output in memory using Caffeine
