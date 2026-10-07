@@ -310,8 +310,8 @@ export function App() {
           </span>
         </a>
         <nav aria-label="Workspaces">
-          <a href="#formula">Formula</a>
-          <a href="#composer">HTML composer</a>
+          <a href="#formula">Simple expression</a>
+          <a href="#composer">Formula + HTML + CSS</a>
         </nav>
         <button
           className="theme-toggle"
