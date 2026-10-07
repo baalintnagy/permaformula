@@ -171,7 +171,7 @@ class CaffeineImageStoreTests {
             }));
             try {
                 assertTrue(entered.await(2, TimeUnit.SECONDS));
-                try (var scope = WorkDeadline.open(Duration.ofMillis(100))) {
+                try (var _ = WorkDeadline.open(Duration.ofMillis(100))) {
                     assertEquals(504, assertThrows(ResponseStatusException.class,
                             () -> store.getOrGenerate("same", () -> {
                                 throw new AssertionError("duplicate generation");

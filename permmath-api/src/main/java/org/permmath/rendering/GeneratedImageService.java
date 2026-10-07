@@ -78,7 +78,7 @@ public class GeneratedImageService {
                         () -> SvgOutputPolicy.sanitize(formulaRenderer.render(formula)))));
     }
 
-    private String key(String format, ImageDescriptor descriptor) throws IOException {
+    private String key(String format, ImageDescriptor descriptor) {
         // Stable versioned content identity, also suitable for filenames or database keys.
         var identity = format + ":" + ComplexityPolicy.CURRENT.fingerprint()
                 + "\n" + mapper.writeValueAsString(descriptor);

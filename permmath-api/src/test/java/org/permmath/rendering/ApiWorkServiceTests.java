@@ -56,7 +56,7 @@ class ApiWorkServiceTests {
     @Test
     void deadlinePropagatesThroughNestedFetchWithoutRestartingBudget() throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
-        try (var scope = WorkDeadline.at(deadline)) {
+        try (var _ = WorkDeadline.at(deadline)) {
             assertEquals(deadline, work.generate(() -> work.fetch(() -> WorkDeadline.deadline(Duration.ofSeconds(5)))));
         }
     }
@@ -64,7 +64,7 @@ class ApiWorkServiceTests {
     @Test
     void timeoutInterruptsWorkerAndRecoveryWaitsForItsExit() throws Exception {
         var worker = new AtomicReference<Thread>();
-        try (var deadline = WorkDeadline.open(Duration.ofMillis(100))) {
+        try (var _ = WorkDeadline.open(Duration.ofMillis(100))) {
             assertEquals(504, assertThrows(ResponseStatusException.class, () -> work.prepare(() -> {
                 worker.set(Thread.currentThread());
                 await(new CountDownLatch(1));
@@ -82,7 +82,7 @@ class ApiWorkServiceTests {
         var worker = new AtomicReference<Thread>();
         var release = new CountDownLatch(1);
         try {
-            try (var deadline = WorkDeadline.open(Duration.ofMillis(100))) {
+            try (var _ = WorkDeadline.open(Duration.ofMillis(100))) {
                 assertEquals(504, assertThrows(ResponseStatusException.class, () -> work.fetch(() -> {
                     worker.set(Thread.currentThread());
                     while (release.getCount() != 0) {

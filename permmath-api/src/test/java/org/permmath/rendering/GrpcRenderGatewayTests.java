@@ -34,7 +34,7 @@ class GrpcRenderGatewayTests {
                 }).build().start();
         var channel = NettyChannelBuilder.forAddress("127.0.0.1", server.getPort()).usePlaintext().build();
         try (var gateway = new GrpcRenderGateway(channel, Duration.ofSeconds(5));
-                var scope = WorkDeadline.open(Duration.ofSeconds(2))) {
+                var _ = WorkDeadline.open(Duration.ofSeconds(2))) {
             long remaining = Long.parseLong(new String(gateway.renderFormula("x"), StandardCharsets.UTF_8));
             assertTrue(remaining > 0 && remaining <= 2000, "RPC must use remaining API budget");
         } finally {

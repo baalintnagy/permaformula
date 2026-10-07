@@ -39,7 +39,7 @@ class StylesheetFetcherTests {
     @Test
     void expandsRelativeImportsFromFinalRedirectDestinationAndKeepsOrder() throws Exception {
         var requested = Stream.<String>builder();
-        var fetcher = new StylesheetFetcher((uri, deadline) -> {
+        var fetcher = new StylesheetFetcher((uri, _) -> {
             requested.add(uri.toString());
             if (uri.getPath().equals("/main.css")) {
                 return new StylesheetFetcher.Download(URI.create("https://example.com/css/final.css"), "@import 'base.css' screen; p {color:blue}");
@@ -59,7 +59,7 @@ class StylesheetFetcherTests {
     void fetchesStylesheetsInOrderAndPreservesCheckedFailures() throws Exception {
         var requested = Stream.<String>builder();
         var refs = List.of("https://example.com/red.css", "https://example.com/blue.css");
-        var fetcher = new StylesheetFetcher((uri, deadline) -> {
+        var fetcher = new StylesheetFetcher((uri, _) -> {
             requested.add(uri.toString());
             return new StylesheetFetcher.Download(uri,
                 uri.getPath().equals("/red.css") ? "p{color:red}" : "p{color:blue}");
@@ -71,7 +71,7 @@ class StylesheetFetcherTests {
         assertTrue(stylesheets.get(1).contains("color:blue"));
 
         var failure = new IOException("download failed");
-        var failing = new StylesheetFetcher((uri, deadline) -> {
+        var failing = new StylesheetFetcher((_, _) -> {
             throw failure;
         });
         assertSame(failure, assertThrows(IOException.class, () -> failing.fetchAll(refs)));
@@ -79,12 +79,12 @@ class StylesheetFetcherTests {
 
     @Test
     void blocksUnsafeImportsCyclesAndExcessiveImportDepth() {
-        var unsafe = new StylesheetFetcher((uri, deadline) -> new StylesheetFetcher.Download(uri,
+        var unsafe = new StylesheetFetcher((uri, _) -> new StylesheetFetcher.Download(uri,
                 "@import 'https://127.0.0.1/private.css';"));
         assertThrows(IllegalArgumentException.class, () -> unsafe.fetch("https://example.com/main.css"));
-        var cyclic = new StylesheetFetcher((uri, deadline) -> new StylesheetFetcher.Download(uri, "@import 'main.css';"));
+        var cyclic = new StylesheetFetcher((uri, _) -> new StylesheetFetcher.Download(uri, "@import 'main.css';"));
         assertThrows(IllegalArgumentException.class, () -> cyclic.fetch("https://example.com/main.css"));
-        var deep = new StylesheetFetcher((uri, deadline) -> new StylesheetFetcher.Download(uri,
+        var deep = new StylesheetFetcher((uri, _) -> new StylesheetFetcher.Download(uri,
                 "@import '" + uri.getPath() + "/child.css';"));
         assertThrows(IllegalArgumentException.class, () -> deep.fetch("https://example.com/main.css"));
     }

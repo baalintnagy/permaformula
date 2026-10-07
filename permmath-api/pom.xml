@@ -7,9 +7,7 @@
         <version>1.0</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
-    <groupId>org.permmath</groupId>
     <artifactId>permmath-api</artifactId>
-    <version>1.0</version>
     <name>PermMath API</name>
     <description>Permlinks for Math Formules</description>
     <dependencies>

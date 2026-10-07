@@ -27,7 +27,7 @@ final class RenderContentPolicy {
             .allowAttributes("colspan", "rowspan").matching(Pattern.compile("[0-9]{1,3}"))
                     .onElements("td", "th")
             .allowWithoutAttributes("div", "span")
-            .allowAttributes("style").matching((element, attribute, value) -> StylesheetPolicy.declarations(value))
+            .allowAttributes("style").matching((_, _, value) -> StylesheetPolicy.declarations(value))
                     .globally().toFactory();
 
     static String document(String template, ImageDescriptor descriptor) throws IOException {
@@ -35,7 +35,7 @@ final class RenderContentPolicy {
     }
 
 
-    static String document(String template, ImageDescriptor descriptor, List<String> externalCss) throws IOException {
+    static String document(String template, ImageDescriptor descriptor, List<String> externalCss) {
         PreparationComplexity.html(descriptor.forumla());
         int rules = PreparationComplexity.css(descriptor.style() == null ? "" : descriptor.style())
             + externalCss.stream().mapToInt(PreparationComplexity::css).sum();

@@ -32,7 +32,7 @@ final class BrowserChannelPolicy {
         context.addInitScript(DISABLE_CHANNELS);
         context.routeWebSocket("**/*", socket -> {
             // Never connect to the server or forward close events to a nonexistent server socket.
-            socket.onClose((code, reason) -> {
+            socket.onClose((_, _) -> {
             });
             socket.close(new WebSocketRoute.CloseOptions().setCode(1008)
                     .setReason("WebSockets are disabled in the renderer"));
@@ -50,7 +50,7 @@ final class BrowserChannelPolicy {
             }
         });
         // Fail the render even for srcdoc/data/about:blank frames.
-        page.onFrameAttached(frame -> page.close());
+        page.onFrameAttached(_ -> page.close());
         page.onFrameNavigated(frame -> {
             if (frame != page.mainFrame() || (!documentUrl.equals(frame.url()) && !("about:blank".equals(frame.url()) && !documentAdmitted.get()))) {
                 page.close();

@@ -21,8 +21,7 @@ public final class ApiDeadlineFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
         throws ServletException, IOException {
-        try (@SuppressWarnings("unused")
-        var deadline = WorkDeadline.open(properties.timeout())) {
+        try (var _ = WorkDeadline.open(properties.timeout())) {
             chain.doFilter(request, response);
         }
     }

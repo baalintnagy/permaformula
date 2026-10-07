@@ -70,13 +70,13 @@ class ClientRateLimitsTests {
     void isolatesClientsAndRefillsUsingMonotonicTime() {
         var limits = limits(10, Duration.ofMinutes(1), List.of());
         var first = request("203.0.113.1");
-        try (var scope = limits.open(first)) { }
-        try (var scope = limits.open(first)) { }
+        try (var _ = limits.open(first)) { }
+        try (var _ = limits.open(first)) { }
         var denied = assertThrows(ClientRateLimits.Limited.class, () -> limits.open(first));
         assertEquals("1", denied.getHeaders().getFirst("Retry-After"));
-        try (var scope = limits.open(request("203.0.113.2"))) { }
+        try (var _ = limits.open(request("203.0.113.2"))) { }
         now.addAndGet(Duration.ofSeconds(1).toNanos());
-        try (var scope = limits.open(first)) { }
+        try (var _ = limits.open(first)) { }
         assertThrows(ClientRateLimits.Limited.class, () -> limits.open(first));
     }
 
@@ -84,23 +84,23 @@ class ClientRateLimitsTests {
     void rejectsNewIdentitiesAtCapacityWithoutResettingExistingAllowances() {
         var limits = limits(1, Duration.ofSeconds(2), List.of());
         var first = request("203.0.113.1");
-        try (var scope = limits.open(first)) { }
+        try (var _ = limits.open(first)) { }
         assertThrows(ClientRateLimits.Limited.class, () -> limits.open(request("203.0.113.2")));
-        try (var scope = limits.open(first)) { }
+        try (var _ = limits.open(first)) { }
         assertThrows(ClientRateLimits.Limited.class, () -> limits.open(first));
         now.addAndGet(Duration.ofSeconds(3).toNanos());
-        try (var scope = limits.open(request("203.0.113.2"))) { }
+        try (var _ = limits.open(request("203.0.113.2"))) { }
     }
 
     @Test
     void pinsActiveRequestsBeyondIdleExpiry() {
         var limits = limits(1, Duration.ofSeconds(2), List.of());
-        try (var scope = limits.open(request("203.0.113.1"))) {
+        try (var _ = limits.open(request("203.0.113.1"))) {
             now.addAndGet(Duration.ofSeconds(3).toNanos());
             assertThrows(ClientRateLimits.Limited.class, () -> limits.open(request("203.0.113.2")));
         }
         now.addAndGet(Duration.ofSeconds(3).toNanos());
-        try (var scope = limits.open(request("203.0.113.2"))) { }
+        try (var _ = limits.open(request("203.0.113.2"))) { }
     }
 
     @Test
@@ -110,7 +110,7 @@ class ClientRateLimitsTests {
         var release = new CountDownLatch(1);
         try (var executor = Executors.newSingleThreadExecutor()) {
             Future<String> active;
-            try (var scope = limits.open(request("203.0.113.1"))) {
+            try (var _ = limits.open(request("203.0.113.1"))) {
                 var operation = ClientRateLimits.generation(() -> {
                     entered.countDown();
                     try {
@@ -125,11 +125,11 @@ class ClientRateLimitsTests {
             }
             try {
                 now.addAndGet(Duration.ofSeconds(3).toNanos());
-                try (var scope = limits.open(request("203.0.113.1"))) {
+                try (var _ = limits.open(request("203.0.113.1"))) {
                     var second = ClientRateLimits.generation(() -> "second");
                     assertEquals(429, assertThrows(ClientRateLimits.Limited.class, second::run).getStatusCode().value());
                 }
-                try (var scope = limits.open(request("203.0.113.2"))) {
+                try (var _ = limits.open(request("203.0.113.2"))) {
                     assertEquals("other", ClientRateLimits.generation(() -> "other").run());
                 }
             } finally {
@@ -137,7 +137,7 @@ class ClientRateLimitsTests {
             }
             assertEquals("done", active.get(2, TimeUnit.SECONDS));
             now.addAndGet(Duration.ofSeconds(1).toNanos());
-            try (var scope = limits.open(request("203.0.113.1"))) {
+            try (var _ = limits.open(request("203.0.113.1"))) {
                 assertEquals("recovered", ClientRateLimits.generation(() -> "recovered").run());
             }
         }
@@ -146,7 +146,7 @@ class ClientRateLimitsTests {
     @Test
     void failedGenerationsSpendTokensAndReleaseConcurrency() throws Exception {
         var limits = limits(10, Duration.ofMinutes(1), List.of());
-        try (var scope = limits.open(request("203.0.113.1"))) {
+        try (var _ = limits.open(request("203.0.113.1"))) {
             assertThrows(IOException.class, () -> ClientRateLimits.generation(() -> {
                 throw new IOException("failed");
             }).run());
@@ -175,7 +175,7 @@ class ClientRateLimitsTests {
         var release = new CountDownLatch(1);
         try (var executor = Executors.newFixedThreadPool(2)) {
             var first = executor.submit(() -> {
-                try (var scope = limits.open(request("203.0.113.1"))) {
+                try (var _ = limits.open(request("203.0.113.1"))) {
                     return store.getOrGenerate("shared", () -> work.generate(ClientRateLimits.generation(() -> {
                         entered.countDown();
                         try {
@@ -189,7 +189,7 @@ class ClientRateLimitsTests {
             });
             assertTrue(entered.await(2, TimeUnit.SECONDS));
             var second = executor.submit(() -> {
-                try (var scope = limits.open(request("203.0.113.2"))) {
+                try (var _ = limits.open(request("203.0.113.2"))) {
                     waiting.countDown();
                     String shared = store.getOrGenerate("shared", () -> {
                         fail("Duplicate caller must reuse the in-flight load");
@@ -214,10 +214,10 @@ class ClientRateLimitsTests {
     void boundsConcurrentRequestsIncludingSharedImageWaitersAndReleasesOnClose() {
         var limits = new ClientRateLimits(new ClientRateLimitProperties(60, 10, 1, 60, 2, 1,
                 10, Duration.ofMinutes(1), List.of()), now::get);
-        try (var scope = limits.open(request("203.0.113.1"))) {
+        try (var _ = limits.open(request("203.0.113.1"))) {
             assertThrows(ClientRateLimits.Limited.class, () -> limits.open(request("203.0.113.1")));
-            try (var other = limits.open(request("203.0.113.2"))) { }
+            try (var _ = limits.open(request("203.0.113.2"))) { }
         }
-        try (var scope = limits.open(request("203.0.113.1"))) { }
+        try (var _ = limits.open(request("203.0.113.1"))) { }
     }
 }

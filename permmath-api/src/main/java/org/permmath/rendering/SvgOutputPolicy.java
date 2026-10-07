@@ -107,7 +107,7 @@ public final class SvgOutputPolicy {
         factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
         factory.setProperty(XMLInputFactory.IS_REPLACING_ENTITY_REFERENCES, false);
         factory.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, "");
-        factory.setXMLResolver((publicId, systemId, base, namespace) -> {
+        factory.setXMLResolver((_, _, _, _) -> {
             throw new XMLStreamException("External XML resource denied");
         });
         XMLStreamReader reader = null;

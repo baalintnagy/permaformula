@@ -41,7 +41,7 @@ public class CaffeineImageStore implements GeneratedImageStore {
             .weigher((String key, String svg) -> (int) Math.min(Integer.MAX_VALUE,
                 2L * (key.length() + svg.length()) + 256))
             .expireAfterAccess(properties.expireAfterAccess())
-            .removalListener((String key, String svg, RemovalCause cause) ->
+            .removalListener((String key, String _, RemovalCause cause) ->
                 log.debug("event=cache_removed key={} cause={}", key, cause))
             .ticker(ticker)
             .recordStats()

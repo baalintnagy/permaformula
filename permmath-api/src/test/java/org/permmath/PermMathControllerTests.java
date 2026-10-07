@@ -107,7 +107,7 @@ class PermMathControllerTests {
 
     @Test
     void encodingHonoursTheExistingRequestDeadline() throws Exception {
-        try (var deadline = WorkDeadline.open(Duration.ofNanos(1))) {
+        try (var _ = WorkDeadline.open(Duration.ofNanos(1))) {
             mvc.perform(get("/url-encode").param("text", "x")).andExpect(status().isGatewayTimeout());
         }
         mvc.perform(get("/url-encode").param("text", "x")).andExpect(status().isOk());

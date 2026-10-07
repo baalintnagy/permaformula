@@ -309,31 +309,35 @@ class RenderWorkQueueTests {
     @Test
     void shutdownRemovesQueuedRequestsAndWakesCallers() throws Exception {
         var entered = new CountDownLatch(1);
-        try (var callers = Executors.newVirtualThreadPerTaskExecutor();
-                var queue = new RenderWorkQueue(1, settings(1, Duration.ofSeconds(5)), (request, _) -> {
-                    entered.countDown();
-                    awaitLatch(new CountDownLatch(1));
-                    return response(request);
-                })) {
-            var active = callers.submit(() -> queue.execute(request("active"), Duration.ofSeconds(5)));
-            awaitLatch(entered);
-            var waiting = callers.submit(() -> queue.execute(request("waiting"), Duration.ofSeconds(5)));
-            await()
-                .pollDelay(Duration.ZERO)
-                .pollInterval(Duration.ofMillis(5))
-                .atMost(Duration.ofSeconds(3))
-                .until(() -> queue.waitingJobs() == 1);
-            queue.close();
-            assertEquals(RenderException.Kind.QUEUE_CANCELLED, failureKind(waiting));
-            assertEquals(RenderException.Kind.CANCELLED, failureKind(active));
-            await()
-                .pollDelay(Duration.ZERO)
-                .pollInterval(Duration.ofMillis(5))
-                .atMost(Duration.ofSeconds(3))
-                .until(() -> queue.retainedBytes() == 0);
-            assertEquals(RenderException.Kind.OVERLOADED, assertThrows(RenderException.class,
-                    () -> queue.execute(request("closed"), Duration.ofSeconds(5))).kind());
-            assertEquals(0, queue.retainedBytes());
+        try (var callers = Executors.newVirtualThreadPerTaskExecutor()) {
+            var queue = new RenderWorkQueue(1, settings(1, Duration.ofSeconds(5)), (request, _) -> {
+                entered.countDown();
+                awaitLatch(new CountDownLatch(1));
+                return response(request);
+            });
+            try {
+                var active = callers.submit(() -> queue.execute(request("active"), Duration.ofSeconds(5)));
+                awaitLatch(entered);
+                var waiting = callers.submit(() -> queue.execute(request("waiting"), Duration.ofSeconds(5)));
+                await()
+                    .pollDelay(Duration.ZERO)
+                    .pollInterval(Duration.ofMillis(5))
+                    .atMost(Duration.ofSeconds(3))
+                    .until(() -> queue.waitingJobs() == 1);
+                queue.close();
+                assertEquals(RenderException.Kind.QUEUE_CANCELLED, failureKind(waiting));
+                assertEquals(RenderException.Kind.CANCELLED, failureKind(active));
+                await()
+                    .pollDelay(Duration.ZERO)
+                    .pollInterval(Duration.ofMillis(5))
+                    .atMost(Duration.ofSeconds(3))
+                    .until(() -> queue.retainedBytes() == 0);
+                assertEquals(RenderException.Kind.OVERLOADED, assertThrows(RenderException.class,
+                        () -> queue.execute(request("closed"), Duration.ofSeconds(5))).kind());
+                assertEquals(0, queue.retainedBytes());
+            } finally {
+                queue.close();
+            }
         }
     }
 

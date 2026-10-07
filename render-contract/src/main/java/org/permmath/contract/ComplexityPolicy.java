@@ -47,7 +47,7 @@ public final class ComplexityPolicy {
         var values = Arrays.stream(Limit.values())
             .collect(Collectors.toMap(limit -> limit,
                 limit -> configuredValue(limit, overrides, environment, defaults),
-                (left, right) -> left, () -> new EnumMap<>(Limit.class)));
+                    (left, _) -> left, () -> new EnumMap<>(Limit.class)));
         if (values.get(Limit.SVG_BYTES) > RenderProtocol.MAX_CONTENT_BYTES) {
             throw new IllegalArgumentException("SVG limit exceeds transport size limit");
         }

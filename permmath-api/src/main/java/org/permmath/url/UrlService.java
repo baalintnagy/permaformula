@@ -89,7 +89,7 @@ public class UrlService {
         return work.prepare(() -> decode(ubcq));
     }
 
-    private ImageDescriptor decode(String ubcq) throws IOException {
+    private ImageDescriptor decode(String ubcq) {
         try {
             var json = stringCompressionService.decompress(ubcq);
             var descriptor = DESCRIPTOR_MAPPER.readValue(json, ImageDescriptor.class);

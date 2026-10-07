@@ -30,7 +30,7 @@ final class BoundedWork {
         var ran = new AtomicBoolean();
         var task = new FutureTask<T>(() -> {
             ran.set(true);
-            try (var scope = WorkDeadline.at(deadline)) {
+            try (var _ = WorkDeadline.at(deadline)) {
                 WorkDeadline.remainingNanos(timeout);
                 T result = operation.run();
                 WorkDeadline.remainingNanos(timeout);

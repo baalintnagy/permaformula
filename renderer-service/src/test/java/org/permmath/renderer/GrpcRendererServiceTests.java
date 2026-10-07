@@ -88,7 +88,7 @@ class GrpcRendererServiceTests {
 
     @Test
     void exchangesMessagesAndMapsOverload() throws Exception {
-        try (var fixture = new Fixture((request, budget) -> {
+        try (var fixture = new Fixture((request, _) -> {
             if (request.getRequestId().equals("busy")) {
                 throw new RenderException(RenderException.Kind.OVERLOADED, "busy");
             }
@@ -104,7 +104,7 @@ class GrpcRendererServiceTests {
     @Test
     void rpcDeadlineInterruptsExecutingJob() throws Exception {
         var interrupted = new CountDownLatch(1);
-        try (var fixture = new Fixture((request, budget) -> {
+        try (var fixture = new Fixture((_, _) -> {
             try {
                 Thread.sleep(60_000);
                 throw new AssertionError("Deadline failed");
