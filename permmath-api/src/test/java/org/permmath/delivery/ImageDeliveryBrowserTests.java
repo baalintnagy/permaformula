@@ -30,14 +30,14 @@ class ImageDeliveryBrowserTests {
                 async ({api, images}) => {
                     const link = await fetch(api + '/url?formula=' + encodeURIComponent('<p>browser `x^2`</p>'), {credentials: 'omit'});
                     const url = await link.text();
-                    if (!link.ok || !url.startsWith(images + '/image?')) throw new Error('Wrong permalink origin');
-                    const formula = await fetch(api + '/img?formula=x%5E2', {credentials: 'omit'});
-                    if (!formula.ok || !formula.url.startsWith(images + '/img?') || formula.type !== 'cors') throw new Error('Anonymous redirect/CORS failed');
+                    if (!link.ok || !url.startsWith(images + '/html?')) throw new Error('Wrong permalink origin');
+                    const formula = await fetch(api + '/exp?formula=x%5E2', {credentials: 'omit'});
+                    if (!formula.ok || !formula.url.startsWith(images + '/exp?') || formula.type !== 'cors') throw new Error('Anonymous redirect/CORS failed');
                     if (!(await formula.text()).includes('<svg')) throw new Error('Expected formula SVG');
                     const html = await fetch(url, {credentials: 'omit'});
                     if (!html.ok || !(await html.text()).includes('<svg')) throw new Error('Expected HTML SVG');
                     try {
-                        await fetch(images + '/img?formula=x%5E2', {credentials: 'include'});
+                        await fetch(images + '/exp?formula=x%5E2', {credentials: 'include'});
                         throw new Error('Credentialed image read unexpectedly allowed');
                     } catch (error) {
                         if (!(error instanceof TypeError)) throw error;

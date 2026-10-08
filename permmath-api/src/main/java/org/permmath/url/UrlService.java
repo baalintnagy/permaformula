@@ -79,7 +79,7 @@ public class UrlService {
                         imageWidth,
                         styleRefs,
                         style));
-        return "%s/image?%s".formatted(
+        return "%s/html?%s".formatted(
                 permMathProperties.imageHost(),
                 "ubcq=" + encode(stringCompressionService.compress(imageJson), UTF_8));
     }

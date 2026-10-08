@@ -42,23 +42,23 @@ class ImageDeliveryBoundaryTests {
     @Test
     void redirectsUntrustedOrUnmarkedHandlersBeforeRenderingAndPreservesRawQuery() throws Exception {
         assertAll(List.of(
-                peer("/img?formula=x%2By", "203.0.113.50").header("X-Permmath-Image-Delivery", "1"),
-                peer("/img?formula=x%2By", "172.30.86.2").header("X-Forwarded-For", "203.0.113.51")).stream()
+                peer("/exp?formula=x%2By", "203.0.113.50").header("X-Permmath-Image-Delivery", "1"),
+                peer("/exp?formula=x%2By", "172.30.86.2").header("X-Forwarded-For", "203.0.113.51")).stream()
             .<Executable>map(request -> () -> {
                 mvc.perform(request).andExpect(status().isTemporaryRedirect())
-                        .andExpect(header().string("Location", "https://math-images.example.net/img?formula=x%2By"))
+                        .andExpect(header().string("Location", "https://math-images.example.net/exp?formula=x%2By"))
                         .andExpect(header().string("Cache-Control", "no-store"));
             }));
-        mvc.perform(peer("/image?ubcq=malformed", "203.0.113.52"))
+        mvc.perform(peer("/html?ubcq=malformed", "203.0.113.52"))
                 .andExpect(status().isTemporaryRedirect());
-        mvc.perform(peer("/img;ignored?formula=x", "203.0.113.53"))
+        mvc.perform(peer("/exp;ignored?formula=x", "203.0.113.53"))
                 .andExpect(status().isTemporaryRedirect());
         verifyNoInteractions(renderer);
     }
 
     @Test
     void rejectsDuplicateDeliveryMarkersFromTrustedProxy() throws Exception {
-        mvc.perform(peer("/img?formula=x", "172.30.86.2").header("X-Forwarded-For", "203.0.113.54")
+        mvc.perform(peer("/exp?formula=x", "172.30.86.2").header("X-Forwarded-For", "203.0.113.54")
                 .header("X-Permmath-Image-Delivery", "1", "1")).andExpect(status().isTemporaryRedirect());
         verifyNoInteractions(renderer);
     }
@@ -66,7 +66,7 @@ class ImageDeliveryBoundaryTests {
     @Test
     void trustedImageIngressPreservesSvgHeadersAndPublicUrlPointsToImageOrigin() throws Exception {
         when(renderer.render("delivery-safe")).thenReturn("<svg xmlns='http://www.w3.org/2000/svg'><text>safe</text></svg>");
-        mvc.perform(peer("/img", "172.30.86.2").param("formula", "delivery-safe")
+        mvc.perform(peer("/exp", "172.30.86.2").param("formula", "delivery-safe")
                 .header("X-Forwarded-For", "203.0.113.55").header("X-Permmath-Image-Delivery", "1"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Content-Security-Policy", SvgOutputPolicy.CSP))
@@ -74,7 +74,7 @@ class ImageDeliveryBoundaryTests {
                 .andExpect(header().string("Referrer-Policy", "no-referrer"));
         mvc.perform(peer("/url", "203.0.113.56").param("formula", "<p>public user</p>"))
                 .andExpect(status().isOk()).andExpect(content().string(Matchers.startsWith(
-                        "https://math-images.example.net/image?ubcq=")));
+                        "https://math-images.example.net/html?ubcq=")));
         mvc.perform(peer("/v3/api-docs", "203.0.113.57")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.servers[0].url").value("https://math.example.com"));
     }

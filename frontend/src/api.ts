@@ -2,7 +2,7 @@ export function formulaUrl(
   formula: string,
   origin = import.meta.env.VITE_PERMMATH_API_ORIGIN || window.location.origin,
 ): string {
-  const url = new URL('/img', origin);
+  const url = new URL('/exp', origin);
   url.searchParams.set('formula', formula);
   return url.href;
 }
@@ -17,7 +17,7 @@ export interface ComposerRequest {
 export function imageRequestUrl(permalink: string): string {
   const url = new URL(permalink, window.location.origin);
   // Vite proxies image endpoints; direct API fetches would require CORS in development.
-  if (import.meta.env.DEV && ['/image', '/img'].includes(url.pathname))
+  if (import.meta.env.DEV && ['/html', '/exp'].includes(url.pathname))
     return url.pathname + url.search;
   return url.href;
 }
@@ -69,7 +69,7 @@ export async function createPermalink(
   const url = new URL(result, window.location.origin);
   if (
     !['http:', 'https:'].includes(url.protocol) ||
-    url.pathname !== '/image' ||
+    url.pathname !== '/html' ||
     !url.searchParams.has('ubcq')
   ) {
     throw new Error('The server returned an invalid SVG permalink.');

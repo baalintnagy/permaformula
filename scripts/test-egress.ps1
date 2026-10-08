@@ -69,7 +69,7 @@ try {
     }
     Write-Output 'Mixed public/private DNS and private DNS destinations denied by Squid'
 
-    $formula = Invoke-WebRequest "$BaseUrl/img?formula=x%5E2" -TimeoutSec 40
+    $formula = Invoke-WebRequest "$BaseUrl/exp?formula=x%5E2" -TimeoutSec 40
     $formulaSvg = if ($formula.Content -is [string]) { $formula.Content } else { [Text.Encoding]::UTF8.GetString($formula.Content) }
     if ($formula.StatusCode -ne 200 -or $formulaSvg -notmatch '<svg') { throw 'Formula ingress failed' }
     $html = [uri]::EscapeDataString('<p class="text-danger">Egress verified `x^2`</p>')

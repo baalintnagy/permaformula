@@ -43,20 +43,20 @@ try {
     $response = Get-Response "$BaseUrl/url?formula=$html"
     Assert-Status $response 200
     $url = Text $response
-    if (!$url.StartsWith("$ImageUrl/image?ubcq=")) { throw "Permalink does not use image origin: $url" }
+    if (!$url.StartsWith("$ImageUrl/html?ubcq=")) { throw "Permalink does not use image origin: $url" }
     $credentials = @{'Cookie'='app_session=sentinel'; 'Authorization'='Bearer sentinel';
             'Proxy-Authorization'='Basic sentinel'; 'X-Permmath-Image-Delivery'='forged'}
     Assert-Svg (Get-Response $url $credentials)
-    $redirect = Get-Response "$BaseUrl/img?formula=x%5E2" $credentials
+    $redirect = Get-Response "$BaseUrl/exp?formula=x%5E2" $credentials
     Assert-Status $redirect 307
-    if ((Header $redirect 'Location') -ne "$ImageUrl/img?formula=x%5E2") { throw 'Legacy redirect lost origin/query' }
-    Assert-Svg (Get-Response "$ImageUrl/img?formula=x%5E2" $credentials)
-    foreach ($path in @('/url?formula=x', '/url-encode?text=x', '/decode?ubcq=bad', '/swagger-ui/index.html', '/v3/api-docs', '/img;ignored?formula=x', '/')) {
+    if ((Header $redirect 'Location') -ne "$ImageUrl/exp?formula=x%5E2") { throw 'Legacy redirect lost origin/query' }
+    Assert-Svg (Get-Response "$ImageUrl/exp?formula=x%5E2" $credentials)
+    foreach ($path in @('/url?formula=x', '/url-encode?text=x', '/decode?ubcq=bad', '/swagger-ui/index.html', '/v3/api-docs', '/exp;ignored?formula=x', '/')) {
         Assert-Status (Get-Response "$ImageUrl$path") 404
     }
-    Assert-Status (Get-Response "$BaseUrl/img;ignored?formula=x" $credentials) 404
-    Assert-Status (Get-Response "$ImageUrl/img?formula=x" @{} 'POST') 403
-    $cors = Get-Response "$ImageUrl/img?formula=x" @{'Origin'=$BaseUrl} 'OPTIONS'
+    Assert-Status (Get-Response "$BaseUrl/exp;ignored?formula=x" $credentials) 404
+    Assert-Status (Get-Response "$ImageUrl/exp?formula=x" @{} 'POST') 403
+    $cors = Get-Response "$ImageUrl/exp?formula=x" @{'Origin'=$BaseUrl} 'OPTIONS'
     Assert-Status $cors 204
     if ((Header $cors 'Access-Control-Allow-Origin') -ne $BaseUrl -or $cors.Headers.Contains('Access-Control-Allow-Credentials')) {
         throw 'Image CORS must allow only anonymous reads from the configured API origin'
@@ -80,7 +80,7 @@ try {
 
     $image = (docker inspect "${ProjectName}-ingress-1" | ConvertFrom-Json)[0].Config.Image
     $probe = Join-Path $taskRoot 'docker/ingress/delivery-probe.sh'
-    foreach ($path in @('/img?formula=x', '/img;ignored?formula=x')) {
+    foreach ($path in @('/exp?formula=x', '/exp;ignored?formula=x')) {
         $direct = docker run --rm --network "${ProjectName}_api-private" --read-only --cap-drop ALL `
             --security-opt no-new-privileges:true --mount "type=bind,source=$probe,target=/probe.sh,readonly" `
             --entrypoint sh $image /probe.sh $path
@@ -121,7 +121,7 @@ try {
         throw 'API credentials must survive; spoofed image-delivery marker must be removed'
     }
     if (!$api.Headers.Contains('Set-Cookie')) { throw 'Echo fixture must set its control cookie' }
-    foreach ($path in @('/img', '/image')) {
+    foreach ($path in @('/exp', '/html')) {
         $imageResponse = Get-Response "$imageFixture$path" $credentials
         Assert-Status $imageResponse 200
         if ((Text $imageResponse) -ne '|||1' -or $imageResponse.Headers.Contains('Set-Cookie')) {

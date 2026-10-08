@@ -17,19 +17,19 @@ afterEach(() => {
 describe('image requests', () => {
   it('uses the development proxy without changing the encoded image payload', () => {
     vi.stubEnv('DEV', true);
-    expect(imageRequestUrl('http://localhost:8086/image?ubcq=a%2Bb%2F%3D')).toBe(
-      '/image?ubcq=a%2Bb%2F%3D',
+    expect(imageRequestUrl('http://localhost:8086/html?ubcq=a%2Bb%2F%3D')).toBe(
+      '/html?ubcq=a%2Bb%2F%3D',
     );
-    expect(imageRequestUrl('http://localhost:8086/img?formula=x%2By')).toBe('/img?formula=x%2By');
+    expect(imageRequestUrl('http://localhost:8086/exp?formula=x%2By')).toBe('/exp?formula=x%2By');
     vi.stubEnv('DEV', false);
-    expect(imageRequestUrl('https://images.example/image?ubcq=a%2Bb')).toBe(
-      'https://images.example/image?ubcq=a%2Bb',
+    expect(imageRequestUrl('https://images.example/html?ubcq=a%2Bb')).toBe(
+      'https://images.example/html?ubcq=a%2Bb',
     );
   });
   it('round-trips original formula characters without double encoding', () => {
     const formula = 'x + y = 50% & α\n"quoted" #?';
     const url = new URL(formulaUrl(formula, 'https://math.example'));
-    expect(url.pathname).toBe('/img');
+    expect(url.pathname).toBe('/exp');
     expect(url.searchParams.get('formula')).toBe(formula);
     expect(url.searchParams.size).toBe(1);
     expect(url.search).toContain('%2B');
@@ -81,10 +81,10 @@ describe('image requests', () => {
     await expect(createPermalink(request)).rejects.toThrow('invalid SVG permalink');
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(new Response('https://images.example/image?ubcq=abc%2Bdef')),
+      vi.fn().mockResolvedValue(new Response('https://images.example/html?ubcq=abc%2Bdef')),
     );
     await expect(createPermalink(request)).resolves.toBe(
-      'https://images.example/image?ubcq=abc%2Bdef',
+      'https://images.example/html?ubcq=abc%2Bdef',
     );
   });
 });

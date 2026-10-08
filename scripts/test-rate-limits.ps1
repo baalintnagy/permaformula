@@ -29,9 +29,9 @@ if (!$ready) { throw 'API did not become ready through ingress' }
 
 $formula = [Uri]::EscapeDataString("rate_$(Get-Random -Maximum 1000000)")
 $spoof = @{'X-Forwarded-For'='198.51.100.1'; 'Forwarded'='for=198.51.100.2'; 'X-Real-IP'='198.51.100.3'}
-Assert-Status (Get-Response "/img?formula=$formula" $spoof) 200
-Assert-Limited (Get-Response "/img?formula=${formula}%2B1" @{'X-Forwarded-For'='198.51.100.4'})
-$cached = Get-Response "/img?formula=$formula" @{'X-Forwarded-For'='198.51.100.5'}
+Assert-Status (Get-Response "/exp?formula=$formula" $spoof) 200
+Assert-Limited (Get-Response "/exp?formula=${formula}%2B1" @{'X-Forwarded-For'='198.51.100.4'})
+$cached = Get-Response "/exp?formula=$formula" @{'X-Forwarded-For'='198.51.100.5'}
 Assert-Status $cached 200
 if (!$cached.Headers.ContainsKey('Content-Security-Policy')) { throw 'Cached SVG lost its CSP' }
 Assert-Status (Get-Response '/url?formula=x' @{'X-Forwarded-For'='198.51.100.6'}) 200

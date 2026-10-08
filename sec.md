@@ -93,12 +93,12 @@ The ready flag still proves protocol completion, not document safety. The indepe
 
 The template loads `tex-svg.js` as well as [AsciiMath](https://asciimath.org/), so TeX processing remains reachable in HTML text. MathJax's `ui/safe` extension is enabled in the browser and the rebuilt GraalJS bundle, with explicit protocols allowing HTTPS and denying HTTP, JavaScript, file and data. An additional MathJax render action applies safe filtering to [AsciiMath](https://asciimath.org/) trees; the upstream extension already installs TeX filtering. The API independently validates final output, so safety does not depend on the exporter or MathJax alone. Internal fragment references and HTTPS hyperlinks are retained; external resource references, active SVG/HTML and dangerous schemes are rejected. CSS resource URLs are removed except local fragments.
 
-Both `/image` and `/img` return restrictive sandbox CSP, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. CSP permits embedded presentation styles while denying scripts, external resources, connections, frames and objects. Both cache identities include the new output-policy version; failed validation is not cached. Regression coverage includes forged renderer output, namespaces, active features, CSS URI escapes, XML entities, limits and delivery headers.
+Both `/html` and `/exp` return restrictive sandbox CSP, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. CSP permits embedded presentation styles while denying scripts, external resources, connections, frames and objects. Both cache identities include the new output-policy version; failed validation is not cached. Regression coverage includes forged renderer output, namespaces, active features, CSS URI escapes, XML entities, limits and delivery headers.
 
 Compose now supplies a dedicated anonymous image listener. `permmath.image-host`
 controls generated permalink origins independently of the public API host.
 `/url`, `/url-encode` and Swagger remain publicly available on the API listener;
-existing API `/image` and `/img` URLs redirect with HTTP 307 and preserve raw queries.
+existing API `/html` and `/exp` URLs redirect with HTTP 307 and preserve raw queries.
 Only those two image routes allow GET/HEAD/OPTIONS on the image listener; other
 routes/methods fail closed. Native nginx strips Cookie/Authorization/Proxy-Authorization
 requests and hides Set-Cookie/WWW-Authenticate responses. Only the configured API
@@ -166,10 +166,10 @@ to 128, property names to 64 characters, strings to 4,194,304 characters and
 numbers to ten characters; trailing JSON is rejected. Malformed payloads return
 HTTP 400 without including parser diagnostics in the public exception.
 
-Shared descriptor construction validation applies to `/url`, `/image`
+Shared descriptor construction validation applies to `/url`, `/html`
 and HTML cache identities: nonblank content up to 4 MiB, inline CSS up to 1 MiB,
 eight nonblank stylesheet references up to 2 KiB each, and width 220–4000.
-`/img` validates a nonblank formula up to 256 KiB before rendering/cache identity
+`/exp` validates a nonblank formula up to 256 KiB before rendering/cache identity
 serialization. Text limits count UTF-8 bytes and preserve accepted whitespace.
 Oversized existing permalinks are intentionally rejected. Proxy/server query
 limits may be smaller. Tests cover byte boundaries, concatenated-member expansion,
@@ -177,7 +177,7 @@ compression bombs, malformed descriptors, endpoint rejection and no renderer cal
 on invalid inputs. Admission is implemented under 13; parsing/layout complexity budgets are implemented under 12.
 
 The public `/decode` endpoint has been removed. Its bounded decompression/JSON
-implementation remains necessary internally for `/image`. `/url-encode?text=...`
+implementation remains necessary internally for `/html`. `/url-encode?text=...`
 uses Java's UTF-8 URLEncoder on the servlet-decoded parameter, with the existing
 4 MiB content byte cap (at most 12 MiB encoded output). It accepts empty input
 and requires the parameter. It uses preparation admission, the unchanged 60s
@@ -318,9 +318,9 @@ Renderer/API admission, per-client request/render quotas, 16 MiB output caps and
 
 ### 15. Formula-only renderer abuse — supervised isolation and output policy implemented
 
-AsciiMathRenderer passes formula as a value and disables Java host access/class lookup. It now runs in a fresh disposable JVM inside the renderer container. Formula input/output are capped at 16 MiB, job heap at 1 GiB, and the supervisor terminates stalled jobs under the RPC/service deadline. Container limits cover native allocations. /img still launches neither Chromium nor external CSS fetching.
+AsciiMathRenderer passes formula as a value and disables Java host access/class lookup. It now runs in a fresh disposable JVM inside the renderer container. Formula input/output are capped at 16 MiB, job heap at 1 GiB, and the supervisor terminates stalled jobs under the RPC/service deadline. Container limits cover native allocations. /exp still launches neither Chromium nor external CSS fetching.
 
-This removes unbounded formula execution from the API process. The common API-side SVG policy applies to `/img` as well as styled HTML, and its GraalJS bundle now uses MathJax safe filtering. API admission and deadlines are implemented (13); complexity budgets are implemented (12); non-cooperative API work still needs attention (13). Individual inputs are bounded (11). The TeX-link probe targeted styled HTML; it is not evidence of that exact payload working in [AsciiMath](https://asciimath.org/)-only /img.
+This removes unbounded formula execution from the API process. The common API-side SVG policy applies to `/exp` as well as styled HTML, and its GraalJS bundle now uses MathJax safe filtering. API admission and deadlines are implemented (13); complexity budgets are implemented (12); non-cooperative API work still needs attention (13). Individual inputs are bounded (11). The TeX-link probe targeted styled HTML; it is not evidence of that exact payload working in [AsciiMath](https://asciimath.org/)-only /exp.
 
 ### 16. Data exposure and supply chain — partially mitigated; ongoing operational work
 
@@ -433,7 +433,7 @@ continues making progress. NAT/replicas require deployment-specific quota review
 
 Validation: the production ingress image passed native Docker smoke coverage for
 an 11 MiB request line, 8 MiB body cap, shared per-client and total connection
-limits, spoofed forwarded headers, Retry-After/image CORS, header/body/keepalive
+limits, spoofed forwarded headers, Retry-After/html CORS, header/body/keepalive
 and slow-response-reader deadlines, recovery and invalid configuration rejection.
 Compose validation and git diff whitespace checks passed. Test-only containers
 and networks were removed; no production deployment was performed.
@@ -468,7 +468,7 @@ deadlines still bound waiting. Non-cooperative API parsing remains a separate is
 ## URL encoding and decode-endpoint cleanup verification
 
 The public decode controller, OpenAPI operation and nginx proxy route are removed;
-its bounded internal descriptor decoder remains in use by /image. GET /url-encode
+its bounded internal descriptor decoder remains in use by /html. GET /url-encode
 accepts a required text parameter and applies Java UTF-8 query-value encoding,
 preserving empty input and escaping literal plus/percent/reserved characters.
 Existing preparation admission, request quotas, deadlines and input byte bounds
@@ -479,7 +479,7 @@ UI/delivery tests skipped. Coverage includes raw-query decoding exactly once,
 Unicode/whitespace, the 4 MiB UTF-8 input and 12 MiB worst-case output boundary,
 missing/oversized inputs, removed routes/OpenAPI, preparation overload/deadline
 recovery and independent request/render quotas. Compressed-image decompression,
-JSON validation and bomb rejection remain covered through /image. Linux image
+JSON validation and bomb rejection remain covered through /html. Linux image
 verification caught and fixed a PID-file publication race in the existing process
 cancellation test fixture; atomic publication then passed on Windows and Linux.
 

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 const svg =
   '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="50"><text x="10" y="30">Rendered SVG</text></svg>';
-const permalink = 'http://127.0.0.1:5173/image?ubcq=test%2Bpayload';
+const permalink = 'http://127.0.0.1:5173/html?ubcq=test%2Bpayload';
 
 test('color picker applies on double-click and outside click', async ({ page }) => {
   await page.goto('/');
@@ -61,15 +61,15 @@ test('local math previews, exact query encoding, server rendering and new-tab pe
   );
   const requests: string[] = [];
   page.on('request', (request) => {
-    if (['/img', '/image', '/url', '/url-encode'].includes(new URL(request.url()).pathname))
+    if (['/exp', '/html', '/url', '/url-encode'].includes(new URL(request.url()).pathname))
       requests.push(request.url());
   });
-  await page.route('**/img?**', (route) =>
-    route.fulfill({ contentType: 'image/svg+xml', body: svg }),
-  );
   await page
     .context()
-    .route('**/image?**', (route) => route.fulfill({ contentType: 'image/svg+xml', body: svg }));
+    .route('**/exp?**', (route) => route.fulfill({ contentType: 'image/svg+xml', body: svg }));
+  await page
+    .context()
+    .route('**/html?**', (route) => route.fulfill({ contentType: 'image/svg+xml', body: svg }));
   await page.route('**/url?**', (route) =>
     route.fulfill({ contentType: 'text/plain', body: permalink }),
   );
@@ -107,7 +107,7 @@ test('local math previews, exact query encoding, server rendering and new-tab pe
   await expect(formulaLink).toBeVisible();
   await expect(formulaLink).toHaveAttribute('href', currentFormulaUrl);
   await expect(formulaLink).toHaveAttribute('target', '_blank');
-  expect(requests.some((url) => new URL(url).pathname === '/img')).toBe(false);
+  expect(requests.some((url) => new URL(url).pathname === '/exp')).toBe(false);
   const formulaPopupPromise = page.waitForEvent('popup');
   await formulaLink.click();
   const formulaPopup = await formulaPopupPromise;
@@ -118,7 +118,7 @@ test('local math previews, exact query encoding, server rendering and new-tab pe
     page.getByRole('img', { name: `Rendered formula: ${formula}`, exact: true }),
   ).toBeVisible();
   expect(
-    new URL(requests.find((url) => new URL(url).pathname === '/img')!).searchParams.get('formula'),
+    new URL(requests.find((url) => new URL(url).pathname === '/exp')!).searchParams.get('formula'),
   ).toBe(formula);
 
   await page.getByRole('button', { name: 'Add stylesheet' }).click();
@@ -193,7 +193,7 @@ test('theme persists, mobile layout fits, and user HTML stays isolated', async (
 });
 
 test('validation and server rendering failures are visible', async ({ page }) => {
-  await page.route('**/img?**', (route) =>
+  await page.context().route('**/exp?**', (route) =>
     route.fulfill({
       status: 400,
       contentType: 'application/problem+json',
@@ -217,7 +217,7 @@ test('validation and server rendering failures are visible', async ({ page }) =>
     page.locator('#composer').getByRole('button', { name: 'Generate SVG' }),
   ).toBeDisabled();
   await page.getByRole('button', { name: 'Remove stylesheet 1' }).click();
-  await page.route('**/image?**', (route) =>
+  await page.route('**/html?**', (route) =>
     route.fulfill({
       status: 400,
       contentType: 'application/problem+json',
@@ -229,7 +229,7 @@ test('validation and server rendering failures are visible', async ({ page }) =>
   await expect(
     page.locator('#composer').getByRole('link', { name: 'Open SVG', exact: true }),
   ).toHaveCount(0);
-  await page.route('**/image?**', (route) =>
+  await page.route('**/html?**', (route) =>
     route.fulfill({ contentType: 'image/svg+xml', body: svg }),
   );
   await page.locator('#composer').getByRole('button', { name: 'Generate SVG' }).click();

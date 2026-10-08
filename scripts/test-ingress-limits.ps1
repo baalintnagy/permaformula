@@ -75,11 +75,11 @@ try {
     $first = Connect $api; $second = Connect $images
     $bodyTimer = [System.Diagnostics.Stopwatch]::StartNew()
     Send $first "GET /url HTTP/1.1`r`nHost: api.example.test`r`nContent-Length: 1000`r`n`r`nx"
-    Send $second "GET /img HTTP/1.1`r`nHost: images.example.test`r`nContent-Length: 1000`r`n`r`nx"
+    Send $second "GET /exp HTTP/1.1`r`nHost: images.example.test`r`nContent-Length: 1000`r`n`r`nx"
     # Wait for complete headers to enter nginx's native connection accounting.
     Start-Sleep -Milliseconds 200
     $third = Connect $images
-    Send $third "GET /img HTTP/1.1`r`nHost: images.example.test`r`nX-Forwarded-For: 8.8.8.8`r`nConnection: close`r`n`r`n"
+    Send $third "GET /exp HTTP/1.1`r`nHost: images.example.test`r`nX-Forwarded-For: 8.8.8.8`r`nConnection: close`r`n`r`n"
     $rejected = Read-Headers $third
     Assert-Match $rejected '^HTTP/1.1 429' 'Shared per-client cap was bypassed'
     Assert-Match $rejected '(?im)^Retry-After: 1\r?$' 'Missing retry hint'
@@ -114,7 +114,7 @@ try {
     Send $held "GET /url HTTP/1.1`r`nHost: api.example.test`r`nContent-Length: 1000`r`n`r`nx"
     Start-Sleep -Milliseconds 200
     $overTotal = Connect $images
-    Send $overTotal "GET /img HTTP/1.1`r`nHost: images.example.test`r`nConnection: close`r`n`r`n"
+    Send $overTotal "GET /exp HTTP/1.1`r`nHost: images.example.test`r`nConnection: close`r`n`r`n"
     Assert-Match (Read-Headers $overTotal) '^HTTP/1.1 429' 'Global cap was not shared across listeners'
     Assert-Match (docker logs $ingress 2>&1 | Out-String) 'limiting connections by zone "total"' 'Global cap was not exercised independently'
     Write-Output 'PASS: 11 MiB request line, body cap, shared client and total caps, spoof resistance, Retry-After/CORS, header/body/keepalive/write timeouts and recovery.'

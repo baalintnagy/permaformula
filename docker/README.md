@@ -13,7 +13,7 @@ The Maven build verifies all four modules. Docker builds separate targets:
 - `runtime`: Spring API, UID/GID 10001, no Chromium or GraalJS. Fetches and sanitizes external CSS, prepares HTML, caches SVG and serves HTTP.
 - `renderer`: gRPC service, UID/GID 10002, Chromium and GraalJS. Runs both HTML and formula jobs in disposable JVMs. Contains no API application or credentials.
 - `stylesheet-egress`: Squid 7 from Alpine packages, running as `squid`. Its native ACLs allow CONNECT to public port 443 and reject internal, metadata, reserved and transition addresses, including any blocked answer in a mixed DNS result. No port is published, no TLS interception or content cache is used, and access logging is disabled.
-- `ingress`: nginx from Alpine packages, running as `nginx`. Publishes separate API/image listeners and forwards only to the private API. Access logging is disabled to avoid recording formula/permalink queries. Proxy response timeouts are 65 seconds, beyond the API's 60-second deadline; SVG headers are preserved.
+- `ingress`: nginx from Alpine packages, running as `nginx`. Publishes separate API/html listeners and forwards only to the private API. Access logging is disabled to avoid recording formula/permalink queries. Proxy response timeouts are 65 seconds, beyond the API's 60-second deadline; SVG headers are preserved.
 - `cache-db`: PostgreSQL, private to the API on an isolated `cache-private` network,
   with no published port. A persistent `cache-data` volume stores generated SVGs.
   The API logs in as the non-superuser `permmath`; bootstrap admin credentials are
@@ -97,7 +97,7 @@ docker compose up --build -d
 ```
 
 Terminate HTTPS in front of `127.0.0.1:${PORT:-5000}`. One public hostname serves
-the Builder, API, Swagger and exact `/image` and `/img` routes. No image port is
+the Builder, API, Swagger and exact `/html` and `/exp` routes. No image port is
 published and `PERMMATH_IMAGE_HOST` is deliberately ignored by this Compose file:
 permalinks always use `PERMMATH_HOST`. A provider-assigned hostname is sufficient;
 buying domains is optional. The repository does not provision production TLS.
@@ -132,7 +132,7 @@ Set `PERMMATH_HOST=https://math.example.com` and
 to its corresponding localhost listener (`PORT` / `IMAGE_PORT`, default 5000 / 5001).
 Use different registrable domains for independent cookie scope; the image host
 must remain anonymous. API image routes redirect with HTTP 307 preserving queries.
-The image listener exposes only exact `/image` and `/img`. Anonymous CORS permits
+The image listener exposes only exact `/html` and `/exp`. Anonymous CORS permits
 only the configured API origin; credentialed cross-origin reads remain denied.
 This profile sets `PERMMATH_IMAGE_DELIVERY_SEPARATE_ORIGIN_REQUIRED=true`, which
 fails startup if the origins are equivalent or the delivery boundary is disabled.
@@ -313,7 +313,7 @@ Remote TCP deployment requires its own private network, authentication, egress a
 
 ## Verification
 
-`docker compose config --quiet` validates configuration. Check `/img?formula=x`, then use `/url` to create a styled descriptor and load its `/image` permalink. Confirm external styles survive rendering.
+`docker compose config --quiet` validates configuration. Check `/exp?formula=x`, then use `/url` to create a styled descriptor and load its `/html` permalink. Confirm external styles survive rendering.
 
 Inspect the renderer with `docker inspect`: NetworkMode must be `none`, user 10002, read-only root, resource limits and security options present. `/proc/net/dev` should contain only loopback. Application/browser files must be unwritable. Chromium must launch without `--no-sandbox` and with seccomp active. Repeat these checks on production hosts after runtime upgrades.
 

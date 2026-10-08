@@ -73,7 +73,7 @@ try {
         throw 'API credentials must survive; spoofed image-delivery marker must be removed'
     }
     if (!$api.Headers.Contains('Set-Cookie')) { throw 'Echo fixture must set its control cookie' }
-    foreach ($path in @('/img', '/image')) {
+    foreach ($path in @('/exp', '/html')) {
         Assert-Status (Get-Response "$imageFixture$path" @{} 'POST') 403
         Assert-Status (Get-Response "$imageFixture$path" @{} 'OPTIONS') 204
         $imageResponse = Get-Response "$imageFixture$path" $credentials
@@ -83,9 +83,9 @@ try {
         }
         if ((Header $imageResponse 'Content-Security-Policy') -notmatch 'sandbox') { throw 'Proxy dropped CSP' }
     }
-    Assert-Status (Get-Response "$imageFixture/img;ignored?formula=x" $credentials) 404
+    Assert-Status (Get-Response "$imageFixture/exp;ignored?formula=x" $credentials) 404
     if ($Profile -eq 'separate-origins') {
-        Assert-Status (Get-Response "$apiFixture/img?formula=x" $credentials) 307
+        Assert-Status (Get-Response "$apiFixture/exp?formula=x" $credentials) 307
         Assert-Status (Get-Response "$imageFixture/url") 404
     }
     Write-Output 'Native upstream fixture confirms Cookie/Authorization/Proxy-Authorization stripping and Set-Cookie suppression on both image endpoints.'

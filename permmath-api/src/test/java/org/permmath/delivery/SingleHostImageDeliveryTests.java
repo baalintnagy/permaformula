@@ -23,10 +23,10 @@ class SingleHostImageDeliveryTests {
 
     @Test
     void rejectsUntrustedMissingAndDuplicateMarkersWithoutRedirectLoops() throws Exception {
-        mvc.perform(get("/img").param("formula", "x").header("X-Permmath-Image-Delivery", "1"))
+        mvc.perform(get("/exp").param("formula", "x").header("X-Permmath-Image-Delivery", "1"))
                 .andExpect(status().isForbidden()).andExpect(header().doesNotExist("Location"));
         for (String[] markers : new String[][] {{}, {"1", "1"}}) {
-            var request = get("/img").param("formula", "x").with(r -> {
+            var request = get("/exp").param("formula", "x").with(r -> {
                 r.setRemoteAddr("172.30.86.2"); r.addHeader("X-Forwarded-For", "203.0.113.60"); return r;
             });
             if (markers.length > 0) request.header("X-Permmath-Image-Delivery", (Object[]) markers);
@@ -38,7 +38,7 @@ class SingleHostImageDeliveryTests {
     @Test
     void protectedSameOriginImagesKeepSandboxAndPermalinkHost() throws Exception {
         when(renderer.render("single-host-safe")).thenReturn("<svg xmlns='http://www.w3.org/2000/svg'/>");
-        mvc.perform(get("/img").param("formula", "single-host-safe")
+        mvc.perform(get("/exp").param("formula", "single-host-safe")
                 .header("X-Permmath-Image-Delivery", "1").with(r -> {
                     r.setRemoteAddr("172.30.86.2"); r.addHeader("X-Forwarded-For", "203.0.113.60"); return r;
                 }))
@@ -48,6 +48,6 @@ class SingleHostImageDeliveryTests {
                 .andExpect(header().string("Referrer-Policy", "no-referrer"));
         mvc.perform(get("/url").param("formula", "x"))
                 .andExpect(status().isOk()).andExpect(content().string(
-                        org.hamcrest.Matchers.startsWith("https://math.example.com/image?ubcq=")));
+                        org.hamcrest.Matchers.startsWith("https://math.example.com/html?ubcq=")));
     }
 }

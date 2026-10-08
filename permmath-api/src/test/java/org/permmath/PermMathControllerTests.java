@@ -131,10 +131,10 @@ class PermMathControllerTests {
 
     @Test
     void bothSvgEndpointsSendRestrictiveHeaders() throws Exception {
-        when(renderer.getImg("x")).thenReturn("<svg/>");
-        when(renderer.getImage(any())).thenReturn("<svg/>");
+        when(renderer.getExp("x")).thenReturn("<svg/>");
+        when(renderer.getHtml(any())).thenReturn("<svg/>");
         String link = urlService.getImageUrl("x", null, null, null);
-        assertAll(List.of(get("/img").param("formula", "x"), followLink(link)).stream()
+        assertAll(List.of(get("/exp").param("formula", "x"), followLink(link)).stream()
             .<Executable>map(request -> () -> {
                 mvc.perform(request).andExpect(status().isOk())
                         .andExpect(MockMvcResultMatchers.header()
@@ -161,7 +161,7 @@ class PermMathControllerTests {
                 "https://example.com/b.css");
         String style = "\npre::before { content: 'a  b'; }\n\tpre { width: 50%; }  ";
         String image = "<svg>α</svg>";
-        when(renderer.getImage(any())).thenReturn(image);
+        when(renderer.getHtml(any())).thenReturn(image);
 
         String link = mvc.perform(get("/url").param("formula", formula)
                 .param("imageWidth", "640").param("styleRefs", refs.toArray(String[]::new))
@@ -173,41 +173,41 @@ class PermMathControllerTests {
                 .andExpect(content().contentTypeCompatibleWith("image/svg+xml"))
                 .andExpect(content().string(image))
                 .andExpect(content().bytes(image.getBytes(StandardCharsets.UTF_8)));
-        verify(renderer).getImage(new ImageDescriptor(formula, 640, refs, style));
+        verify(renderer).getHtml(new ImageDescriptor(formula, 640, refs, style));
     }
 
     @Test
     void generatedLinksPreserveWhitespaceExactly() throws Exception {
-        when(renderer.getImage(any())).thenReturn("<svg/>");
+        when(renderer.getHtml(any())).thenReturn("<svg/>");
         String link = urlService.getImageUrl("x\n\t +   y", null, List.of(), " \n ");
 
         mvc.perform(followLink(link)).andExpect(status().isOk());
-        verify(renderer).getImage(new ImageDescriptor("x\n\t +   y", null, null, " \n "));
+        verify(renderer).getHtml(new ImageDescriptor("x\n\t +   y", null, null, " \n "));
     }
 
     @Test
     void formulaEndpointPassesUncompressedFormulaExactly() throws Exception {
         String formula = "  x\n\t +   y = 50% & z # w?  ";
-        when(renderer.getImg(formula)).thenReturn("<svg/>");
-        mvc.perform(get("/img").param("formula", formula))
+        when(renderer.getExp(formula)).thenReturn("<svg/>");
+        mvc.perform(get("/exp").param("formula", formula))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith("image/svg+xml"))
                 .andExpect(content().string("<svg/>"));
-        verify(renderer).getImg(formula);
+        verify(renderer).getExp(formula);
     }
 
     @Test
     void compressionIsAlwaysUsedAndDeterministic() throws Exception {
         mvc.perform(get("/url").param("formula", "x"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(Matchers.startsWith("http://localhost:8086/image?ubcq=")))
+                .andExpect(content().string(Matchers.startsWith("http://localhost:8086/html?ubcq=")))
                 .andExpect(content().string(urlService.getImageUrl("x", null, null, null)));
         mvc.perform(get("/url").param("formula", "x").param("compressUrlQuery", "false"))
                 .andExpect(content().string(urlService.getImageUrl("x", null, null, null)));
     }
 
     @ParameterizedTest
-    @ValueSource(strings = { "/url", "/image", "/url-encode", "/img" })
+    @ValueSource(strings = { "/url", "/html", "/url-encode", "/exp" })
     void missingRequiredInputReturnsBadRequest(String endpoint) throws Exception {
         mvc.perform(get(endpoint)).andExpect(status().isBadRequest());
     }
@@ -271,7 +271,7 @@ class PermMathControllerTests {
         var timedMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new LocalExceptionHandler())
                 .addFilters(new ApiDeadlineFilter(properties)).build();
-        timedMvc.perform(get("/image").param("ubcq", "valid-but-stalled"))
+        timedMvc.perform(get("/html").param("ubcq", "valid-but-stalled"))
                 .andExpect(status().isGatewayTimeout());
         Assertions.assertNotNull(worker.get());
         worker.get().join(2000);
@@ -290,12 +290,12 @@ class PermMathControllerTests {
                 "{\"forumla\":\"x\"} {}",
                 "{\"forumla\":" + "[".repeat(20) + "0" + "]".repeat(20) + "}").stream()
             .<Executable>map(json -> () -> {
-                mvc.perform(get("/image").param("ubcq", new StringCompressionService().compress(json)))
+                mvc.perform(get("/html").param("ubcq", new StringCompressionService().compress(json)))
                         .andExpect(status().isBadRequest());
             }));
         assertAll(List.of("%%%", "AQIDBA==").stream()
             .<Executable>map(payload -> () -> {
-                mvc.perform(get("/image").param("ubcq", payload)).andExpect(status().isBadRequest());
+                mvc.perform(get("/html").param("ubcq", payload)).andExpect(status().isBadRequest());
             }));
         Mockito.verifyNoInteractions(renderer);
     }
@@ -307,14 +307,14 @@ class PermMathControllerTests {
             gzip.write("x".repeat(InputLimits.MAX_JSON_BYTES + 1)
                     .getBytes(StandardCharsets.UTF_8));
         }
-        mvc.perform(get("/image").param("ubcq", Base64.getEncoder().encodeToString(bytes.toByteArray())))
+        mvc.perform(get("/html").param("ubcq", Base64.getEncoder().encodeToString(bytes.toByteArray())))
                 .andExpect(status().isBadRequest());
         Mockito.verifyNoInteractions(renderer);
     }
 
     @Test
     void directEndpointsRejectOversizedUtf8ContentAndStyles() throws Exception {
-        mvc.perform(get("/img").param("formula", "漢".repeat(InputLimits.MAX_FORMULA_BYTES / 3 + 1)))
+        mvc.perform(get("/exp").param("formula", "漢".repeat(InputLimits.MAX_FORMULA_BYTES / 3 + 1)))
                 .andExpect(status().isBadRequest());
         mvc.perform(get("/url").param("formula", "x".repeat(
                 InputLimits.MAX_CONTENT_BYTES + 1)))

@@ -207,7 +207,7 @@ export function App() {
   const widthValid = Number.isInteger(width) && width >= 220 && width <= 4000;
   const refsValid = styleRefs.every((ref) => !ref.trim() || validStyleRef(ref.trim()));
   const inputIdentity = JSON.stringify([html, css, styleRefs, imageWidth]);
-  const imgUrl = formulaUrl(formula);
+  const expUrl = formulaUrl(formula);
 
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
@@ -393,8 +393,8 @@ export function App() {
             </button>
           </div>
           <div className="permalink-result panel">
-            <CopyUrl url={imgUrl} label="Expression SVG URL" />
-            <a href={imgUrl} target="_blank" rel="noopener noreferrer" className="text-button">
+            <CopyUrl url={expUrl} label="Expression SVG URL" />
+            <a href={expUrl} target="_blank" rel="noopener noreferrer" className="text-button">
               Open SVG
               <Icon name="external" />
             </a>

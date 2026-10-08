@@ -66,17 +66,17 @@ class PermMathApplicationTests {
         mvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.openapi").value("3.0.1"))
-                .andExpect(jsonPath("$.paths['/img'].get.responses['200'].content['image/svg+xml']").exists())
+                .andExpect(jsonPath("$.paths['/exp'].get.responses['200'].content['image/svg+xml']").exists())
                 .andExpect(jsonPath("$.paths['/url-encode'].get.responses['200'].content['text/plain']").exists())
                 .andExpect(jsonPath("$.paths['/decode']").doesNotExist());
     }
 
     @Test
-    void imageSwaggerExampleContainsOnlyASimpleFormula() throws Exception {
+    void htmlSwaggerExampleContainsOnlyASimpleFormula() throws Exception {
         String json = mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         var mapper = JsonMapper.builder().build();
-        var parameters = mapper.readTree(json).at("/paths/~1image/get/parameters");
+        var parameters = mapper.readTree(json).at("/paths/~1html/get/parameters");
         var parameter = parameters.get(0);
         Assertions.assertEquals("ubcq", parameter.get("name").asString());
         var decoded = new StringCompressionService()
@@ -97,12 +97,12 @@ class PermMathApplicationTests {
 
     @Test
     void invalidCompressedInputReturnsBusinessRuleProblem() throws Exception {
-        mvc.perform(get("/image").param("ubcq", "%%%"))
+        mvc.perform(get("/html").param("ubcq", "%%%"))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.errorType").value("BUSINESS_RULE_VIOLATION"))
-                .andExpect(jsonPath("$.instance").value("/image"))
+                .andExpect(jsonPath("$.instance").value("/html"))
                 .andExpect(jsonPath("$.id").isString())
                 .andExpect(jsonPath("$.timestamp").isNumber());
     }
@@ -129,7 +129,7 @@ class PermMathApplicationTests {
 
     @Test
     void formulaEndpointReturnsSvgWithoutStartingABrowser() throws Exception {
-        mvc.perform(get("/img").param("formula", "sqrt(x^2 + y^2)"))
+        mvc.perform(get("/exp").param("formula", "sqrt(x^2 + y^2)"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith("image/svg+xml"))
                 .andExpect(content().string(Matchers.startsWith("<svg")));
@@ -137,27 +137,32 @@ class PermMathApplicationTests {
 
     @Test
     void blankFormulaEndpointInputReturnsProblem() throws Exception {
-        mvc.perform(get("/img").param("formula", " "))
+        mvc.perform(get("/exp").param("formula", " "))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith("application/problem+json"));
     }
 
     @Test
     void missingFormulaEndpointInputReturnsProblem() throws Exception {
-        mvc.perform(get("/img"))
+        mvc.perform(get("/exp"))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith("application/problem+json"));
     }
 
     @Test
     void renamedRoutesRequireCompressedInputAndOldRoutesAreRemoved() throws Exception {
-        mvc.perform(get("/image").param("formula", "x")).andExpect(status().isBadRequest());
-        mvc.perform(get("/decode").param("url", "http://localhost/image?formula=x")).andExpect(status().isNotFound());
+        mvc.perform(get("/html").param("formula", "x")).andExpect(status().isBadRequest());
+        mvc.perform(get("/decode").param("url", "http://localhost/html?formula=x")).andExpect(status().isNotFound());
+        mvc.perform(get("/img").param("formula", "x")).andExpect(status().isNotFound());
+        mvc.perform(get("/image").param("ubcq", "legacy-payload")).andExpect(status().isNotFound());
         mvc.perform(get("/image-cq")).andExpect(status().isNotFound());
         mvc.perform(get("/decode-cq")).andExpect(status().isNotFound());
-        mvc.perform(get("/img").param("ubcq", "legacy-payload")).andExpect(status().isBadRequest());
+        mvc.perform(get("/exp").param("ubcq", "legacy-payload")).andExpect(status().isBadRequest());
         mvc.perform(get("/v3/api-docs"))
-                .andExpect(jsonPath("$.paths['/image']").exists())
+                .andExpect(jsonPath("$.paths['/html']").exists())
+                .andExpect(jsonPath("$.paths['/exp']").exists())
+                .andExpect(jsonPath("$.paths['/img']").doesNotExist())
+                .andExpect(jsonPath("$.paths['/image']").doesNotExist())
                 .andExpect(jsonPath("$.paths['/url-encode']").exists())
                 .andExpect(jsonPath("$.paths['/decode']").doesNotExist())
                 .andExpect(jsonPath("$.paths['/image-cq']").doesNotExist())

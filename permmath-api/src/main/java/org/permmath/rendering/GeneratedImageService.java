@@ -49,7 +49,7 @@ public class GeneratedImageService {
         this.mapper = mapper;
     }
 
-    public String getImage(@Valid @NotNull ImageDescriptor descriptor) throws IOException {
+    public String getHtml(@Valid @NotNull ImageDescriptor descriptor) throws IOException {
         var prepared = work.prepare(() -> {
             var effective = new ImageDescriptor(descriptor.forumla(),
                 Objects.requireNonNullElse(descriptor.imageWidth(), defaults.defaultImageWidth()),
@@ -66,7 +66,7 @@ public class GeneratedImageService {
         })));
     }
 
-    public String getImg(@NotBlank String formula) throws IOException {
+    public String getExp(@NotBlank String formula) throws IOException {
         var cacheKey = work.prepare(() -> {
             InputLimits.formula(formula);
             ComplexityPolicy.CURRENT.checkMathInput(formula);

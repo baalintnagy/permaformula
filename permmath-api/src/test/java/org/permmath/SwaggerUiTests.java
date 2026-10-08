@@ -38,14 +38,14 @@ class SwaggerUiTests {
             operation.getByText("Try it out", new Locator.GetByTextOptions().setExact(true)).click();
             var response = page.waitForResponse(r -> r.url().contains("/url?") && r.status() == 200,
                     () -> operation.getByText("Execute", new Locator.GetByTextOptions().setExact(true)).click());
-            assertTrue(response.text().startsWith("http://localhost:8086/image?ubcq="));
+            assertTrue(response.text().startsWith("http://localhost:8086/html?ubcq="));
             operation.locator(".responses-inner .response-col_status").filter(
                     new Locator.FilterOptions().setHasText("200")).first().waitFor();
-            var imageOperation = page.locator("#operations-perm-math-controller-getImage");
-            imageOperation.locator(".opblock-summary").click();
-            imageOperation.getByText("Try it out", new Locator.GetByTextOptions().setExact(true)).click();
-            var imageResponse = page.waitForResponse(r -> r.url().contains("/image?") && r.status() == 200,
-                    () -> imageOperation.getByText("Execute", new Locator.GetByTextOptions().setExact(true)).click());
+            var htmlOperation = page.locator("#operations-perm-math-controller-getHtml");
+            htmlOperation.locator(".opblock-summary").click();
+            htmlOperation.getByText("Try it out", new Locator.GetByTextOptions().setExact(true)).click();
+            var imageResponse = page.waitForResponse(r -> r.url().contains("/html?") && r.status() == 200,
+                    () -> htmlOperation.getByText("Execute", new Locator.GetByTextOptions().setExact(true)).click());
             assertTrue(imageResponse.text().startsWith("<svg"));
             assertTrue(imageResponse.text().contains("width=\"220\""));
             assertTrue(imageResponse.text().contains("<path"));

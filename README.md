@@ -13,15 +13,18 @@ MathRenderAPI generates SVG images from compressed formula and styled HTML descr
 | Endpoint | Purpose |
 |---|---|
 | `GET /url?formula=...` | Generate a compressed permalink. Optional `imageWidth`, `style`, and repeated external HTTPS `styleRefs` parameters. |
-| `GET /image?ubcq=...` | Render compressed styled HTML with backtick-delimited [AsciiMath](https://asciimath.org/) as SVG. |
-| `GET /img?formula=...` | Render an uncompressed plain [AsciiMath](https://asciimath.org/) formula as standalone SVG, without a browser. |
+| `GET /html?ubcq=...` | Render compressed styled HTML with backtick-delimited [AsciiMath](https://asciimath.org/) as SVG. |
+| `GET /exp?formula=...` | Render an uncompressed plain [AsciiMath](https://asciimath.org/) formula as standalone SVG, without a browser. |
 | `GET /url-encode?text=...` | Encode text as a UTF-8 query parameter value and return plain text. |
 
-`/image` uses `ubcq`: a GZIP-compressed UTF-8 JSON image descriptor,
+`/html` uses `ubcq`: a GZIP-compressed UTF-8 JSON image descriptor,
 Base64-encoded and URL-encoded. `/url` always generates this format, including
 for short formulas. The `compressUrlQuery` option and uncompressed input modes
-have been removed. `/image` requires `ubcq`. The public `/decode` endpoint and
+have been removed. `/html` requires `ubcq`. The public `/decode` endpoint and
 the former `/image-cq` and `/decode-cq` route names are no longer available.
+
+The former `/img` and `/image` endpoints have been renamed to `/exp` and `/html`.
+Update existing clients and stored permalinks; the old routes return 404.
 
 ### Query-value encoding: `/url-encode`
 
@@ -41,18 +44,18 @@ ingress request-line/header limits also apply. The operation uses bounded API
 preparation and the request deadline/quotas. It returns `text/plain;charset=UTF-8`
 with no-store, nosniff and no-referrer headers and uses no rendering quota or cache.
 
-### Formula-only SVG: `/img`
+### Formula-only SVG: `/exp`
 
 Send plain [AsciiMath](https://asciimath.org/) directly, without HTML or backtick delimiters:
 
 ```sh
-curl --get --data-urlencode 'formula=sqrt(x^2 + y^2)' http://localhost:8086/img --output formula.svg
+curl --get --data-urlencode 'formula=sqrt(x^2 + y^2)' http://localhost:8086/exp --output formula.svg
 ```
 
-`/img` accepts only a required `formula` parameter. The formula determines its
+`/exp` accepts only a required `formula` parameter. The formula determines its
 natural dimensions; there are no width or styling options. The former compressed
 `ubcq` input is no longer supported by this endpoint. `/url` continues to generate
-compressed permalinks for `/image`.
+compressed permalinks for `/html`.
 
 Response: `200 OK`, `Content-Type: image/svg+xml`. The standalone formula SVG
 contains embedded glyph paths and can be used as an HTML image source. Missing
@@ -61,7 +64,7 @@ URL-encoded, including literal `+` characters.
 
 Formula, HTML, CSS and stylesheet references are preserved without whitespace
 normalization. The historical `forumla` JSON spelling remains in compressed
-payloads for `/image`.
+payloads for `/html`.
 
 This endpoint runs bundled MathJax 3.2.2 with its lightweight DOM adapter in
 GraalJS in a disposable JVM inside the separate renderer service. It launches no browser and needs no
@@ -91,7 +94,7 @@ Generate a permalink with /url, then request the returned link to render it.
 The default production deployment uses one hostname for the Builder UI, API and
 images. Configure `PERMMATH_HOST` to its public HTTPS origin (a provider-assigned
 hostname is sufficient). Compose exposes nginx on `127.0.0.1:5000`; terminate TLS
-in front of that listener. `/image` and `/img` still pass through credential-stripping
+in front of that listener. `/html` and `/exp` still pass through credential-stripping
 image ingress, mandatory trusted-ingress validation, sanitized SVG output and a
 restrictive CSP sandbox. Keep the API and renderer private.
 
@@ -120,7 +123,7 @@ See [frontend setup and checks](frontend/README.md).
 
 ### Generated image caching
 
-Both `/image` and `/img` cache successful SVG output in memory using Caffeine
+Both `/html` and `/exp` cache successful SVG output in memory using Caffeine
 and in a persistent database. Local/IDE launches default to embedded SQLite;
 Docker defaults to PostgreSQL. Concurrent requests for the same image in one API
 process share one generation. Errors are not cached. Database entries survive
@@ -181,7 +184,7 @@ cache-management endpoint or distributed render lock. See
 ### Rendering
 
 Chromium renders styled HTML with locally bundled MathJax 3.2.2 (SVG output).
-It is the sole HTML rendering backend; no engine selection is required. All image endpoints return SVG. Styled HTML is embedded using SVG foreignObject; `/img` returns pure formula SVG.
+It is the sole HTML rendering backend; no engine selection is required. All image endpoints return SVG. Styled HTML is embedded using SVG foreignObject; `/exp` returns pure formula SVG.
 `imageWidth` is the layout width in pixels (500 by default); image height follows the content.
 The legacy `default-dpi` setting is retained for configuration compatibility but
 browser rendering uses CSS pixels rather than that value.
@@ -326,11 +329,11 @@ limits, Compose egress rules and parser/layout complexity budgets.
 Rendering waits for MathJax, fonts, and images, with a configurable timeout
 (`permmath.rendering.timeout`, default `45s`, including queue waiting; child execution defaults to 30 seconds). User HTML is sanitized with a presentation element/attribute allowlist. External and inline CSS are parsed with ph-css and filtered by a presentation property/function allowlist. CSS variables, responsive media rules, supports rules, cascade layers and nested styles are retained. External stylesheets retain their application order; inline CSS follows them. Submitted images, SVG, links, scripts, forms and embedded documents are removed.
 
-The `/image` response type is `image/svg+xml` instead of
+The `/html` response type is `image/svg+xml` instead of
 `image/jpeg`; existing compressed permalinks resolve to SVG without changing their
 payload. HTML SVG exports use `foreignObject` with computed styles embedded,
 and keep MathJax formulas as vector paths. They are intended for browsers;
-SVG tools that do not support `foreignObject` should use `/img` for individual
+SVG tools that do not support `foreignObject` should use `/exp` for individual
 formulas. Ordinary HTML text still uses the viewer's fonts.
 
 Styled HTML export uses bundled html-to-image 1.11.13 through the small source
@@ -351,7 +354,7 @@ foreignObject, MathML, glyph paths, local fragment references and HTTPS links.
 Active elements, unsafe links, external resources, DTDs and XML entities are
 rejected; unsupported CSS declarations are removed. Output is limited to 16 MiB,
 depth 256 and 100,000 elements. Both cache identities include the output-policy
-version. `/image` and `/img` send sandbox CSP, `nosniff` and `no-referrer` headers.
+version. `/html` and `/exp` send sandbox CSP, `nosniff` and `no-referrer` headers.
 
 External stylesheets are fetched by a controlled HTTP client, with HTTPS on port 443, normal TLS certificate/hostname verification, and public IP addresses only. The connection uses the validated DNS addresses, so it cannot re-resolve an unchecked address. Every redirect is validated; HTTP downgrades, credentials and private/loopback/link-local/reserved destinations are rejected. CSS imports use the same fetcher and resolve relative to the final stylesheet URL.
 
@@ -407,7 +410,7 @@ Limits count UTF-8 bytes and preserve accepted content and whitespace:
 
 | Input | Limit |
 |---|---|
-| `/img` plain formula | 256 KiB, nonblank |
+| `/exp` plain formula | 256 KiB, nonblank |
 | Descriptor HTML/content (`forumla`) | 4 MiB, nonblank |
 | Inline stylesheet | 1 MiB |
 | Stylesheet references | Eight, nonblank, 2 KiB each |

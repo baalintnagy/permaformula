@@ -35,8 +35,8 @@ class GeneratedImageServiceTests {
     @Test
     void rejectsComplexInputBeforeCallingEitherRenderer() throws Exception {
         var service = service(500);
-        assertThrows(IllegalArgumentException.class, () -> service.getImg("x".repeat(262145)));
-        assertThrows(IllegalArgumentException.class, () -> service.getImage(new ImageDescriptor("<div>".repeat(129), null, null, null)));
+        assertThrows(IllegalArgumentException.class, () -> service.getExp("x".repeat(262145)));
+        assertThrows(IllegalArgumentException.class, () -> service.getHtml(new ImageDescriptor("<div>".repeat(129), null, null, null)));
         verifyNoInteractions(html, formula);
     }
 
@@ -44,8 +44,8 @@ class GeneratedImageServiceTests {
     void htmlUsesEffectiveWidthAndCachesReusableContent() throws Exception {
         when(html.getImage(any())).thenReturn(resource("<svg xmlns=\"http://www.w3.org/2000/svg\">α</svg>"));
         var service = service(500);
-        assertEquals("<svg xmlns=\"http://www.w3.org/2000/svg\">α</svg>", service.getImage(new ImageDescriptor("html", null, null, null)));
-        assertEquals("<svg xmlns=\"http://www.w3.org/2000/svg\">α</svg>", service.getImage(new ImageDescriptor("html", 500, List.of(), "")));
+        assertEquals("<svg xmlns=\"http://www.w3.org/2000/svg\">α</svg>", service.getHtml(new ImageDescriptor("html", null, null, null)));
+        assertEquals("<svg xmlns=\"http://www.w3.org/2000/svg\">α</svg>", service.getHtml(new ImageDescriptor("html", 500, List.of(), "")));
         verify(html, times(1)).getImage(any());
     }
 
@@ -54,9 +54,9 @@ class GeneratedImageServiceTests {
         when(formula.render("x")).thenReturn("<svg xmlns=\"http://www.w3.org/2000/svg\">formula-svg</svg>");
         when(html.getImage(any())).thenReturn(resource("<svg xmlns=\"http://www.w3.org/2000/svg\">html-svg</svg>"));
         var service = service(500);
-        assertEquals("<svg xmlns=\"http://www.w3.org/2000/svg\">formula-svg</svg>", service.getImg("x"));
-        assertEquals("<svg xmlns=\"http://www.w3.org/2000/svg\">formula-svg</svg>", service.getImg("x"));
-        assertEquals("<svg xmlns=\"http://www.w3.org/2000/svg\">html-svg</svg>", service.getImage(new ImageDescriptor("x", null, null, null)));
+        assertEquals("<svg xmlns=\"http://www.w3.org/2000/svg\">formula-svg</svg>", service.getExp("x"));
+        assertEquals("<svg xmlns=\"http://www.w3.org/2000/svg\">formula-svg</svg>", service.getExp("x"));
+        assertEquals("<svg xmlns=\"http://www.w3.org/2000/svg\">html-svg</svg>", service.getHtml(new ImageDescriptor("x", null, null, null)));
         verify(formula, times(1)).render("x");
     }
 
@@ -64,11 +64,11 @@ class GeneratedImageServiceTests {
     void outputAffectingSettingsHaveDifferentKeys() throws Exception {
         when(html.getImage(any())).thenAnswer(_ -> resource("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"));
         var descriptor = new ImageDescriptor("html", null, null, null);
-        service(500).getImage(descriptor);
-        service(900).getImage(descriptor);
-        service(500).getImage(new ImageDescriptor("html", null, null, "red"));
-        service(500).getImage(new ImageDescriptor("html", null, List.of("a.css", "b.css"), null));
-        service(500).getImage(new ImageDescriptor("html", null, List.of("b.css", "a.css"), null));
+        service(500).getHtml(descriptor);
+        service(900).getHtml(descriptor);
+        service(500).getHtml(new ImageDescriptor("html", null, null, "red"));
+        service(500).getHtml(new ImageDescriptor("html", null, List.of("a.css", "b.css"), null));
+        service(500).getHtml(new ImageDescriptor("html", null, List.of("b.css", "a.css"), null));
         verify(html, times(5)).getImage(any());
     }
 
@@ -76,8 +76,8 @@ class GeneratedImageServiceTests {
     void contentKeysAreStableAcrossServiceInstances() throws Exception {
         when(html.getImage(any())).thenReturn(resource("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"));
         var descriptor = new ImageDescriptor("html", null, null, null);
-        service(500).getImage(descriptor);
-        service(500).getImage(descriptor);
+        service(500).getHtml(descriptor);
+        service(500).getHtml(descriptor);
         verify(html, times(1)).getImage(any());
     }
 
@@ -89,8 +89,8 @@ class GeneratedImageServiceTests {
         var service = service(500);
         var descriptor = new ImageDescriptor("x", null, null, null);
         IntStream.range(0, 2).forEach(_ -> {
-            assertThrows(IOException.class, () -> service.getImage(descriptor));
-            assertThrows(IOException.class, () -> service.getImg("x"));
+            assertThrows(IOException.class, () -> service.getHtml(descriptor));
+            assertThrows(IOException.class, () -> service.getExp("x"));
         });
         verify(html, times(2)).getImage(any());
         verify(formula, times(2)).render("x");
@@ -102,10 +102,10 @@ class GeneratedImageServiceTests {
                 + "background-image:url(https://evil.example/a)'/></svg>";
         when(formula.render("x")).thenReturn(rendered);
         var service = service(500);
-        var clean = service.getImg("x");
+        var clean = service.getExp("x");
         assertFalse(clean.contains("evil.example"));
         assertTrue(clean.contains("fill:currentColor"));
-        assertEquals(clean, service.getImg("x"));
+        assertEquals(clean, service.getExp("x"));
         verify(formula, times(1)).render("x");
     }
 
@@ -120,7 +120,7 @@ class GeneratedImageServiceTests {
         var service = service(500);
         ReflectionTestUtils.setField(service, "work", work);
         when(formula.render("cached")).thenReturn("<svg xmlns='http://www.w3.org/2000/svg'><text>cached</text></svg>");
-        String cached = service.getImg("cached");
+        String cached = service.getExp("cached");
         var entered = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         try (var caller = Executors.newSingleThreadExecutor()) {
@@ -135,9 +135,9 @@ class GeneratedImageServiceTests {
             }));
             try {
                 assertTrue(entered.await(2, TimeUnit.SECONDS));
-                assertEquals(cached, service.getImg("cached"));
+                assertEquals(cached, service.getExp("cached"));
                 assertEquals(503, assertThrows(ResponseStatusException.class,
-                        () -> service.getImg("uncached")).getStatusCode().value());
+                        () -> service.getExp("uncached")).getStatusCode().value());
                 verify(formula, never()).render("uncached");
             } finally {
                 release.countDown();

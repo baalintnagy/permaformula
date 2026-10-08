@@ -78,24 +78,24 @@ class BuilderUiTests {
             page.navigate(origin);
             page.frameLocator("iframe[title='Formula live preview']").locator("svg").waitFor();
             page.frameLocator("iframe[title='HTML live preview']").locator("svg").waitFor();
-            var formulaResponse = page.waitForResponse(response -> response.url().contains("/img?"),
-                    () -> page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions()
-                            .setName("Render image").setExact(true)).click());
+            var formulaResponse = page.waitForResponse(response -> response.url().contains("/exp?"),
+                    () -> page.locator("#formula").getByRole(AriaRole.BUTTON, new com.microsoft.playwright.Locator.GetByRoleOptions()
+                            .setName("Generate SVG").setExact(true)).click());
             assertEquals(200, formulaResponse.status());
             assertTrue(formulaResponse.text().contains("<path"));
             assertThat(page.locator(".server-result img")).isVisible();
             page.waitForFunction("document.querySelector('.server-result img')?.naturalWidth > 0");
 
-            page.getByRole(AriaRole.BUTTON,
-                    new Page.GetByRoleOptions().setName("Generate image")).click();
+            page.locator("#composer").getByRole(AriaRole.BUTTON,
+                    new com.microsoft.playwright.Locator.GetByRoleOptions().setName("Generate SVG")).click();
             // The SVG response CSP prohibits Playwright's injected selector script.
-            assertThat(page.locator("iframe[title='Generated SVG image']")).isVisible();
-            assertTrue(page.locator("iframe[title='Generated SVG image']").getAttribute("src").startsWith("blob:"));
+            assertThat(page.locator("iframe[title='Generated SVG']")).isVisible();
+            assertTrue(page.locator("iframe[title='Generated SVG']").getAttribute("src").startsWith("blob:"));
             page.locator(".generated-viewer").screenshot(new com.microsoft.playwright.Locator.ScreenshotOptions()
                     .setPath(Path.of("target/builder/generated-viewer.png")));
-            var imageTab = page.waitForPopup(() -> page.getByRole(AriaRole.LINK,
-                    new Page.GetByRoleOptions().setName("Open image").setExact(true)).click());
-            imageTab.waitForURL(origin + "/image?**");
+            var imageTab = page.waitForPopup(() -> page.locator("#composer").getByRole(AriaRole.LINK,
+                    new com.microsoft.playwright.Locator.GetByRoleOptions().setName("Open SVG").setExact(true)).click());
+            imageTab.waitForURL(origin + "/html?**");
             imageTab.waitForLoadState(LoadState.LOAD);
             // Inspect the actual response rather than injecting a DOM selector into a sandboxed SVG document.
             try (var client = HttpClient.newHttpClient()) {
