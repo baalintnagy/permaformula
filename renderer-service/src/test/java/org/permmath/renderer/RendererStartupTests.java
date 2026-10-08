@@ -28,7 +28,10 @@ class RendererStartupTests {
                 assertTrue(process.isAlive(), "Readiness must mean the service is listening");
             } finally {
                 // Terminate before closing the executor so failed readiness cannot leave a blocked reader.
-                process.destroyForcibly();
+                var children = process.descendants().toList();
+                process.destroy();
+                if (!process.waitFor(5, TimeUnit.SECONDS)) process.destroyForcibly();
+                children.forEach(ProcessHandle::destroyForcibly);
                 assertTrue(process.waitFor(5, TimeUnit.SECONDS));
             }
         }

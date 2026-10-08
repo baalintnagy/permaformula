@@ -5,6 +5,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Engine;
+import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
@@ -15,6 +17,23 @@ public class AsciiMathRenderer implements AutoCloseable {
     private final ComplexityPolicy policy;
     private Context context;
     private Value render;
+    private Engine engine;
+    private static Source source;
+
+    private static synchronized Source source() throws IOException {
+        if (source == null) {
+            try (var input = AsciiMathRenderer.class.getResourceAsStream("/svg/renderer.js")) {
+                source = Source.newBuilder("js", new String(Objects.requireNonNull(input).readAllBytes(),
+                        StandardCharsets.UTF_8), "permmath-renderer.js").cached(true).build();
+            }
+        }
+        return source;
+    }
+
+    /** Force engine/bundle initialization and one typesetting pass before announcing readiness. */
+    public synchronized void warmUp() throws IOException {
+        render("x");
+    }
 
     public AsciiMathRenderer() {
         this(ComplexityPolicy.CURRENT);
@@ -29,17 +48,19 @@ public class AsciiMathRenderer implements AutoCloseable {
         }
         policy.checkMathInput(formula);
         if (context == null) {
-            var created = Context.newBuilder("js").allowHostAccess(HostAccess.NONE)
-                    .allowHostClassLookup(_ -> false)
-                    // Stock JDK operation intentionally uses GraalJS's interpreter.
-                    .option("engine.WarnInterpreterOnly", "false").build();
-            try (var input = getClass().getResourceAsStream("/svg/renderer.js")) {
+            engine = Engine.newBuilder("js").option("engine.WarnInterpreterOnly", "false").build();
+            Context created = null;
+            try {
+                created = Context.newBuilder("js").engine(engine).allowHostAccess(HostAccess.NONE)
+                        .allowHostClassLookup(_ -> false).build();
                 created.eval("js", "globalThis.PermMathComplexity = " + policy.json() + ";");
-                created.eval("js", new String(Objects.requireNonNull(input).readAllBytes(), StandardCharsets.UTF_8));
+                created.eval(source());
                 render = created.eval("js", "PermMathSvg.render");
                 context = created;
             } catch (RuntimeException | IOException e) {
-                created.close();
+                if (created != null) created.close();
+                engine.close();
+                engine = null;
                 throw e;
             }
         }
@@ -60,6 +81,10 @@ public class AsciiMathRenderer implements AutoCloseable {
             context.close();
             context = null;
             render = null;
+        }
+        if (engine != null) {
+            engine.close();
+            engine = null;
         }
     }
 }

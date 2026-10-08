@@ -38,12 +38,20 @@ public class ImageRendererService implements AutoCloseable {
     public InputStreamResource getImage(@Valid @NotNull ImageDescriptor descriptor) throws IOException {
         PreparationComplexity.html(descriptor.forumla());
         PreparationComplexity.css(descriptor.style() == null ? "" : descriptor.style());
-        var externalCss = descriptor.styleRefs() == null || descriptor.styleRefs().isEmpty()
+        List<String> externalCss;
+        try (var _ = new GenerationTiming("stylesheet_fetch")) {
+            externalCss = descriptor.styleRefs() == null || descriptor.styleRefs().isEmpty()
                 ? List.<String>of()
                 : work.fetch(() -> stylesheetFetcher.fetchAll(descriptor.styleRefs()));
-        var document = RenderContentPolicy.document(template, descriptor, externalCss);
+        }
+        String document;
+        try (var _ = new GenerationTiming("html_prepare")) {
+            document = RenderContentPolicy.document(template, descriptor, externalCss);
+        }
         int width = Objects.requireNonNullElse(descriptor.imageWidth(), properties.defaultImageWidth());
-        return new InputStreamResource(new ByteArrayInputStream(gateway.renderHtml(document, width)));
+        try (var _ = new GenerationTiming("html_rpc")) {
+            return new InputStreamResource(new ByteArrayInputStream(gateway.renderHtml(document, width)));
+        }
     }
 
     @Override

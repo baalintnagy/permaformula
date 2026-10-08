@@ -11,7 +11,7 @@ origin. The optional `separate-origins` profile retains two listeners.
 The Maven build verifies all four modules. Docker builds separate targets:
 
 - `runtime`: Spring API, UID/GID 10001, no Chromium or GraalJS. Fetches and sanitizes external CSS, prepares HTML, caches SVG and serves HTTP.
-- `renderer`: gRPC service, UID/GID 10002, Chromium and GraalJS. Runs both HTML and formula jobs in disposable JVMs. Contains no API application or credentials.
+- `renderer`: gRPC service, UID/GID 10002, Chromium and GraalJS. Prestarts isolated formula and HTML worker pools and reuses successful workers. Contains no API application or credentials.
 - `stylesheet-egress`: Squid 7 from Alpine packages, running as `squid`. Its native ACLs allow CONNECT to public port 443 and reject internal, metadata, reserved and transition addresses, including any blocked answer in a mixed DNS result. No port is published, no TLS interception or content cache is used, and access logging is disabled.
 - `ingress`: nginx from Alpine packages, running as `nginx`. Publishes separate API/html listeners and forwards only to the private API. Access logging is disabled to avoid recording formula/permalink queries. Proxy response timeouts are 65 seconds, beyond the API's 60-second deadline; SVG headers are preserved.
 - `cache-db`: PostgreSQL, private to the API on an isolated `cache-private` network,
@@ -249,6 +249,15 @@ bounded FIFO waiting queue, with immediate rejection when admission is full:
 | `RENDERER_QUEUE_CAPACITY` | 16 | Waiting jobs; 0 disables waiting, maximum 1024 |
 | `RENDERER_QUEUE_WAIT_SECONDS` | 15 | Maximum wait, positive and at most 60 seconds |
 | `RENDERER_QUEUE_MAX_RETAINED_BYTES` | 67108864 | Conservative retained-input budget, capped at 25% of supervisor heap |
+| `RENDERER_WORKER_STARTUP_SECONDS` | 60 | Worker initialization timeout, positive and at most 300 seconds |
+| `RENDERER_WORKER_MAX_JOBS` | 100 | Successful jobs before worker recycling; 1 makes workers single-use |
+
+Each render kind has `RENDERER_CONCURRENCY` prestarted processes, but both pools
+share the same execution concurrency cap. Idle formula workers retain initialized
+GraalJS/MathJax; idle HTML workers retain Chromium. HTML requests use fresh browser
+contexts and temporary documents are removed after each render. Worker pools warm
+asynchronously; listener readiness does not imply all workers have initialized.
+Review the 3 GiB memory and 256 PID limits before increasing concurrency.
 
 The byte budget charges running and waiting requests at three times protobuf
 serialized size plus 1 KiB per job; count and memory admission happen before input
@@ -265,9 +274,11 @@ at execution maximum plus queue wait; the API's `PERMMATH_RENDERING_TIMEOUT`
 defaults to 45s and is further restricted by the remaining 60s API deadline.
 Changing queue/execution limits requires reviewing the API RPC budget too; no stage
 renews an existing deadline. The supervisor terminates job descendants on running
-cancellation, timeout or failure. Fatal running jobs cause service exit and Compose
-restarts the container, clearing its PID namespace, including orphan native
-processes. A supervisor is required when running outside Compose.
+cancellation, timeout or failure, then replenishes the affected slot. Failed process
+cleanup causes service exit and Compose restarts the container, clearing its PID
+namespace. A supervisor is required when running outside Compose. Worker stdout
+uses bounded length-delimited Protobuf frames with readiness/status bytes; gRPC
+messages are unchanged. Content-free elapsed stage timings are written to stderr.
 
 The API still admits only two unique generations, including renderer waiting,
 and one per client. A default single API therefore normally occupies at most one

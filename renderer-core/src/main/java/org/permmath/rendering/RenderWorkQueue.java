@@ -139,6 +139,7 @@ public final class RenderWorkQueue implements RenderJobExecutor, AutoCloseable {
         final CompletableFuture<Void> started = new CompletableFuture<>();
         private final long weight;
         private final long queueDeadline;
+        private final long enqueued = System.nanoTime();
         private boolean running;
         private boolean released;
 
@@ -168,6 +169,7 @@ public final class RenderWorkQueue implements RenderJobExecutor, AutoCloseable {
                     return;
                 }
                 running = true;
+                RenderTimings.elapsed("queue_wait", enqueued);
                 started.complete(null);
             }
             try {

@@ -67,7 +67,7 @@ normalization. The historical `forumla` JSON spelling remains in compressed
 payloads for `/html`.
 
 This endpoint runs bundled MathJax 3.2.2 with its lightweight DOM adapter in
-GraalJS in a disposable JVM inside the separate renderer service. It launches no browser and needs no
+GraalJS in a reusable isolated JVM inside the separate renderer service. It launches no browser and needs no
 Node.js installation at runtime. Build instructions are in
 [`tools/svg/README.md`](tools/svg/README.md).
 
@@ -195,7 +195,7 @@ The project is a Maven reactor with four modules:
 |---|---|
 | `permmath-api` | HTTP endpoints, controlled CSS fetching, sanitization and caching |
 | `render-contract` | Versioned Protocol Buffers and generated gRPC client/server types |
-| `renderer-core` | Chromium/GraalJS rendering, admission and disposable-process supervision |
+| `renderer-core` | Chromium/GraalJS rendering, admission and warm-process supervision |
 | `renderer-service` | Private gRPC endpoint, health service and deployment lifecycle |
 
 Run `mvn verify` with JDK 25 to build and test all modules. Docker is the recommended way to run both services: `docker compose up --build -d`.
@@ -234,7 +234,7 @@ matching `event=renderer_ready transport=tcp`, then launch the API with
 on stdout after the gRPC listener starts. After changing the renderer, stop the
 existing launch group and launch it again so the marker is emitted by the new process.
 
-Both HTML and formula rendering use gRPC with request IDs and deadlines. The renderer uses a bounded Java work queue; full admission returns HTTP 503 with Retry-After, and an expired deadline or queue wait returns 504. Each job uses fresh execution state. Content/output are bounded at 16 MiB. `RenderGateway` separates API generation from the transport, and `RenderJobExecutor` separates rendering from gRPC. A future RabbitMQ consumer can reuse the contract/core; new async endpoints and pending indicator images remain future work.
+Both HTML and formula rendering use gRPC with request IDs and deadlines. The renderer uses a bounded Java work queue; full admission returns HTTP 503 with Retry-After, and an expired deadline or queue wait returns 504. HTML jobs use fresh browser contexts; formula jobs reuse initialized GraalJS/MathJax state with input passed as data. Content/output are bounded at 16 MiB. `RenderGateway` separates API generation from the transport, and `RenderJobExecutor` separates rendering from gRPC. A future RabbitMQ consumer can reuse the contract/core; new async endpoints and pending indicator images remain future work.
 
 API work also uses immediate admission with no queue:
 
@@ -300,8 +300,35 @@ Only actual cache-miss loaders reach the renderer. Cache hits and shared in-flig
 results do not add jobs. Per-client generation slots remain occupied while waiting,
 preventing one default client from filling the queue. Expired/cancelled queued
 jobs are removed and cannot render later. A running worker retains admission until
-it actually exits; interruption still kills its disposable child JVM. Queue expiry
+its exchange finishes or its failed process and descendants have exited. Interruption
+kills and replaces that worker. Queue expiry
 or queued cancellation does not restart the renderer or interrupt another job.
+
+The supervisor prestarts separate formula and HTML pools, each with
+`RENDERER_CONCURRENCY` processes, while the shared execution cap stays at that
+concurrency (one by default). Formula workers initialize a cached GraalJS source,
+engine and context and perform a warmup render. HTML workers retain Chromium;
+every request closes its fresh browser context and removes its temporary document.
+Workers recycle after `RENDERER_WORKER_MAX_JOBS` successful jobs (default 100);
+setting this to 1 retains single-use behavior with prestart. Initialization has a
+separate `RENDERER_WORKER_STARTUP_SECONDS` limit (default 60, maximum 300).
+Initialization and replenishment run asynchronously: `renderer_ready` means the
+RPC listener is ready; an early request may still wait for initialization within
+its existing deadline. Pooling increases idle memory and native process usage.
+Review container limits before increasing concurrency. Stock-JDK GraalJS still
+uses its interpreter; reuse removes repeated initialization without adding compiler
+dependencies or changing the deployment JDK.
+
+Content-free `event=render_timing` stderr records include `stage`, `pid` and
+`durationMs`: queue wait, worker startup/acquisition/roundtrip, formula/HTML
+initialization and rendering, and browser initialization/context/navigation/
+typesetting wait/SVG extraction. Totals include their sub-stages and should not
+be added together; navigation can include typesetting performed during page load.
+The API also times stylesheet fetching, HTML preparation and the HTML RPC, so
+slow external stylesheets can be distinguished from rendering work.
+Run the opt-in cold/warm measurements and browser isolation checks with
+`mvn -o -pl renderer-core,renderer-service -am -Drendering.tests=true test`.
+Look for `event=render_benchmark`; results are uncached examples, not latency guarantees.
 
 The API's two generation slots remain unchanged and include renderer waiting.
 Thus one default API normally reaches at most one running and one queued render;
@@ -467,7 +494,7 @@ sections; for Eclipse, use the corresponding VM arguments or Environment tabs.
 They are not Spring `application.yaml` properties. Nonpositive/invalid values and
 SVG budgets larger than the transport limit are rejected.
 
-The renderer forwards its resolved policy to disposable JVMs and injects the same
+The renderer forwards its resolved policy to isolated worker JVMs and injects the same
 values into Chromium and GraalJS before their bundles run. JavaScript contains no
 duplicate defaults. The resolved policy fingerprint participates in cache keys.
 MathJax supplies expression discovery and native TeX expansion limits; [AsciiMath](https://asciimath.org/)

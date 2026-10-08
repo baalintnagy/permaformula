@@ -15,43 +15,64 @@ import com.google.protobuf.CodedInputStream;
 /**
  * Admission and process deadlines are independent of the RPC transport and browser page.
  */
-public final class SupervisedRenderer implements RenderJobExecutor {
+public final class SupervisedRenderer implements RenderJobExecutor, AutoCloseable {
 
     private final BrowserSettings settings;
 
     private final Semaphore permits;
+    private final RenderWorkerPool formulas;
+    private final RenderWorkerPool html;
 
     public SupervisedRenderer(BrowserSettings settings, int concurrency) {
-        if (concurrency < 1) {
-            throw new IllegalArgumentException("Renderer concurrency must be positive");
+        this(settings, concurrency, Duration.ofSeconds(60), 100);
+    }
+
+    public SupervisedRenderer(BrowserSettings settings, int concurrency, Duration startupTimeout, int maxJobs) {
+        if (concurrency < 1 || concurrency > 64 || startupTimeout.isNegative() || startupTimeout.isZero()
+                || startupTimeout.compareTo(Duration.ofMinutes(5)) > 0 || maxJobs < 1) {
+            throw new IllegalArgumentException("Invalid renderer worker settings");
         }
         this.settings = settings;
         permits = new Semaphore(concurrency);
+        formulas = new RenderWorkerPool(concurrency, () -> worker("formula"), startupTimeout, maxJobs);
+        html = new RenderWorkerPool(concurrency, () -> worker("html"), startupTimeout, maxJobs);
     }
 
     @Override
     public RenderResponse execute(RenderRequest request, Duration budget) throws RenderException {
         RenderLimits.validate(request);
         budget = budget.compareTo(settings.timeout()) > 0 ? settings.timeout() : budget;
+        if (budget.isZero() || budget.isNegative()) {
+            throw new RenderException(RenderException.Kind.DEADLINE, "Render deadline exceeded");
+        }
         if (!permits.tryAcquire()) {
             throw new RenderException(RenderException.Kind.OVERLOADED, "Renderer is busy");
         }
         try {
-            var process = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-                    "--enable-native-access=ALL-UNNAMED", "-Xmx1024m", "-XX:+ExitOnOutOfMemoryError",
-                    "-Djava.io.tmpdir=" + System.getProperty("java.io.tmpdir"),
-                    "-cp", System.getProperty("java.class.path"), RenderJobMain.class.getName(),
-                    settings.browserDirectory().toAbsolutePath().toString(), Long.toString(budget.toMillis()),
-                    Boolean.toString(settings.chromiumSandbox()));
-            process.environment().clear();
-            process.environment().putAll(ComplexityPolicy.CURRENT.workerEnvironment());
-            process.environment().putAll(Map.of("HOME", System.getProperty("java.io.tmpdir"),
-                    "TMPDIR", System.getProperty("java.io.tmpdir"), "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1"));
-            process.redirectError(ProcessBuilder.Redirect.INHERIT);
-            return run(process, request, budget);
+            return (request.hasHtml() ? html : formulas).execute(request, budget);
         } finally {
             permits.release();
         }
+    }
+
+    private ProcessBuilder worker(String kind) {
+        var process = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+                    "--enable-native-access=ALL-UNNAMED", "-Xmx1024m", "-XX:+ExitOnOutOfMemoryError",
+                    "-Djava.io.tmpdir=" + System.getProperty("java.io.tmpdir"),
+                    "-cp", System.getProperty("java.class.path"), RenderWorkerMain.class.getName(), kind,
+                    settings.browserDirectory().toAbsolutePath().toString(), Long.toString(settings.timeout().toMillis()),
+                    Boolean.toString(settings.chromiumSandbox()));
+        process.environment().clear();
+        process.environment().putAll(ComplexityPolicy.CURRENT.workerEnvironment());
+        process.environment().putAll(Map.of("HOME", System.getProperty("java.io.tmpdir"),
+                    "TMPDIR", System.getProperty("java.io.tmpdir"), "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1"));
+        process.redirectError(ProcessBuilder.Redirect.INHERIT);
+        return process;
+    }
+
+    @Override public void close() {
+        try { formulas.close(); }
+        finally { html.close(); }
     }
 
     static RenderResponse run(ProcessBuilder builder, RenderRequest request, Duration budget) throws RenderException {

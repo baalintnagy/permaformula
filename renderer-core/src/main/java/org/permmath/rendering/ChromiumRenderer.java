@@ -29,6 +29,7 @@ final class ChromiumRenderer implements AutoCloseable {
     }
 
     ChromiumRenderer(BrowserSettings properties, ComplexityPolicy policy) throws IOException {
+        long started = System.nanoTime();
         this.policy = Objects.requireNonNull(policy);
         var directory = properties.browserDirectory().toAbsolutePath().normalize();
         // Only executables in the configured browser installation are considered.
@@ -48,20 +49,30 @@ final class ChromiumRenderer implements AutoCloseable {
             throw e;
         }
         timeout = properties.timeout().toMillis();
+        RenderTimings.elapsed("browser_initialize", started);
     }
 
     byte[] render(String url, int width) {
+        long started = System.nanoTime();
         try (var context = BrowserChannelPolicy.newContext(browser, width)) {
             context.addInitScript("globalThis.PermMathComplexity = " + policy.json() + ";");
             var page = BrowserChannelPolicy.newPage(context, url);
             page.setDefaultTimeout(timeout);
             page.setDefaultNavigationTimeout(timeout);
+            RenderTimings.elapsed("browser_context", started);
+            started = System.nanoTime();
             page.navigate(url);
+            RenderTimings.elapsed("browser_navigation", started);
+            started = System.nanoTime();
             page.waitForFunction("window.PermMathRenderer?.state === 'ready' || window.PermMathRenderer?.state === 'error'");
+            RenderTimings.elapsed("browser_typeset_wait", started);
             if ("error".equals(page.evaluate("window.PermMathRenderer.state"))) {
                 throw new IllegalArgumentException("Typesetting failed: " + page.evaluate("window.PermMathRenderer.error"));
             }
-            return ((String) page.evaluate("window.PermMathRenderer.svg")).getBytes(StandardCharsets.UTF_8);
+            started = System.nanoTime();
+            byte[] svg = ((String) page.evaluate("window.PermMathRenderer.svg")).getBytes(StandardCharsets.UTF_8);
+            RenderTimings.elapsed("browser_svg_extract", started);
+            return svg;
         }
     }
 

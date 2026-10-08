@@ -30,7 +30,14 @@ public final class RendererServiceMain {
                 timeout, Boolean.parseBoolean(env.getOrDefault("RENDERER_CHROMIUM_SANDBOX", "true")));
         int concurrency = Integer.parseInt(env.getOrDefault("RENDERER_CONCURRENCY", "1"));
         var queueSettings = RenderQueueSettings.fromEnvironment(env);
-        var jobs = new RenderWorkQueue(concurrency, queueSettings, new SupervisedRenderer(settings, concurrency));
+        var supervisor = new SupervisedRenderer(settings, concurrency,
+                Duration.ofSeconds(Long.parseLong(env.getOrDefault("RENDERER_WORKER_STARTUP_SECONDS", "60"))),
+                Integer.parseInt(env.getOrDefault("RENDERER_WORKER_MAX_JOBS", "100")));
+        var jobs = new RenderWorkQueue(concurrency, queueSettings, supervisor);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            jobs.close();
+            supervisor.close();
+        }));
         System.err.println("event=renderer_queue_configured capacity=" + queueSettings.capacity()
                 + " configured_bytes=" + queueSettings.maxRetainedBytes() + " effective_bytes=" + jobs.effectiveRetainedBytes()
                 + " wait_seconds=" + queueSettings.maxWait().toSeconds());
@@ -38,9 +45,12 @@ public final class RendererServiceMain {
         var restarts = Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().daemon(true).factory());
         var rpc = new GrpcRendererService(jobs, timeout.plus(queueSettings.maxWait()), failure -> {
             System.err.println("event=renderer_job_failed kind=" + failure.kind());
-            jobs.close(); // Stop accepting/starting work while the PID namespace is being restarted.
-            // Docker restart tears down the PID namespace, including orphan native processes.
-            restarts.schedule(() -> System.exit(1), 200, TimeUnit.MILLISECONDS);
+            // Ordinary job failures retire only their worker. Failed process cleanup is fatal:
+            // Docker restart tears down the namespace if native descendants cannot be reaped.
+            if (failure.getCause() instanceof IllegalStateException) {
+                jobs.close();
+                restarts.schedule(() -> System.exit(1), 200, TimeUnit.MILLISECONDS);
+            }
         });
         NettyServerBuilder builder;
         EventLoopGroup boss = null, workers = null;
