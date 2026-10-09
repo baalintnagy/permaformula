@@ -55,8 +55,8 @@ class SingleHostImageDeliveryTests {
                 .andExpect(header().string("Content-Security-Policy", SvgOutputPolicy.CSP))
                 .andExpect(header().string("X-Content-Type-Options", "nosniff"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"));
-        mvc.perform(get("/url").param("formula", "x"))
+        mvc.perform(get("/ubcq").param("formula", "x"))
                 .andExpect(status().isOk()).andExpect(content().string(
-                        org.hamcrest.Matchers.startsWith("https://math.example.com/html?ubcq=")));
+                        org.hamcrest.Matchers.startsWith("H4sI")));
     }
 }

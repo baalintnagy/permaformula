@@ -27,7 +27,7 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: true,
       proxy: Object.fromEntries(
-        ['/url', '/exp', '/html', '/swagger-ui', '/v3/api-docs'].map((path) => [
+        ['/ubcq', '/exp', '/html', '/swagger-ui', '/v3/api-docs'].map((path) => [
           path,
           {
             target: apiOrigin,

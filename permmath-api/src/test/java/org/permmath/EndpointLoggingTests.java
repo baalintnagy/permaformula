@@ -31,11 +31,11 @@ class EndpointLoggingTests {
     @Test
     void aspectLogsSuccessAndValidationFailureWithoutPayloads(CapturedOutput output) throws Exception {
         String formula = "unique-formula-content-for-logging-test";
-        mvc.perform(get("/url").param("formula", formula)).andExpect(status().isOk());
-        mvc.perform(get("/url").param("formula", " ")).andExpect(status().isBadRequest());
-        assertThat(output.getOut()).contains("event=endpoint_started method=GET path=/url",
-                "event=endpoint_completed method=GET path=/url", "status=200 durationMs=",
-                "event=endpoint_failed method=GET path=/url", "errorType=ConstraintViolationException");
+        mvc.perform(get("/ubcq").param("formula", formula)).andExpect(status().isOk());
+        mvc.perform(get("/ubcq").param("formula", " ")).andExpect(status().isBadRequest());
+        assertThat(output.getOut()).contains("event=endpoint_started method=GET path=/ubcq",
+                "event=endpoint_completed method=GET path=/ubcq", "status=200 durationMs=",
+                "event=endpoint_failed method=GET path=/ubcq", "errorType=ConstraintViolationException");
         assertThat(output.getOut()).doesNotContain(formula);
     }
 

@@ -324,7 +324,7 @@ Remote TCP deployment requires its own private network, authentication, egress a
 
 ## Verification
 
-`docker compose config --quiet` validates configuration. Check `/exp?formula=x`, then use `/url` to create a styled descriptor and load its `/html` permalink. Confirm external styles survive rendering.
+`docker compose config --quiet` validates configuration. Check `/exp?formula=x`, then use `/ubcq` to create a styled descriptor, then URL-encode it in an `/html?ubcq=...` image URL. Confirm external styles survive rendering.
 
 Inspect the renderer with `docker inspect`: NetworkMode must be `none`, user 10002, read-only root, resource limits and security options present. `/proc/net/dev` should contain only loopback. Application/browser files must be unwritable. Chromium must launch without `--no-sandbox` and with seccomp active. Repeat these checks on production hosts after runtime upgrades.
 
@@ -379,7 +379,7 @@ docker compose -f compose.separate-origins.yaml --env-file docker/egress/smoke.e
 docker compose -f compose.separate-origins.yaml --env-file docker/egress/smoke.env -p permmath-delivery-smoke down --volumes
 ```
 
-This checks public permalink creation, cross-origin redirects, route/method/CORS
+This checks public descriptor creation, cross-origin redirects, route/method/CORS
 restrictions, actual SVG/JPEG headers and forged markers against the private API. A native nginx upstream fixture also checks
 which Cookie/Authorization/Proxy-Authorization headers reach the upstream and
 that Set-Cookie is suppressed on all four image endpoints in both ingress profiles. Fixture ports are ephemeral

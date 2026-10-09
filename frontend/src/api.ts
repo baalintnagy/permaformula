@@ -7,6 +7,12 @@ export function formulaUrl(
   return url.href;
 }
 
+export function jpegUrl(svgUrl: string): string {
+  const url = new URL(svgUrl);
+  url.pathname += '-jpg';
+  return url.href;
+}
+
 export interface ComposerRequest {
   html: string;
   css: string;
@@ -40,7 +46,7 @@ export function permalinkRequest(request: ComposerRequest): string {
   for (const ref of request.styleRefs) {
     if (ref.trim()) params.append('styleRefs', ref.trim());
   }
-  return `/url?${params}`;
+  return `/ubcq?${params}`;
 }
 
 export async function responseError(response: Response): Promise<string> {
@@ -66,13 +72,10 @@ export async function createPermalink(
   });
   if (!response.ok) throw new Error(await responseError(response));
   const result = (await response.text()).trim();
-  const url = new URL(result, window.location.origin);
-  if (
-    !['http:', 'https:'].includes(url.protocol) ||
-    url.pathname !== '/html' ||
-    !url.searchParams.has('ubcq')
-  ) {
-    throw new Error('The server returned an invalid SVG permalink.');
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(result) || result.length % 4 !== 0) {
+    throw new Error('The server returned an invalid compressed image descriptor.');
   }
+  const url = new URL('/html', import.meta.env.VITE_PERMMATH_API_ORIGIN || window.location.origin);
+  url.searchParams.set('ubcq', result);
   return url.href;
 }

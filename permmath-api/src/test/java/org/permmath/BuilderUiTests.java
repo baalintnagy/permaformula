@@ -16,12 +16,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.permmath.rendering.RenderGatewayTestConfiguration;
-import org.permmath.url.UrlService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
@@ -38,15 +35,11 @@ class BuilderUiTests {
     @LocalServerPort
     private int port;
 
-    @Autowired
-    private UrlService urls;
-
     private String origin;
 
     @BeforeEach
     void useTestServerOrigin() {
         origin = "http://localhost:" + port;
-        ReflectionTestUtils.setField(urls, "permMathProperties", new PermMathProperties(origin, 500, 2000));
     }
 
     @Test
@@ -80,14 +73,14 @@ class BuilderUiTests {
             page.frameLocator("iframe[title='HTML live preview']").locator("svg").waitFor();
             var formulaResponse = page.waitForResponse(response -> response.url().contains("/exp?"),
                     () -> page.locator("#formula").getByRole(AriaRole.BUTTON, new com.microsoft.playwright.Locator.GetByRoleOptions()
-                            .setName("Generate SVG").setExact(true)).click());
+                            .setName("Render").setExact(true)).click());
             assertEquals(200, formulaResponse.status());
             assertTrue(formulaResponse.text().contains("<path"));
             assertThat(page.locator(".server-result img")).isVisible();
             page.waitForFunction("document.querySelector('.server-result img')?.naturalWidth > 0");
 
             page.locator("#composer").getByRole(AriaRole.BUTTON,
-                    new com.microsoft.playwright.Locator.GetByRoleOptions().setName("Generate SVG")).click();
+                    new com.microsoft.playwright.Locator.GetByRoleOptions().setName("Render")).click();
             // The SVG response CSP prohibits Playwright's injected selector script.
             assertThat(page.locator("iframe[title='Generated SVG']")).isVisible();
             assertTrue(page.locator("iframe[title='Generated SVG']").getAttribute("src").startsWith("blob:"));
@@ -109,6 +102,18 @@ class BuilderUiTests {
             }
             assertThat(page.getByLabel("Generated SVG URL", new Page.GetByLabelOptions()
                     .setExact(true))).hasValue(imageTab.url());
+            for (String section : java.util.List.of("#formula", "#composer")) {
+                String jpgUrl = page.locator(section).getByRole(AriaRole.LINK,
+                        new com.microsoft.playwright.Locator.GetByRoleOptions().setName("Open JPG").setExact(true))
+                        .getAttribute("href");
+                try (var client = HttpClient.newHttpClient()) {
+                    var response = client.send(HttpRequest.newBuilder(URI.create(jpgUrl)).build(),
+                            HttpResponse.BodyHandlers.ofByteArray());
+                    assertEquals(200, response.statusCode());
+                    assertTrue(response.headers().firstValue("content-type").orElse("").contains("image/jpeg"));
+                    assertTrue(javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(response.body())) != null);
+                }
+            }
             Files.createDirectories(Path.of("target/builder"));
             page.bringToFront();
             page.evaluate("window.scrollTo({top:0,behavior:'instant'})");

@@ -28,9 +28,10 @@ class ImageDeliveryBrowserTests {
             page.navigate(api + "/swagger-ui/index.html");
             Object result = page.evaluate("""
                 async ({api, images}) => {
-                    const link = await fetch(api + '/url?formula=' + encodeURIComponent('<p>browser `x^2`</p>'), {credentials: 'omit'});
-                    const url = await link.text();
-                    if (!link.ok || !url.startsWith(images + '/html?')) throw new Error('Wrong permalink origin');
+                    const link = await fetch(api + '/ubcq?formula=' + encodeURIComponent('<p>browser `x^2`</p>'), {credentials: 'omit'});
+                    const ubcq = await link.text();
+                    const url = api + '/html?ubcq=' + encodeURIComponent(ubcq);
+                    if (!link.ok || !ubcq.startsWith('H4sI')) throw new Error('Wrong permalink origin');
                     const formula = await fetch(api + '/exp?formula=x%5E2', {credentials: 'omit'});
                     if (!formula.ok || !formula.url.startsWith(images + '/exp?') || formula.type !== 'cors') throw new Error('Anonymous redirect/CORS failed');
                     if (!(await formula.text()).includes('<svg')) throw new Error('Expected formula SVG');

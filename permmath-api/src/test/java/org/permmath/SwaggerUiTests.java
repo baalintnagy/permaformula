@@ -33,12 +33,12 @@ class SwaggerUiTests {
             var page = browser.newPage();
             page.setDefaultTimeout(10000);
             page.navigate("http://localhost:" + port + "/swagger-ui/index.html");
-            var operation = page.locator("#operations-perm-math-controller-getUrl");
+            var operation = page.locator("#operations-perm-math-controller-getUbcq");
             operation.locator(".opblock-summary").click();
             operation.getByText("Try it out", new Locator.GetByTextOptions().setExact(true)).click();
-            var response = page.waitForResponse(r -> r.url().contains("/url?") && r.status() == 200,
+            var response = page.waitForResponse(r -> r.url().contains("/ubcq?") && r.status() == 200,
                     () -> operation.getByText("Execute", new Locator.GetByTextOptions().setExact(true)).click());
-            assertTrue(response.text().startsWith("http://localhost:8086/html?ubcq="));
+            assertTrue(response.text().startsWith("H4sI"));
             operation.locator(".responses-inner .response-col_status").filter(
                     new Locator.FilterOptions().setHasText("200")).first().waitFor();
             var htmlOperation = page.locator("#operations-perm-math-controller-getHtml");
@@ -50,9 +50,9 @@ class SwaggerUiTests {
             assertTrue(imageResponse.text().contains("width=\"220\""));
             assertTrue(imageResponse.text().contains("<path"));
             Object jpegResult = page.evaluate("""
-                async permalink => {
+                async ubcq => {
                     for (const url of ['/exp-jpg?formula=' + encodeURIComponent('sqrt(x^2+y^2)'),
-                            '/html-jpg?' + new URL(permalink).search.substring(1)]) {
+                            '/html-jpg?ubcq=' + encodeURIComponent(ubcq)]) {
                         const response = await fetch(url);
                         if (!response.ok || response.headers.get('content-type') !== 'image/jpeg') return false;
                         const image = await createImageBitmap(await response.blob());

@@ -163,7 +163,7 @@ class BrowserRenderingTests {
 
     @Test
     void rendersBuilderSwaggerExample() throws Exception {
-        var method = PermMathController.class.getMethod("getUrl", String.class,
+        var method = PermMathController.class.getMethod("getUbcq", String.class,
                 Integer.class, List.class, String.class);
         var parameters = method.getParameters();
         List<String> refs = List.of();

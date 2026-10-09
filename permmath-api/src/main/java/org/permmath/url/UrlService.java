@@ -1,13 +1,9 @@
 package org.permmath.url;
 
-import static java.net.URLEncoder.encode;
-import static java.nio.charset.StandardCharsets.UTF_8;
-
 import java.io.IOException;
 import java.util.List;
 
 import org.jspecify.annotations.Nullable;
-import org.permmath.PermMathProperties;
 import org.permmath.compression.StringCompressionService;
 import org.permmath.rendering.ApiWorkProperties;
 import org.permmath.rendering.ApiWorkService;
@@ -42,9 +38,6 @@ public class UrlService {
             .build();
 
     @Autowired
-    private PermMathProperties permMathProperties;
-
-    @Autowired
     private ObjectMapper objectMapper;
 
     @Autowired
@@ -53,25 +46,15 @@ public class UrlService {
     private ApiWorkService work = new ApiWorkService(
             ApiWorkProperties.defaults());
 
-    public String getImageUrl(
+    public String getUbcq(
             @NotBlank String formula,
             @Nullable @ValidImageWidth Integer imageWidth,
             @Nullable List<@NotBlank String> styleRefs,
             @Nullable String style) throws IOException {
-        return work.prepare(() -> createImageUrl(formula, imageWidth, styleRefs, style));
+        return work.prepare(() -> createUbcq(formula, imageWidth, styleRefs, style));
     }
 
-    public String encodeText(String text) throws IOException {
-        return work.prepare(() -> {
-            if (text == null) {
-                throw new IllegalArgumentException("Text is required");
-            }
-            InputLimits.text(text, InputLimits.MAX_CONTENT_BYTES, "Text");
-            return encode(text, UTF_8);
-        });
-    }
-
-    private String createImageUrl(String formula, Integer imageWidth, List<String> styleRefs, String style) throws IOException {
+    private String createUbcq(String formula, Integer imageWidth, List<String> styleRefs, String style) throws IOException {
 
         var imageJson = objectMapper.writeValueAsString(
                 new ImageDescriptor(
@@ -79,9 +62,7 @@ public class UrlService {
                         imageWidth,
                         styleRefs,
                         style));
-        return "%s/html?%s".formatted(
-                permMathProperties.imageHost(),
-                "ubcq=" + encode(stringCompressionService.compress(imageJson), UTF_8));
+        return stringCompressionService.compress(imageJson);
     }
 
     // Request parameters have already been URL-decoded by Spring.

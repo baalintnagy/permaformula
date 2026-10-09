@@ -12,15 +12,14 @@ MathRenderAPI generates SVG images from compressed formula and styled HTML descr
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /url?formula=...` | Generate a compressed permalink. Optional `imageWidth`, `style`, and repeated external HTTPS `styleRefs` parameters. |
+| `GET /ubcq?formula=...` | Generate a raw Base64 compressed descriptor. Optional `imageWidth`, `style`, and repeated external HTTPS `styleRefs` parameters. |
 | `GET /html?ubcq=...` | Render compressed styled HTML with backtick-delimited [AsciiMath](https://asciimath.org/) as SVG. |
 | `GET /exp-jpg?formula=...` | Convert the corresponding cached formula SVG to high quality JPEG. |
 | `GET /html-jpg?ubcq=...` | Convert the corresponding cached styled HTML SVG to high quality JPEG. |
 | `GET /exp?formula=...` | Render an uncompressed plain [AsciiMath](https://asciimath.org/) formula as standalone SVG, without a browser. |
-| `GET /url-encode?text=...` | Encode text as a UTF-8 query parameter value and return plain text. |
 
 `/html` uses `ubcq`: a GZIP-compressed UTF-8 JSON image descriptor,
-Base64-encoded and URL-encoded. `/url` always generates this format, including
+Base64-encoded and URL-encoded in image URLs. `/ubcq` returns raw Base64, including
 for short formulas. The `compressUrlQuery` option and uncompressed input modes
 have been removed. `/html` requires `ubcq`. The public `/decode` endpoint and
 the former `/image-cq` and `/decode-cq` route names are no longer available.
@@ -49,25 +48,24 @@ before reuse. A JPEG request refreshes its source SVG as well as the JPEG expiry
 A new conversion consumes a separate generation allowance after any SVG miss;
 configure quotas with this additional work in mind. API and renderer must be
 updated together. Both ingress profiles protect the new routes in the same way
-as their SVG counterparts. The Builder UI continues to request SVGs.
+as their SVG counterparts. The Builder renders SVG previews and provides SVG/JPG URLs with separate Copy buttons and Open links.
 
-### Query-value encoding: `/url-encode`
+### Compressed descriptor: `/ubcq`
 
-```sh
-curl --get --data-urlencode 'text=x + y = 50%' http://localhost:8086/url-encode
-# x+%2B+y+%3D+50%25
-```
+`GET /ubcq?formula=...` accepts the former `/url` parameters: HTML content in
+`formula`, optional `imageWidth`, optional CSS in `style`, and repeated HTTPS
+`styleRefs`. It returns only the GZIP-compressed, Base64-encoded JSON descriptor
+as `text/plain;charset=UTF-8`, with no hostname, port, path or `ubcq=` prefix.
+URL-encode the returned value once when building `/html?ubcq=...` or
+`/html-jpg?ubcq=...`. Swagger accepts the raw value and encodes it for you.
+The Builder constructs complete image URLs using its API origin (or configured
+API origin in development); separate-origin deployments redirect them to the
+image listener. Copy and Open SVG continue to use complete working URLs.
 
-Java's `URLEncoder` applies UTF-8 form/query-value encoding: spaces become `+`,
-literal `+` becomes `%2B`, and reserved characters and non-ASCII bytes are escaped.
-The result represents one query parameter value, so URL delimiters in the input
-are escaped too. Supply original text in Swagger or use normal query encoding
-when calling the endpoint; the servlet decodes the incoming parameter once.
-Empty text is accepted; missing `text` returns 400. Input is capped at the existing
-4 MiB content limit measured in UTF-8, bounding encoded output to 12 MiB. Normal
-ingress request-line/header limits also apply. The operation uses bounded API
-preparation and the request deadline/quotas. It returns `text/plain;charset=UTF-8`
-with no-store, nosniff and no-referrer headers and uses no rendering quota or cache.
+The former `/url` and `/url-encode` routes have been removed and return 404.
+This operation performs no rendering. Descriptor preparation remains bounded by
+the existing input limits, request deadline, admission and request quotas; its
+responses use no-store, nosniff and no-referrer headers.
 
 ### Formula-only SVG: `/exp`
 
@@ -79,8 +77,8 @@ curl --get --data-urlencode 'formula=sqrt(x^2 + y^2)' http://localhost:8086/exp 
 
 `/exp` accepts only a required `formula` parameter. The formula determines its
 natural dimensions; there are no width or styling options. The former compressed
-`ubcq` input is no longer supported by this endpoint. `/url` continues to generate
-compressed permalinks for `/html`.
+`ubcq` input is no longer supported by this endpoint. `/ubcq` generates
+compressed descriptors for `/html` and `/html-jpg`.
 
 Response: `200 OK`, `Content-Type: image/svg+xml`. The standalone formula SVG
 contains embedded glyph paths and can be used as an HTML image source. Missing
@@ -114,7 +112,7 @@ by the exception-handler library.
 
 Simply send a GET request to the relevant endpoint with your desired parameters.
 
-Generate a permalink with /url, then request the returned link to render it.
+Generate a descriptor with `/ubcq`, URL-encode it in `/html?ubcq=...`, then request that URL to render it.
 
 The default production deployment uses one hostname for the Builder UI, API and
 images. Configure `PERMMATH_HOST` to its public HTTPS origin (a provider-assigned

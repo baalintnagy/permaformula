@@ -2,7 +2,8 @@ import { expect, test } from '@playwright/test';
 
 const svg =
   '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="50"><text x="10" y="30">Rendered SVG</text></svg>';
-const permalink = 'http://127.0.0.1:5173/html?ubcq=test%2Bpayload';
+const ubcq = 'H4sI+a/b+/==';
+const permalink = 'http://localhost:8086/html?ubcq=' + encodeURIComponent(ubcq);
 
 test('color picker applies on double-click and outside click', async ({ page }) => {
   await page.goto('/');
@@ -61,7 +62,7 @@ test('local math previews, exact query encoding, server rendering and new-tab pe
   );
   const requests: string[] = [];
   page.on('request', (request) => {
-    if (['/exp', '/html', '/url', '/url-encode'].includes(new URL(request.url()).pathname))
+    if (['/exp', '/html', '/ubcq', '/url-encode'].includes(new URL(request.url()).pathname))
       requests.push(request.url());
   });
   await page
@@ -70,9 +71,12 @@ test('local math previews, exact query encoding, server rendering and new-tab pe
   await page
     .context()
     .route('**/html?**', (route) => route.fulfill({ contentType: 'image/svg+xml', body: svg }));
-  await page.route('**/url?**', (route) =>
-    route.fulfill({ contentType: 'text/plain', body: permalink }),
+  await page.route('**/ubcq?**', (route) =>
+    route.fulfill({ contentType: 'text/plain', body: ubcq }),
   );
+  await page
+    .context()
+    .route('**/*-jpg?**', (route) => route.fulfill({ contentType: 'image/svg+xml', body: svg }));
   await page.goto('/');
   await expect(
     page.frameLocator('iframe[title="Formula live preview"]').locator('svg'),
@@ -113,7 +117,20 @@ test('local math previews, exact query encoding, server rendering and new-tab pe
   const formulaPopup = await formulaPopupPromise;
   await formulaPopup.waitForURL(currentFormulaUrl);
   await formulaPopup.close();
-  await formulaSection.getByRole('button', { name: 'Generate SVG', exact: true }).click();
+  const formulaJpgUrl = await page.getByLabel('Expression JPG URL', { exact: true }).inputValue();
+  expect(new URL(formulaJpgUrl).pathname).toBe('/exp-jpg');
+  expect(new URL(formulaJpgUrl).searchParams.get('formula')).toBe(formula);
+  await page.getByRole('button', { name: 'Copy Expression JPG URL', exact: true }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(formulaJpgUrl);
+  const formulaJpgLink = formulaSection.getByRole('link', { name: 'Open JPG', exact: true });
+  await expect(formulaJpgLink).toHaveAttribute('href', formulaJpgUrl);
+  await expect(formulaJpgLink).toHaveAttribute('target', '_blank');
+  const formulaJpgPopupPromise = page.waitForEvent('popup');
+  await formulaJpgLink.click();
+  const formulaJpgPopup = await formulaJpgPopupPromise;
+  await formulaJpgPopup.waitForURL(formulaJpgUrl);
+  await formulaJpgPopup.close();
+  await formulaSection.getByRole('button', { name: 'Render', exact: true }).click();
   await expect(
     page.getByRole('img', { name: `Rendered formula: ${formula}`, exact: true }),
   ).toBeVisible();
@@ -129,16 +146,19 @@ test('local math previews, exact query encoding, server rendering and new-tab pe
   await page.getByLabel('Canvas width').fill('720');
   let popupCount = 0;
   page.on('popup', () => popupCount++);
-  await page.locator('#composer').getByRole('button', { name: 'Generate SVG' }).click();
+  await page.locator('#composer').getByRole('button', { name: 'Render' }).click();
   await expect(page.frameLocator('iframe[title="Generated SVG"]').locator('svg')).toBeVisible();
   expect(popupCount).toBe(0);
   await expect(page.locator('.generated-viewer')).toHaveCSS('animation-name', 'result-ready');
   await page.getByLabel('Canvas width').fill('500');
   await expect(page.getByText('Showing the previous SVG.')).toBeVisible();
+  await expect(page.getByLabel('Generated JPG URL (previous input)', { exact: true })).toHaveValue(
+    permalink.replace('/html?', '/html-jpg?'),
+  );
   await page.getByLabel('Canvas width').fill('720');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(page.locator('.generated-viewer')).toHaveCSS('animation-name', 'none');
-  await page.locator('#composer').getByRole('button', { name: 'Generate SVG' }).click();
+  await page.locator('#composer').getByRole('button', { name: 'Render' }).click();
   await expect(page.frameLocator('iframe[title="Generated SVG"]').locator('svg')).toBeVisible();
   await expect(page.getByText('Your SVG is ready.', { exact: true })).toBeVisible();
   expect(popupCount).toBe(0);
@@ -147,7 +167,25 @@ test('local math previews, exact query encoding, server rendering and new-tab pe
   const popup = await popupPromise;
   await popup.waitForURL(permalink);
   await expect(page.getByLabel('Generated SVG URL', { exact: true })).toHaveValue(permalink);
-  const request = new URL(requests.find((url) => new URL(url).pathname === '/url')!);
+  const composer = page.locator('#composer');
+  const jpgPermalink = permalink.replace('/html?', '/html-jpg?');
+  await expect(page.getByLabel('Generated JPG URL', { exact: true })).toHaveValue(jpgPermalink);
+  for (const format of ['SVG', 'JPG']) {
+    const expected = format === 'SVG' ? permalink : jpgPermalink;
+    await composer
+      .getByRole('button', { name: `Copy Generated ${format} URL`, exact: true })
+      .click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(expected);
+  }
+  const jpgLink = composer.getByRole('link', { name: 'Open JPG', exact: true });
+  await expect(jpgLink).toHaveAttribute('href', jpgPermalink);
+  await expect(jpgLink).toHaveAttribute('target', '_blank');
+  const jpgPopupPromise = page.waitForEvent('popup');
+  await jpgLink.click();
+  const jpgPopup = await jpgPopupPromise;
+  await jpgPopup.waitForURL(jpgPermalink);
+  await jpgPopup.close();
+  const request = new URL(requests.find((url) => new URL(url).pathname === '/ubcq')!);
   expect(request.searchParams.get('formula')).toContain('`sum_(i=1)^n');
   expect(request.searchParams.get('style')).toContain('.math-card');
   expect(request.searchParams.get('imageWidth')).toBe('720');
@@ -200,22 +238,18 @@ test('validation and server rendering failures are visible', async ({ page }) =>
       body: JSON.stringify({ detail: 'Invalid formula input' }),
     }),
   );
-  await page.route('**/url?**', (route) =>
-    route.fulfill({ contentType: 'text/plain', body: permalink }),
+  await page.route('**/ubcq?**', (route) =>
+    route.fulfill({ contentType: 'text/plain', body: ubcq }),
   );
   await page.goto('/');
-  await page.locator('#formula').getByRole('button', { name: 'Generate SVG', exact: true }).click();
+  await page.locator('#formula').getByRole('button', { name: 'Render', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveText('Invalid formula input');
   await page.getByLabel('Canvas width').fill('219');
-  await expect(
-    page.locator('#composer').getByRole('button', { name: 'Generate SVG' }),
-  ).toBeDisabled();
+  await expect(page.locator('#composer').getByRole('button', { name: 'Render' })).toBeDisabled();
   await page.getByLabel('Canvas width').fill('500');
   await page.getByRole('button', { name: 'Add stylesheet' }).click();
   await page.getByLabel('Stylesheet URL 1').fill('http://example.com/style.css');
-  await expect(
-    page.locator('#composer').getByRole('button', { name: 'Generate SVG' }),
-  ).toBeDisabled();
+  await expect(page.locator('#composer').getByRole('button', { name: 'Render' })).toBeDisabled();
   await page.getByRole('button', { name: 'Remove stylesheet 1' }).click();
   await page.route('**/html?**', (route) =>
     route.fulfill({
@@ -224,7 +258,7 @@ test('validation and server rendering failures are visible', async ({ page }) =>
       body: JSON.stringify({ detail: 'Unable to render HTML' }),
     }),
   );
-  await page.locator('#composer').getByRole('button', { name: 'Generate SVG' }).click();
+  await page.locator('#composer').getByRole('button', { name: 'Render' }).click();
   await expect(page.locator('#composer').getByRole('alert')).toHaveText('Unable to render HTML');
   await expect(
     page.locator('#composer').getByRole('link', { name: 'Open SVG', exact: true }),
@@ -232,7 +266,7 @@ test('validation and server rendering failures are visible', async ({ page }) =>
   await page.route('**/html?**', (route) =>
     route.fulfill({ contentType: 'image/svg+xml', body: svg }),
   );
-  await page.locator('#composer').getByRole('button', { name: 'Generate SVG' }).click();
+  await page.locator('#composer').getByRole('button', { name: 'Render' }).click();
   await expect(page.frameLocator('iframe[title="Generated SVG"]').locator('svg')).toBeVisible();
   await expect(
     page.locator('#composer').getByRole('link', { name: 'Open SVG', exact: true }),

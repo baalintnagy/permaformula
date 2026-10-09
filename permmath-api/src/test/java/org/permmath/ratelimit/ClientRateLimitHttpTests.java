@@ -46,9 +46,9 @@ class ClientRateLimitHttpTests {
     }
 
     @Test
-    void encodingSpendsRequestAllowanceButLeavesRenderAllowanceAvailable() throws Exception {
-        mvc.perform(client("/url-encode", "203.0.113.90").param("text", "x + y"))
-                .andExpect(status().isOk()).andExpect(content().string("x+%2B+y"));
+    void ubcqSpendsRequestAllowanceButLeavesRenderAllowanceAvailable() throws Exception {
+        mvc.perform(client("/ubcq", "203.0.113.90").param("formula", "x + y"))
+                .andExpect(status().isOk()).andExpect(content().string(org.hamcrest.Matchers.startsWith("H4sI")));
         verifyNoInteractions(renderer, htmlRenderer);
         mvc.perform(client("/exp", "203.0.113.90").param("formula", "encoding-quota-render"))
                 .andExpect(status().isOk());
@@ -58,14 +58,14 @@ class ClientRateLimitHttpTests {
     @Test
     void requestLimitRunsBeforeInputValidationAndCannotBeBypassedBySpoofedHeaders() throws Exception {
         assertAll(IntStream.range(0, 3).mapToObj(i -> (Executable) () -> {
-            mvc.perform(client("/url-encode", "203.0.113.10")
+            mvc.perform(client("/ubcq", "203.0.113.10")
                     .header("X-Forwarded-For", "198.51.100." + i)).andExpect(status().isBadRequest());
         }));
-        mvc.perform(client("/url-encode", "203.0.113.10"))
+        mvc.perform(client("/ubcq", "203.0.113.10"))
                 .andExpect(status().isTooManyRequests()).andExpect(header().string("Retry-After", "20"))
                 .andExpect(header().string("Cache-Control", "no-store"));
         verifyNoInteractions(renderer);
-        mvc.perform(client("/url", "203.0.113.11").param("formula", "x")).andExpect(status().isOk());
+        mvc.perform(client("/ubcq", "203.0.113.11").param("formula", "x")).andExpect(status().isOk());
     }
 
     @Test
@@ -85,18 +85,18 @@ class ClientRateLimitHttpTests {
 
     @Test
     void trustsOnlyConfiguredPeerAndRequiresSingleLiteralClientAddress() throws Exception {
-        mvc.perform(client("/url", "172.30.86.2").param("formula", "x"))
+        mvc.perform(client("/ubcq", "172.30.86.2").param("formula", "x"))
                 .andExpect(status().isBadRequest());
-        mvc.perform(client("/url", "172.30.86.2").param("formula", "x")
+        mvc.perform(client("/ubcq", "172.30.86.2").param("formula", "x")
                 .header("X-Forwarded-For", "203.0.113.30, 203.0.113.31"))
                 .andExpect(status().isBadRequest());
         assertAll(IntStream.range(0, 3).mapToObj(_ -> (Executable) () -> {
-            mvc.perform(client("/url", "172.30.86.2").param("formula", "x")
+            mvc.perform(client("/ubcq", "172.30.86.2").param("formula", "x")
                     .header("X-Forwarded-For", "203.0.113.30")).andExpect(status().isOk());
         }));
-        mvc.perform(client("/url", "172.30.86.2").param("formula", "x")
+        mvc.perform(client("/ubcq", "172.30.86.2").param("formula", "x")
                 .header("X-Forwarded-For", "203.0.113.30")).andExpect(status().isTooManyRequests());
-        mvc.perform(client("/url", "172.30.86.2").param("formula", "x")
+        mvc.perform(client("/ubcq", "172.30.86.2").param("formula", "x")
                 .header("X-Forwarded-For", "203.0.113.31")).andExpect(status().isOk());
     }
 

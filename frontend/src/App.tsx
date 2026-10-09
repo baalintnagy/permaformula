@@ -1,7 +1,14 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Editor } from './Editor';
 import { Preview } from './Preview';
-import { createPermalink, formulaUrl, imageRequestUrl, responseError, validStyleRef } from './api';
+import {
+  createPermalink,
+  formulaUrl,
+  imageRequestUrl,
+  jpegUrl,
+  responseError,
+  validStyleRef,
+} from './api';
 
 const initialFormula = 'sum_(i=1)^n i^3 = ((n(n+1))/2)^2';
 const initialHtml = `<div class="math-card">
@@ -144,6 +151,43 @@ function CopyUrl({ url, label }: { url: string; label: string }) {
       <span className="copy-feedback" role="status">
         {error ? 'Select and copy the URL manually.' : copied ? 'URL copied to clipboard.' : ''}
       </span>
+    </div>
+  );
+}
+
+function ImageUrls({
+  svgUrl,
+  label,
+  previousInput = false,
+  highlight = false,
+}: {
+  svgUrl: string;
+  label: string;
+  previousInput?: boolean;
+  highlight?: boolean;
+}) {
+  return (
+    <div className="permalink-result panel">
+      {(['SVG', 'JPG'] as const).map((format) => {
+        const url = format === 'SVG' ? svgUrl : jpegUrl(svgUrl);
+        return (
+          <div className="image-url-option" key={format}>
+            <CopyUrl
+              url={url}
+              label={`${label} ${format} URL${previousInput ? ' (previous input)' : ''}`}
+            />
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`text-button${highlight ? ' result-highlight' : ''}`}
+            >
+              Open {format}
+              <Icon name="external" />
+            </a>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -388,17 +432,11 @@ export function App() {
               disabled={!formula.trim() || formulaBusy}
               onClick={renderFormula}
             >
-              <span>{formulaBusy ? 'Generating…' : 'Generate SVG'}</span>
+              <span>{formulaBusy ? 'Rendering…' : 'Render'}</span>
               <Icon name="arrow" />
             </button>
           </div>
-          <div className="permalink-result panel">
-            <CopyUrl url={expUrl} label="Expression SVG URL" />
-            <a href={expUrl} target="_blank" rel="noopener noreferrer" className="text-button">
-              Open SVG
-              <Icon name="external" />
-            </a>
-          </div>
+          <ImageUrls svgUrl={expUrl} label="Expression" />
           {formulaError && (
             <div className="error-message" role="alert">
               {formulaError}
@@ -607,7 +645,7 @@ export function App() {
               disabled={composerBusy || !html.trim() || !widthValid || !refsValid}
               onClick={generateImage}
             >
-              {composerBusy ? 'Generating…' : 'Generate SVG'}
+              {composerBusy ? 'Rendering…' : 'Render'}
               <Icon name="arrow" />
             </button>
           </div>
@@ -618,25 +656,12 @@ export function App() {
           )}
           {generatedImage && (
             <div className="generated-result" key={generatedImage.revision}>
-              <div className="permalink-result panel">
-                <CopyUrl
-                  url={permalink}
-                  label={
-                    inputIdentity === generatedInput
-                      ? 'Generated SVG URL'
-                      : 'Generated SVG URL (previous input)'
-                  }
-                />
-                <a
-                  href={permalink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-button result-highlight"
-                >
-                  Open SVG
-                  <Icon name="external" />
-                </a>
-              </div>
+              <ImageUrls
+                svgUrl={permalink}
+                label="Generated"
+                previousInput={inputIdentity !== generatedInput}
+                highlight
+              />
               <div className="generated-viewer panel result-highlight">
                 <PanelHeading title="Generated SVG" badge="SVG" />
                 <p className="generated-status" role="status">

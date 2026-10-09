@@ -72,9 +72,9 @@ class ImageDeliveryBoundaryTests {
                 .andExpect(header().string("Content-Security-Policy", SvgOutputPolicy.CSP))
                 .andExpect(header().string("X-Content-Type-Options", "nosniff"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"));
-        mvc.perform(peer("/url", "203.0.113.56").param("formula", "<p>public user</p>"))
+        mvc.perform(peer("/ubcq", "203.0.113.56").param("formula", "<p>public user</p>"))
                 .andExpect(status().isOk()).andExpect(content().string(Matchers.startsWith(
-                        "https://math-images.example.net/html?ubcq=")));
+                        "H4sI")));
         mvc.perform(peer("/v3/api-docs", "203.0.113.57")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.servers[0].url").value("https://math.example.com"));
     }

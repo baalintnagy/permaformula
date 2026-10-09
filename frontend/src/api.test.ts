@@ -4,6 +4,7 @@ import {
   createPermalink,
   formulaUrl,
   imageRequestUrl,
+  jpegUrl,
   permalinkRequest,
   validStyleRef,
 } from './api';
@@ -15,6 +16,15 @@ afterEach(() => {
 });
 
 describe('image requests', () => {
+  it('preserves the origin and encoded parameters in JPG counterpart URLs', () => {
+    for (const path of ['/exp?formula=x%2By%20%26%20%CE%B1', '/html?ubcq=H4sI%2Ba%2Fb%3D%3D']) {
+      const svg = new URL(path, 'https://images.example:8443');
+      const jpg = new URL(jpegUrl(svg.href));
+      expect(jpg.origin).toBe(svg.origin);
+      expect(jpg.pathname).toBe(`${svg.pathname}-jpg`);
+      expect(jpg.search).toBe(svg.search);
+    }
+  });
   it('uses the development proxy without changing the encoded image payload', () => {
     vi.stubEnv('DEV', true);
     expect(imageRequestUrl('http://localhost:8086/html?ubcq=a%2Bb%2F%3D')).toBe(
@@ -46,7 +56,7 @@ describe('image requests', () => {
       }),
       'https://math.example',
     );
-    expect(url.pathname).toBe('/url');
+    expect(url.pathname).toBe('/ubcq');
     expect(url.searchParams.get('formula')).toBe(html);
     expect(url.searchParams.get('style')).toBe(css);
     expect(url.searchParams.get('imageWidth')).toBe('720');
@@ -54,6 +64,18 @@ describe('image requests', () => {
       'https://a.example/a.css',
       'https://b.example/b.css?q=x+y',
     ]);
+  });
+  it('builds complete image URLs from raw descriptors at the configured API origin', async () => {
+    vi.stubEnv('VITE_PERMMATH_API_ORIGIN', 'http://localhost:8090');
+    const ubcq = 'H4sI+a/b+/==';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(ubcq)));
+    const result = new URL(
+      await createPermalink({ html: '<p>x</p>', css: '', styleRefs: [], imageWidth: 500 }),
+    );
+    expect(result.origin).toBe('http://localhost:8090');
+    expect(result.pathname).toBe('/html');
+    expect(result.searchParams.get('ubcq')).toBe(ubcq);
+    expect(result.searchParams.size).toBe(1);
   });
   it('accepts HTTPS stylesheet references without credentials', () => {
     expect(validStyleRef('https://cdn.example/a.css')).toBe(true);
@@ -65,7 +87,7 @@ describe('image requests', () => {
     ])
       expect(validStyleRef(url)).toBe(false);
   });
-  it('surfaces ProblemDetail errors and rejects invalid permalink schemes', async () => {
+  it('surfaces ProblemDetail errors and rejects invalid descriptor responses', async () => {
     const request = { html: '<p>x</p>', css: '', styleRefs: [], imageWidth: 500 };
     vi.stubGlobal(
       'fetch',
@@ -77,14 +99,19 @@ describe('image requests', () => {
       ),
     );
     await expect(createPermalink(request)).rejects.toThrow('Content exceeds limit');
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('javascript:alert(1)')));
-    await expect(createPermalink(request)).rejects.toThrow('invalid SVG permalink');
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(new Response('https://images.example/html?ubcq=abc%2Bdef')),
-    );
+    for (const value of [
+      '',
+      'javascript:alert(1)',
+      'https://images.example/html?ubcq=abcd',
+      'abc%2Bdef',
+      'abc',
+    ]) {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(value)));
+      await expect(createPermalink(request)).rejects.toThrow('invalid compressed image descriptor');
+    }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('H4sI+a/b+/==')));
     await expect(createPermalink(request)).resolves.toBe(
-      'https://images.example/html?ubcq=abc%2Bdef',
+      new URL('/html?ubcq=H4sI%2Ba%2Fb%2B%2F%3D%3D', window.location.origin).href,
     );
   });
 });

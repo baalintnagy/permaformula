@@ -37,11 +37,11 @@ class PermMathApplicationTests {
     @ParameterizedTest
     @ValueSource(ints = { 219, 4001 })
     void invalidImageWidthsAreRejected(int width) throws Exception {
-        mvc.perform(get("/url").param("formula", "x").param("imageWidth", Integer.toString(width)))
+        mvc.perform(get("/ubcq").param("formula", "x").param("imageWidth", Integer.toString(width)))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
                 .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.instance").value("/url"))
+                .andExpect(jsonPath("$.instance").value("/ubcq"))
                 .andExpect(jsonPath("$.violations[0].property").exists())
                 .andExpect(jsonPath("$.id").isString())
                 .andExpect(jsonPath("$.timestamp").isNumber())
@@ -51,13 +51,13 @@ class PermMathApplicationTests {
     @ParameterizedTest
     @ValueSource(ints = { 220, 4000 })
     void boundaryImageWidthsAreAccepted(int width) throws Exception {
-        mvc.perform(get("/url").param("formula", "x").param("imageWidth", Integer.toString(width)))
+        mvc.perform(get("/ubcq").param("formula", "x").param("imageWidth", Integer.toString(width)))
                 .andExpect(status().isOk());
     }
 
     @Test
     void blankFormulaIsRejected() throws Exception {
-        mvc.perform(get("/url").param("formula", " "))
+        mvc.perform(get("/ubcq").param("formula", " "))
                 .andExpect(status().isBadRequest());
     }
 
@@ -67,7 +67,7 @@ class PermMathApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.openapi").value("3.0.1"))
                 .andExpect(jsonPath("$.paths['/exp'].get.responses['200'].content['image/svg+xml']").exists())
-                .andExpect(jsonPath("$.paths['/url-encode'].get.responses['200'].content['text/plain']").exists())
+                .andExpect(jsonPath("$.paths['/ubcq'].get.responses['200'].content['text/plain']").exists())
                 .andExpect(jsonPath("$.paths['/decode']").doesNotExist());
     }
 
@@ -109,22 +109,22 @@ class PermMathApplicationTests {
 
     @Test
     void missingInputReturnsEnrichedMvcProblem() throws Exception {
-        mvc.perform(get("/url"))
+        mvc.perform(get("/ubcq"))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
                 .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.instance").value("/url"))
+                .andExpect(jsonPath("$.instance").value("/ubcq"))
                 .andExpect(jsonPath("$.id").isString())
                 .andExpect(jsonPath("$.timestamp").isNumber());
     }
 
     @Test
     void invalidWidthTypeReturnsMvcProblem() throws Exception {
-        mvc.perform(get("/url").param("formula", "x").param("imageWidth", "wide"))
+        mvc.perform(get("/ubcq").param("formula", "x").param("imageWidth", "wide"))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
                 .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.instance").value("/url"));
+                .andExpect(jsonPath("$.instance").value("/ubcq"));
     }
 
     @Test
@@ -163,7 +163,8 @@ class PermMathApplicationTests {
                 .andExpect(jsonPath("$.paths['/exp']").exists())
                 .andExpect(jsonPath("$.paths['/img']").doesNotExist())
                 .andExpect(jsonPath("$.paths['/image']").doesNotExist())
-                .andExpect(jsonPath("$.paths['/url-encode']").exists())
+                .andExpect(jsonPath("$.paths['/url-encode']").doesNotExist())
+                .andExpect(jsonPath("$.paths['/url']").doesNotExist())
                 .andExpect(jsonPath("$.paths['/decode']").doesNotExist())
                 .andExpect(jsonPath("$.paths['/image-cq']").doesNotExist())
                 .andExpect(jsonPath("$.paths['/decode-cq']").doesNotExist())

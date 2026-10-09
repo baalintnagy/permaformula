@@ -52,10 +52,11 @@ $ingress = "${ProjectName}-header-ingress"
 $networkCreated = $false; $upstreamCreated = $false; $ingressCreated = $false
 try {
     $html = [uri]::EscapeDataString('<p>Isolated image `x^2`</p>')
-    $response = Get-Response "$BaseUrl/url?formula=$html"
+    $response = Get-Response "$BaseUrl/ubcq?formula=$html"
     Assert-Status $response 200
-    $url = Text $response
-    if (!$url.StartsWith("$ImageUrl/html?ubcq=")) { throw "Permalink does not use image origin: $url" }
+    $ubcq = Text $response
+    if ($ubcq -notmatch '^H4sI[A-Za-z0-9+/]*={0,2}$') { throw "Expected raw compressed descriptor" }
+    $url = "$ImageUrl/html?ubcq=$([uri]::EscapeDataString($ubcq))"
     $credentials = @{'Cookie'='app_session=sentinel'; 'Authorization'='Bearer sentinel';
             'Proxy-Authorization'='Basic sentinel'; 'X-Permmath-Image-Delivery'='forged'}
     Assert-Svg (Get-Response $url $credentials)
@@ -71,7 +72,7 @@ try {
         Assert-Status (Get-Response "$ImageUrl$path" @{} 'POST') 403
         Assert-Status (Get-Response "$ImageUrl$path" @{'Origin'=$BaseUrl} 'OPTIONS') 204
     }
-    foreach ($path in @('/url?formula=x', '/url-encode?text=x', '/decode?ubcq=bad', '/swagger-ui/index.html', '/v3/api-docs', '/exp;ignored?formula=x', '/')) {
+    foreach ($path in @('/ubcq?formula=x', '/url-encode?text=x', '/decode?ubcq=bad', '/swagger-ui/index.html', '/v3/api-docs', '/exp;ignored?formula=x', '/')) {
         Assert-Status (Get-Response "$ImageUrl$path") 404
     }
     Assert-Status (Get-Response "$BaseUrl/exp;ignored?formula=x" $credentials) 404
@@ -90,13 +91,9 @@ try {
     Assert-Status (Get-Response "$BaseUrl/mathjax/tex-svg.js") 200
     Assert-Status (Get-Response "$ImageUrl/mathjax/tex-svg.js") 404
     Assert-Status (Get-Response "$BaseUrl/decode?ubcq=bad") 404
-    $encoded = Get-Response "$BaseUrl/url-encode?text=x%20%2B%20%25%20%CE%B1"
-    Assert-Status $encoded 200
-    if ((Text $encoded) -ne 'x+%2B+%25+%CE%B1' -or $encoded.Content.Headers.ContentType.MediaType -ne 'text/plain' -or
-            (Header $encoded 'Cache-Control') -ne 'no-store' -or (Header $encoded 'X-Content-Type-Options') -ne 'nosniff') {
-        throw 'URL encoding or plain-text security headers failed'
-    }
-    Write-Output 'Public /url returns image-origin links; API redirects preserve queries; image routes and SVG headers/CORS are restricted.'
+    Assert-Status (Get-Response "$BaseUrl/url?formula=x") 404
+    Assert-Status (Get-Response "$BaseUrl/url-encode?text=x") 404
+    Write-Output 'Public /ubcq returns raw descriptors; client-built image URLs and API redirects preserve queries; image routes and headers/CORS are restricted.'
 
     $image = (docker inspect "${ProjectName}-ingress-1" | ConvertFrom-Json)[0].Config.Image
     $probe = Join-Path $taskRoot 'docker/ingress/delivery-probe.sh'
@@ -135,7 +132,7 @@ try {
     if (!$ports.'8080/tcp'[0].HostPort -or !$ports.'8081/tcp'[0].HostPort) { throw 'Fixture listeners were not published' }
     $apiFixture = "http://127.0.0.1:$($ports.'8080/tcp'[0].HostPort)"
     $imageFixture = "http://127.0.0.1:$($ports.'8081/tcp'[0].HostPort)"
-    $api = Get-Response "$apiFixture/url" $credentials
+    $api = Get-Response "$apiFixture/ubcq" $credentials
     Assert-Status $api 200
     if ((Text $api) -notmatch '^app_session=sentinel\|Bearer sentinel\|' -or (Text $api) -notmatch '\|$') {
         throw 'API credentials must survive; spoofed image-delivery marker must be removed'

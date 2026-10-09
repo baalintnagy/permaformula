@@ -65,16 +65,16 @@ try {
     Start-Sleep -Milliseconds 200
     $large = Connect $api
     $query = 'x' * (11 * 1024 * 1024)
-    Send $large "GET /url?formula=$query HTTP/1.1`r`nHost: api.example.test`r`nConnection: close`r`n`r`n"
+    Send $large "GET /ubcq?formula=$query HTTP/1.1`r`nHost: api.example.test`r`nConnection: close`r`n`r`n"
     Assert-Match (Read-Headers $large) '^HTTP/1.1 200' 'Generous request-line allowance was lost'
     $large.Dispose()
     $oversized = Connect $api
-    Send $oversized "GET /url HTTP/1.1`r`nHost: api.example.test`r`nContent-Length: 8388609`r`nConnection: close`r`n`r`n"
+    Send $oversized "GET /ubcq HTTP/1.1`r`nHost: api.example.test`r`nContent-Length: 8388609`r`nConnection: close`r`n`r`n"
     Assert-Match (Read-Headers $oversized) '^HTTP/1.1 413' 'Body size cap was not enforced'
     $oversized.Dispose()
     $first = Connect $api; $second = Connect $images
     $bodyTimer = [System.Diagnostics.Stopwatch]::StartNew()
-    Send $first "GET /url HTTP/1.1`r`nHost: api.example.test`r`nContent-Length: 1000`r`n`r`nx"
+    Send $first "GET /ubcq HTTP/1.1`r`nHost: api.example.test`r`nContent-Length: 1000`r`n`r`nx"
     Send $second "GET /exp HTTP/1.1`r`nHost: images.example.test`r`nContent-Length: 1000`r`n`r`nx"
     # Wait for complete headers to enter nginx's native connection accounting.
     Start-Sleep -Milliseconds 200
@@ -89,16 +89,16 @@ try {
     Assert-Match (Read-Headers $second) '^(HTTP/1.1 408|$)' 'Image body-read timeout missing'
     if ($bodyTimer.Elapsed.TotalSeconds -lt 2 -or $bodyTimer.Elapsed.TotalSeconds -gt 8) { throw 'Body deadline did not close within the configured idle budget' }
     $partial = Connect $api
-    Send $partial "GET /url HTTP/1.1`r`nHost: api.example.test`r`nX-Slow: "
+    Send $partial "GET /ubcq HTTP/1.1`r`nHost: api.example.test`r`nX-Slow: "
     Assert-Match (Read-Headers $partial) '^(HTTP/1.1 408|$)' 'Incomplete headers did not time out'
     Assert-Match (docker logs $ingress 2>&1 | Out-String) 'client timed out .*while reading client request headers' 'Header deadline was not exercised'
     $alive = Connect $api
-    Send $alive "GET /url HTTP/1.1`r`nHost: api.example.test`r`n`r`n"
+    Send $alive "GET /ubcq HTTP/1.1`r`nHost: api.example.test`r`n`r`n"
     Assert-Match (Read-Headers $alive) '^HTTP/1.1 200' 'Capacity did not recover'
     # Fixture response has no body; next byte must be EOF after keepalive timeout.
     if ($alive.GetStream().ReadByte() -ne -1) { throw 'Idle keepalive did not close' }
     $slow = Connect $api
-    Send $slow "GET /url-encode HTTP/1.1`r`nHost: api.example.test`r`n`r`n"
+    Send $slow "GET /ubcq?large=1 HTTP/1.1`r`nHost: api.example.test`r`n`r`n"
     Assert-Match (Read-Headers $slow) '^HTTP/1.1 200' 'Large response failed'
     # Stop reading long enough to fill the TCP buffers and hit send_timeout.
     Start-Sleep -Seconds 5
@@ -111,7 +111,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Total-cap fixture setup failed' }
     Start-Sleep -Milliseconds 300
     $held = Connect $api
-    Send $held "GET /url HTTP/1.1`r`nHost: api.example.test`r`nContent-Length: 1000`r`n`r`nx"
+    Send $held "GET /ubcq HTTP/1.1`r`nHost: api.example.test`r`nContent-Length: 1000`r`n`r`nx"
     Start-Sleep -Milliseconds 200
     $overTotal = Connect $images
     Send $overTotal "GET /exp HTTP/1.1`r`nHost: images.example.test`r`nConnection: close`r`n`r`n"

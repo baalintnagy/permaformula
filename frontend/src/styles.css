@@ -710,10 +710,17 @@ input[aria-invalid='true'] {
 .permalink-result {
   margin-top: 18px;
   padding: 18px 21px 9px;
+}
+.image-url-option {
   display: flex;
   gap: 18px;
   align-items: center;
   flex-wrap: wrap;
+}
+.image-url-option + .image-url-option {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  margin-top: 8px;
 }
 .permalink-result p {
   width: 100%;
@@ -868,7 +875,7 @@ footer svg {
   .canvas-toolbar {
     padding: 12px 15px;
   }
-  .permalink-result {
+  .image-url-option {
     align-items: stretch;
     flex-direction: column;
     gap: 5px;

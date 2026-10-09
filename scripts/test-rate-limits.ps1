@@ -17,7 +17,7 @@ function Assert-Limited($Response) {
 $ready = $false
 for ($attempt = 0; $attempt -lt 60; $attempt++) {
     try {
-        $response = Get-Response '/url?formula=rate-ready'
+        $response = Get-Response '/ubcq?formula=rate-ready'
         if ($response.StatusCode -eq 200) { $ready = $true; break }
         if ($response.StatusCode -eq 429 -or $response.StatusCode -eq 400) {
             throw 'Use a fresh test deployment; check trusted ingress configuration'
@@ -34,8 +34,8 @@ Assert-Limited (Get-Response "/exp?formula=${formula}%2B1" @{'X-Forwarded-For'='
 $cached = Get-Response "/exp?formula=$formula" @{'X-Forwarded-For'='198.51.100.5'}
 Assert-Status $cached 200
 if (!$cached.Headers.ContainsKey('Content-Security-Policy')) { throw 'Cached SVG lost its CSP' }
-Assert-Status (Get-Response '/url?formula=x' @{'X-Forwarded-For'='198.51.100.6'}) 200
-Assert-Status (Get-Response '/url?formula=y' @{'X-Forwarded-For'='198.51.100.7'}) 200
-Assert-Limited (Get-Response '/url-encode?text=x' @{'X-Forwarded-For'='198.51.100.8'})
-Assert-Limited (Get-Response '/url?formula=z' @{'X-Forwarded-For'='198.51.100.9'})
+Assert-Status (Get-Response '/ubcq?formula=x' @{'X-Forwarded-For'='198.51.100.6'}) 200
+Assert-Status (Get-Response '/ubcq?formula=y' @{'X-Forwarded-For'='198.51.100.7'}) 200
+Assert-Limited (Get-Response '/ubcq?formula=x' @{'X-Forwarded-For'='198.51.100.8'})
+Assert-Limited (Get-Response '/ubcq?formula=z' @{'X-Forwarded-For'='198.51.100.9'})
 Write-Output 'nginx overwrites spoofed identities; request/render quotas return 429 with Retry-After; cached SVG remains available after render quota exhaustion.'

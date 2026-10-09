@@ -32,7 +32,7 @@ npm ci
 npm run dev
 ```
 
-The development proxy forwards image and permalink requests, Swagger UI, and OpenAPI to the API. Requests use the proxy to avoid development CORS issues; copied formula URLs point directly at the Java API so they keep working when Vite stops. `/url` permalinks retain the origin configured by the Java application. Local MathJax previews work even while the Java services are stopped; server rendering requires both services.
+The development proxy forwards image and permalink requests, Swagger UI, and OpenAPI to the API. Requests use the proxy to avoid development CORS issues; copied formula URLs point directly at the Java API so they keep working when Vite stops. `/ubcq` returns raw Base64 descriptors; the UI constructs complete HTML image URLs using the same API origin as formula URLs, encoding each descriptor once. Local MathJax previews work even while the Java services are stopped; server rendering requires both services.
 
 To use Compose instead:
 
@@ -43,11 +43,13 @@ npm run dev
 
 ## Production
 
-`docker compose up --build -d` builds the frontend and packages it in the API JAR. Open the API origin, `http://localhost:5000` by default. The image listener continues to expose only `/exp` and `/html`.
+`docker compose up --build -d` builds the frontend and packages it in the API JAR. Open the API origin, `http://localhost:5000` by default. The image listener continues to expose only `/exp`, `/html`, `/exp-jpg`, and `/html-jpg`.
 
 For a local Java build, first run `npm ci` and `npm run build` in this directory, then run `mvn verify` from the repository root. The API module copies `frontend/dist` into its static resources. Rebuild the frontend before packaging subsequent UI changes. A Java-only build without `frontend/dist` remains supported but does not include the UI.
 
 The asset copy is a Maven `copy-resources` execution, skipped by Eclipse's incremental builder. The sibling `frontend/dist` directory is not registered as an Eclipse resource/source folder. Eclipse development uses Vite; command-line Maven builds and Docker still include the static UI. After changing Maven configuration, select **Maven → Update Project…** in Eclipse (`Alt+F5`).
+
+The **Render** buttons display server-rendered SVG previews. Both workspaces offer SVG and JPG URL rows, separate Copy buttons, and Open SVG/Open JPG links that open in a new tab. Expression URLs follow the current formula; composition URLs retain the last rendered input and mark it when the source changes.
 
 ## Checks
 

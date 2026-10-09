@@ -67,7 +67,7 @@ try {
     $apiFixture = "http://127.0.0.1:$($ports.'8080/tcp'[0].HostPort)"
     $imageFixture = "http://127.0.0.1:$($ports.'8081/tcp'[0].HostPort)"
     if ($Profile -eq 'single-host') { $imageFixture = $apiFixture }
-    $api = Get-Response "$apiFixture/url" $credentials
+    $api = Get-Response "$apiFixture/ubcq" $credentials
     Assert-Status $api 200
     if ((Text $api) -notmatch '^app_session=sentinel\|Bearer sentinel\|' -or (Text $api) -notmatch '\|$') {
         throw 'API credentials must survive; spoofed image-delivery marker must be removed'
@@ -86,7 +86,7 @@ try {
     Assert-Status (Get-Response "$imageFixture/exp;ignored?formula=x" $credentials) 404
     if ($Profile -eq 'separate-origins') {
         Assert-Status (Get-Response "$apiFixture/exp?formula=x" $credentials) 307
-        Assert-Status (Get-Response "$imageFixture/url") 404
+        Assert-Status (Get-Response "$imageFixture/ubcq") 404
     }
     Write-Output 'Native upstream fixture confirms Cookie/Authorization/Proxy-Authorization stripping and Set-Cookie suppression on both image endpoints.'
 } finally {
