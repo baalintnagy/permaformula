@@ -25,9 +25,13 @@ public final class RenderWorkerMain {
                 started = System.nanoTime();
                 try {
                     RenderLimits.validate(request);
-                    if (request.hasHtml() != html) throw new IllegalArgumentException("Wrong worker kind");
+                    if ((request.hasHtml() || request.hasJpegSvg()) != html) throw new IllegalArgumentException("Wrong worker kind");
                     byte[] svg;
-                    if (html) {
+                    if (request.hasJpegSvg()) {
+                        String url = assets.add("<!doctype html><html><body></body></html>");
+                        try { svg = chromium.jpeg(url, request.getJpegSvg()); }
+                        finally { assets.remove(url); }
+                    } else if (html) {
                         String url = assets.add(request.getHtml().getDocument());
                         try { svg = chromium.render(url, request.getHtml().getWidth()); }
                         finally { assets.remove(url); }

@@ -19,6 +19,13 @@ public class RenderGatewayTestConfiguration {
                     return renderer.render(formula).getBytes(StandardCharsets.UTF_8);
                 }
             }
+            public byte[] renderJpeg(String svg) throws IOException {
+                try (var assets = new RenderAssets();
+                     var renderer = new ChromiumRenderer(new BrowserSettings(
+                             Path.of("../.runtime/browsers"), Duration.ofSeconds(30), false))) {
+                    return renderer.jpeg(assets.add("<!doctype html><html><body></body></html>"), svg);
+                }
+            }
             public byte[] renderHtml(String html, int width) throws IOException {
                 try (var assets = new RenderAssets();
                      var renderer = new ChromiumRenderer(new BrowserSettings(

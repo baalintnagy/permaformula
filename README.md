@@ -14,6 +14,8 @@ MathRenderAPI generates SVG images from compressed formula and styled HTML descr
 |---|---|
 | `GET /url?formula=...` | Generate a compressed permalink. Optional `imageWidth`, `style`, and repeated external HTTPS `styleRefs` parameters. |
 | `GET /html?ubcq=...` | Render compressed styled HTML with backtick-delimited [AsciiMath](https://asciimath.org/) as SVG. |
+| `GET /exp-jpg?formula=...` | Convert the corresponding cached formula SVG to high quality JPEG. |
+| `GET /html-jpg?ubcq=...` | Convert the corresponding cached styled HTML SVG to high quality JPEG. |
 | `GET /exp?formula=...` | Render an uncompressed plain [AsciiMath](https://asciimath.org/) formula as standalone SVG, without a browser. |
 | `GET /url-encode?text=...` | Encode text as a UTF-8 query parameter value and return plain text. |
 
@@ -25,6 +27,29 @@ the former `/image-cq` and `/decode-cq` route names are no longer available.
 
 The former `/img` and `/image` endpoints have been renamed to `/exp` and `/html`.
 Update existing clients and stored permalinks; the old routes return 404.
+
+### JPEG images: `/exp-jpg` and `/html-jpg`
+
+The JPEG endpoints accept exactly the parameters of their SVG counterparts:
+`formula` for `/exp-jpg`, and compressed `ubcq` for `/html-jpg`. They return
+`image/jpeg`. Calling a JPEG endpoint first generates, validates and caches the
+corresponding SVG using the existing SVG identity. The isolated Chromium renderer
+then rasterizes that SVG, including HTML `foreignObject` content, at up to twice
+its CSS dimensions with 95% JPEG quality. Transparent areas become white.
+Resolution is reduced toward 1x when necessary to respect the shared dimension
+and pixel-area limits. SVG and JPEG failures are never cached; a failed conversion
+retains a successfully generated SVG for retry.
+
+Both formats share the bounded memory and persistent cache budgets, TTL and
+single-generation behavior. JPEG cache identities include the validated source
+SVG, conversion settings and complexity policy. For schema compatibility, JPEGs
+are stored as tagged Base64 text in the existing payload column; persistent byte
+accounting includes this encoding overhead. Stored JPEG metadata is revalidated
+before reuse. A JPEG request refreshes its source SVG as well as the JPEG expiry.
+A new conversion consumes a separate generation allowance after any SVG miss;
+configure quotas with this additional work in mind. API and renderer must be
+updated together. Both ingress profiles protect the new routes in the same way
+as their SVG counterparts. The Builder UI continues to request SVGs.
 
 ### Query-value encoding: `/url-encode`
 
@@ -123,7 +148,7 @@ See [frontend setup and checks](frontend/README.md).
 
 ### Generated image caching
 
-Both `/html` and `/exp` cache successful SVG output in memory using Caffeine
+The SVG and JPEG endpoints cache successful output in memory using Caffeine
 and in a persistent database. Local/IDE launches default to embedded SQLite;
 Docker defaults to PostgreSQL. Concurrent requests for the same image in one API
 process share one generation. Errors are not cached. Database entries survive
@@ -184,7 +209,7 @@ cache-management endpoint or distributed render lock. See
 ### Rendering
 
 Chromium renders styled HTML with locally bundled MathJax 3.2.2 (SVG output).
-It is the sole HTML rendering backend; no engine selection is required. All image endpoints return SVG. Styled HTML is embedded using SVG foreignObject; `/exp` returns pure formula SVG.
+It is the sole HTML rendering backend; no engine selection is required. The `/html` and `/exp` endpoints return SVG; their `-jpg` counterparts return JPEG. Styled HTML is embedded using SVG foreignObject; `/exp` returns pure formula SVG.
 `imageWidth` is the layout width in pixels (500 by default); image height follows the content.
 The legacy `default-dpi` setting is retained for configuration compatibility but
 browser rendering uses CSS pixels rather than that value.

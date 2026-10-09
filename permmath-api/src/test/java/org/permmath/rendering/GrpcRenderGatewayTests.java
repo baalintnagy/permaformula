@@ -48,7 +48,7 @@ class GrpcRenderGatewayTests {
                 .addService(new RendererGrpc.RendererImplBase() {
 
             public void render(RenderRequest request, StreamObserver<RenderResponse> observer) {
-                var input = request.hasHtml() ? request.getHtml().getDocument() : request.getFormula().getFormula();
+                var input = request.hasHtml() ? request.getHtml().getDocument() : request.hasJpegSvg() ? request.getJpegSvg() : request.getFormula().getFormula();
                 if (input.equals("busy")) {
                     observer.onError(Status.RESOURCE_EXHAUSTED.asRuntimeException());
                     return;
@@ -64,6 +64,7 @@ class GrpcRenderGatewayTests {
         var channel = NettyChannelBuilder.forAddress("127.0.0.1", server.getPort()).usePlaintext().build();
         try (var gateway = new GrpcRenderGateway(channel, Duration.ofSeconds(5))) {
             assertEquals("<p>π</p>", new String(gateway.renderHtml("<p>π</p>", 240), StandardCharsets.UTF_8));
+            assertEquals("<svg>π</svg>", new String(gateway.renderJpeg("<svg>π</svg>"), StandardCharsets.UTF_8));
             assertEquals("sqrt(x)", new String(gateway.renderFormula("sqrt(x)"), StandardCharsets.UTF_8));
             assertThrows(IOException.class, () -> gateway.renderFormula("wrong"));
             var overloaded = assertThrows(ResponseStatusException.class, () -> gateway.renderFormula("busy"));

@@ -33,6 +33,73 @@ class GeneratedImageServiceTests {
     private final FormulaSvgRenderer formula = mock(FormulaSvgRenderer.class);
 
     @Test
+    void concurrentJpegRequestsShareBothSourceAndConversion() throws Exception {
+        when(formula.render("shared-jpg")).thenReturn("<svg xmlns='http://www.w3.org/2000/svg' width='20' height='10'/>");
+        var output = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(40, 20,
+                java.awt.image.BufferedImage.TYPE_INT_RGB), "jpeg", output);
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var gateway = mock(RenderGateway.class);
+        when(gateway.renderJpeg(any())).thenAnswer(_ -> {
+            entered.countDown();
+            assertTrue(release.await(5, TimeUnit.SECONDS));
+            return output.toByteArray();
+        });
+        var service = service(500);
+        ReflectionTestUtils.setField(service, "gateway", gateway);
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var first = executor.submit(() -> service.getExpJpg("shared-jpg"));
+            assertTrue(entered.await(5, TimeUnit.SECONDS));
+            var second = executor.submit(() -> service.getExpJpg("shared-jpg"));
+            release.countDown();
+            assertArrayEquals(first.get(5, TimeUnit.SECONDS), second.get(5, TimeUnit.SECONDS));
+        } finally {
+            release.countDown();
+        }
+        verify(formula, times(1)).render("shared-jpg");
+        verify(gateway, times(1)).renderJpeg(any());
+    }
+
+    @Test
+    void jpegFirstPopulatesSvgAndCachesConversionAcrossInstances() throws Exception {
+        String svg = "<svg xmlns='http://www.w3.org/2000/svg' width='20' height='10'><path d='M0 0'/></svg>";
+        when(formula.render("x")).thenReturn(svg);
+        when(html.getImage(any())).thenAnswer(_ -> resource(svg));
+        var gateway = mock(RenderGateway.class);
+        var image = new java.awt.image.BufferedImage(40, 20, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        var output = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(image, "jpeg", output);
+        when(gateway.renderJpeg(any())).thenReturn(output.toByteArray());
+        var service = service(500);
+        ReflectionTestUtils.setField(service, "gateway", gateway);
+        assertArrayEquals(output.toByteArray(), service.getExpJpg("x"));
+        service.getExp("x");
+        service.getExpJpg("x");
+        var restarted = service(500);
+        ReflectionTestUtils.setField(restarted, "gateway", gateway);
+        restarted.getExpJpg("x");
+        restarted.getHtmlJpg(new ImageDescriptor("html", null, null, null));
+        service.getHtml(new ImageDescriptor("html", null, null, null));
+        verify(formula, times(1)).render("x");
+        verify(html, times(1)).getImage(any());
+        verify(gateway, times(1)).renderJpeg(any());
+    }
+
+    @Test
+    void failedJpegConversionKeepsSourceSvgAndRetriesConversion() throws Exception {
+        when(formula.render("x")).thenReturn("<svg xmlns='http://www.w3.org/2000/svg' width='20' height='10'/>");
+        var gateway = mock(RenderGateway.class);
+        when(gateway.renderJpeg(any())).thenReturn(new byte[] { 1, 2, 3 });
+        var service = service(500);
+        ReflectionTestUtils.setField(service, "gateway", gateway);
+        assertThrows(IOException.class, () -> service.getExpJpg("x"));
+        assertThrows(IOException.class, () -> service.getExpJpg("x"));
+        verify(formula, times(1)).render("x");
+        verify(gateway, times(2)).renderJpeg(any());
+    }
+
+    @Test
     void rejectsComplexInputBeforeCallingEitherRenderer() throws Exception {
         var service = service(500);
         assertThrows(IllegalArgumentException.class, () -> service.getExp("x".repeat(262145)));

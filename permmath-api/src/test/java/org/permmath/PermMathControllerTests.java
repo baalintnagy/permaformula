@@ -60,6 +60,26 @@ class PermMathControllerTests {
     private GeneratedImageService renderer;
 
     @Test
+    void jpegRoutesReturnBinaryImagesAndValidateParameters() throws Exception {
+        byte[] jpeg = { (byte) 255, (byte) 216, (byte) 255, (byte) 217 };
+        when(renderer.getExpJpg("x+y")).thenReturn(jpeg);
+        mvc.perform(get("/exp-jpg").param("formula", "x+y"))
+                .andExpect(status().isOk()).andExpect(content().contentType("image/jpeg"))
+                .andExpect(content().bytes(jpeg))
+                .andExpect(MockMvcResultMatchers.header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(MockMvcResultMatchers.header().string("Referrer-Policy", "no-referrer"));
+        String url = urlService.getImageUrl("<p>hello</p>", 500, null, null);
+        String ubcq = URLDecoder.decode(URI.create(url).getRawQuery().substring(5), StandardCharsets.UTF_8);
+        when(renderer.getHtmlJpg(any())).thenReturn(jpeg);
+        mvc.perform(get("/html-jpg").param("ubcq", ubcq)).andExpect(status().isOk())
+                .andExpect(content().contentType("image/jpeg")).andExpect(content().bytes(jpeg));
+        mvc.perform(get("/exp-jpg")).andExpect(status().isBadRequest());
+        mvc.perform(get("/exp-jpg").param("formula", " ")).andExpect(status().isBadRequest());
+        mvc.perform(get("/html-jpg")).andExpect(status().isBadRequest());
+        mvc.perform(get("/html-jpg").param("ubcq", "invalid")).andExpect(status().isBadRequest());
+    }
+
+    @Test
     void encodingPreservesTextWithoutRenderingOrCompression() throws Exception {
         var compression = mock(StringCompressionService.class);
         ReflectionTestUtils.setField(urlService, "stringCompressionService", compression);

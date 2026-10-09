@@ -81,10 +81,15 @@ public final class GrpcRenderGateway implements RenderGateway, AutoCloseable {
         return render(RenderRequest.newBuilder().setFormula(AsciiMathFormula.newBuilder().setFormula(formula)));
     }
 
+    @Override
+    public byte[] renderJpeg(String svg) throws IOException {
+        return render(RenderRequest.newBuilder().setJpegSvg(svg));
+    }
+
     private byte[] render(RenderRequest.Builder builder) throws IOException {
         var request = builder.setRequestId(UUID.randomUUID().toString()).build();
         int contentSize = request.hasHtml() ? request.getHtml().getDocumentBytes().size()
-                : request.getFormula().getFormulaBytes().size();
+                : request.hasJpegSvg() ? request.getJpegSvgBytes().size() : request.getFormula().getFormulaBytes().size();
         if (contentSize > RenderProtocol.MAX_CONTENT_BYTES) {
             throw new IllegalArgumentException("Rendering content is too large");
         }

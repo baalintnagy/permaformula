@@ -6,4 +6,7 @@ import java.io.IOException;
 public interface RenderGateway {
     byte[] renderHtml(String preparedDocument, int width) throws IOException;
     byte[] renderFormula(String formula) throws IOException;
+    default byte[] renderJpeg(String svg) throws IOException {
+        throw new IOException("JPEG conversion is unavailable");
+    }
 }

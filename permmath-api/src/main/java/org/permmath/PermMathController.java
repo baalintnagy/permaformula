@@ -128,6 +128,31 @@ public class PermMathController {
                 .body(urlService.encodeText(text));
     }
 
+    @Operation(summary = "Render a single AsciiMath formula as high quality JPEG",
+            description = "Accepts the same formula as /exp. Generates and caches the source SVG, then caches its JPEG conversion. White background, up to 2x resolution and 95% quality.")
+    @GetMapping(path = "/exp-jpg", produces = "image/jpeg")
+    @ImageDelivery
+    public ResponseEntity<byte[]> getExpJpg(@NotBlank @RequestParam String formula) throws IOException {
+        InputLimits.formula(formula);
+        return jpegResponse(generatedImageService.getExpJpg(formula));
+    }
+
+    @Operation(summary = "Render compressed styled HTML as high quality JPEG",
+            description = "Accepts the same ubcq as /html. Generates and caches the source SVG, then caches its JPEG conversion including styled foreignObject content. White background, up to 2x resolution and 95% quality.")
+    @GetMapping(path = "/html-jpg", produces = "image/jpeg")
+    @ImageDelivery
+    public ResponseEntity<byte[]> getHtmlJpg(@NotBlank @RequestParam String ubcq) throws IOException {
+        return jpegResponse(generatedImageService.getHtmlJpg(urlService.decodeUbcq(ubcq)));
+    }
+
+    private static ResponseEntity<byte[]> jpegResponse(byte[] jpeg) {
+        return ok().contentType(MediaType.IMAGE_JPEG)
+                .header("Content-Security-Policy", SvgOutputPolicy.CSP)
+                .header("X-Content-Type-Options", "nosniff")
+                .header("Referrer-Policy", "no-referrer")
+                .body(jpeg);
+    }
+
     private static ResponseEntity<String> svgResponse(String svg) {
         return ok().contentType(MediaType.parseMediaType("image/svg+xml;charset=UTF-8"))
                 .header("Content-Security-Policy", SvgOutputPolicy.CSP)

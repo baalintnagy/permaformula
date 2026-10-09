@@ -49,7 +49,7 @@ public final class SupervisedRenderer implements RenderJobExecutor, AutoCloseabl
             throw new RenderException(RenderException.Kind.OVERLOADED, "Renderer is busy");
         }
         try {
-            return (request.hasHtml() ? html : formulas).execute(request, budget);
+            return (request.hasHtml() || request.hasJpegSvg() ? html : formulas).execute(request, budget);
         } finally {
             permits.release();
         }

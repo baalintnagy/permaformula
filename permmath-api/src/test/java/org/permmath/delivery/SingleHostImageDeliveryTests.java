@@ -22,6 +22,15 @@ class SingleHostImageDeliveryTests {
     @MockitoBean FormulaSvgRenderer renderer;
 
     @Test
+    void jpegRoutesRequireTrustedIngressBeforeRenderingOrDecoding() throws Exception {
+        mvc.perform(get("/exp-jpg").param("formula", "x"))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/html-jpg").param("ubcq", "malformed"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(renderer);
+    }
+
+    @Test
     void rejectsUntrustedMissingAndDuplicateMarkersWithoutRedirectLoops() throws Exception {
         mvc.perform(get("/exp").param("formula", "x").header("X-Permmath-Image-Delivery", "1"))
                 .andExpect(status().isForbidden()).andExpect(header().doesNotExist("Location"));

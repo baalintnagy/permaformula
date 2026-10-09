@@ -380,9 +380,9 @@ docker compose -f compose.separate-origins.yaml --env-file docker/egress/smoke.e
 ```
 
 This checks public permalink creation, cross-origin redirects, route/method/CORS
-restrictions, actual SVG headers and forged markers against the private API. A native nginx upstream fixture also checks
+restrictions, actual SVG/JPEG headers and forged markers against the private API. A native nginx upstream fixture also checks
 which Cookie/Authorization/Proxy-Authorization headers reach the upstream and
-that Set-Cookie is suppressed on both image endpoints. Fixture ports are ephemeral
+that Set-Cookie is suppressed on all four image endpoints in both ingress profiles. Fixture ports are ephemeral
 and fixtures are removed on completion; shut down the main test project yourself.
 
 While that deployment is running, the opt-in Chromium regression also verifies

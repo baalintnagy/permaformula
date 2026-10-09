@@ -22,6 +22,11 @@ public final class RenderLimits {
                         invalid();
                     }
                 }
+            case JPEG_SVG -> {
+                if (request.getJpegSvg().isBlank() || request.getJpegSvgBytes().size() > MAX_CONTENT_BYTES) {
+                    invalid();
+                }
+            }
             case FORMULA ->
                 {
                     if (request.getFormula().getFormula().isBlank() || request.getFormula().getFormulaBytes().size() > MAX_CONTENT_BYTES) {

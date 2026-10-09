@@ -76,6 +76,48 @@ final class ChromiumRenderer implements AutoCloseable {
         }
     }
 
+    byte[] jpeg(String url, String svg) {
+        try (var context = BrowserChannelPolicy.newContext(browser, 500)) {
+            var page = BrowserChannelPolicy.newPage(context, url);
+            page.setDefaultTimeout(timeout);
+            page.setDefaultNavigationTimeout(timeout);
+            page.navigate(url);
+            String encoded = (String) page.evaluate("""
+                async input => {
+                    const root = new DOMParser().parseFromString(input.svg, 'image/svg+xml').documentElement;
+                    const dimension = value => {
+                        const match = /^(\\d+(?:\\.\\d+)?)(px|ex|em)?$/.exec(value || '');
+                        if (!match) throw new Error('Invalid SVG dimensions');
+                        return Number(match[1]) * (match[2] === 'ex' ? input.ex : match[2] === 'em' ? input.em : 1);
+                    };
+                    const w = dimension(root.getAttribute('width'));
+                    const h = dimension(root.getAttribute('height'));
+                    const scale = Math.min(2, input.dimension / w, input.dimension / h, Math.sqrt(input.area / (w * h)));
+                    if (scale < 1) throw new Error('SVG exceeds raster limits');
+                    const width = Math.floor(w * scale), height = Math.floor(h * scale);
+                    if (width < 1 || height < 1) throw new Error('Invalid raster dimensions');
+                    root.setAttribute('width', String(w)); root.setAttribute('height', String(h));
+                    const image = new Image();
+                    image.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(root));
+                    await image.decode();
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width; canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, width, height);
+                    ctx.drawImage(image, 0, 0, width, height);
+                    const output = canvas.toDataURL('image/jpeg', 0.95);
+                    if (!output.startsWith('data:image/jpeg;base64,')) throw new Error('JPEG encoding failed');
+                    return output.substring(output.indexOf(',') + 1);
+                }
+                """, Map.of("svg", svg,
+                    "dimension", policy.get(ComplexityPolicy.Limit.RENDER_DIMENSION),
+                    "area", policy.get(ComplexityPolicy.Limit.RENDER_AREA),
+                    "ex", policy.get(ComplexityPolicy.Limit.EX_PIXELS),
+                    "em", policy.get(ComplexityPolicy.Limit.EM_PIXELS)));
+            return java.util.Base64.getDecoder().decode(encoded);
+        }
+    }
+
     static boolean allowedRequest(String documentUrl, String requestedUrl, String method, String type) {
         if (!"GET".equals(method)) {
             return false;

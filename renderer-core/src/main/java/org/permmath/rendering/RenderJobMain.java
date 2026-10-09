@@ -21,11 +21,13 @@ public final class RenderJobMain {
             var request = RenderRequest.parseFrom(input);
             RenderLimits.validate(request);
             byte[] svg;
-            if (request.hasHtml()) {
+            if (request.hasHtml() || request.hasJpegSvg()) {
                 var settings = new BrowserSettings(Path.of(args[0]), Duration.ofMillis(Long.parseLong(args[1])),
                         Boolean.parseBoolean(args[2]));
                 try (var assets = new RenderAssets(); var chromium = new ChromiumRenderer(settings)) {
-                    svg = chromium.render(assets.add(request.getHtml().getDocument()), request.getHtml().getWidth());
+                    svg = request.hasJpegSvg()
+                            ? chromium.jpeg(assets.add("<!doctype html><html><body></body></html>"), request.getJpegSvg())
+                            : chromium.render(assets.add(request.getHtml().getDocument()), request.getHtml().getWidth());
                 }
             } else {
                 try (var renderer = new AsciiMathRenderer()) {

@@ -65,6 +65,10 @@ public final class JdbcImageCache implements AutoCloseable {
             return null;
         }
         try {
+            if (stored.startsWith(org.permmath.rendering.JpegOutputPolicy.PREFIX)) {
+                org.permmath.rendering.JpegOutputPolicy.decode(stored);
+                return stored;
+            }
             return SvgOutputPolicy.sanitize(stored);
         } catch (IOException | RuntimeException invalid) {
             discard(key);

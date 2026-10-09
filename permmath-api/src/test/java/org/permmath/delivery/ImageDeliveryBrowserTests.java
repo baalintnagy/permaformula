@@ -36,6 +36,14 @@ class ImageDeliveryBrowserTests {
                     if (!(await formula.text()).includes('<svg')) throw new Error('Expected formula SVG');
                     const html = await fetch(url, {credentials: 'omit'});
                     if (!html.ok || !(await html.text()).includes('<svg')) throw new Error('Expected HTML SVG');
+                    for (const path of ['/exp-jpg?formula=x%5E2', '/html-jpg?' + url.split('?')[1]]) {
+                        const jpeg = await fetch(api + path, {credentials: 'omit'});
+                        if (!jpeg.ok || !jpeg.url.startsWith(images) || jpeg.headers.get('content-type') !== 'image/jpeg') {
+                            throw new Error('JPEG redirect/CORS failed');
+                        }
+                        const bytes = new Uint8Array(await jpeg.arrayBuffer());
+                        if (bytes[0] !== 255 || bytes[1] !== 216) throw new Error('Invalid JPEG');
+                    }
                     try {
                         await fetch(images + '/exp?formula=x%5E2', {credentials: 'include'});
                         throw new Error('Credentialed image read unexpectedly allowed');

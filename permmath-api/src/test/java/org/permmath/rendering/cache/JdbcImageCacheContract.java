@@ -64,6 +64,20 @@ abstract class JdbcImageCacheContract {
         }
     }
 
+    @Test
+    void jpegSurvivesMemoryCacheReplacementAndCorruptJpegIsDiscarded() throws Exception {
+        var image = new java.awt.image.BufferedImage(20, 10, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        var output = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(image, "jpeg", output);
+        String jpeg = org.permmath.rendering.JpegOutputPolicy.encode(output.toByteArray());
+        var backing = backing(4096);
+        assertEquals(jpeg, front(backing).getOrGenerate(KEY, () -> jpeg));
+        assertEquals(jpeg, front(backing).getOrGenerate(KEY, () -> { throw new IOException("Must hit database"); }));
+        backing.save(KEY, "jpeg-v1:bad-data");
+        assertNull(backing.find(KEY));
+        assertEquals(jpeg, front(backing).getOrGenerate(KEY, () -> jpeg));
+    }
+
     @Test void survivesClosingAndReopeningTheDatabaseAndMemoryCache() throws Exception {
         var backing = backing(4096);
         front(backing).getOrGenerate(KEY, () -> SVG);

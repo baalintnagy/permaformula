@@ -78,6 +78,26 @@ public class GeneratedImageService {
                         () -> SvgOutputPolicy.sanitize(formulaRenderer.render(formula)))));
     }
 
+    @Autowired
+    private RenderGateway gateway;
+
+    public byte[] getExpJpg(@NotBlank String formula) throws IOException {
+        return jpeg(getExp(formula));
+    }
+
+    public byte[] getHtmlJpg(@Valid @NotNull ImageDescriptor descriptor) throws IOException {
+        return jpeg(getHtml(descriptor));
+    }
+
+    private byte[] jpeg(String svg) throws IOException {
+        var cacheKey = work.prepare(() -> Hashing.sha256().hashString(
+                "jpeg-v1:chromium-1.59.0:scale-2:quality-95:white:" + ComplexityPolicy.CURRENT.fingerprint()
+                        + "\n" + svg, StandardCharsets.UTF_8).toString());
+        return JpegOutputPolicy.decode(store.getOrGenerate(cacheKey,
+                () -> work.generate(ClientRateLimits.generation(
+                        () -> JpegOutputPolicy.encode(gateway.renderJpeg(svg))))));
+    }
+
     private String key(String format, ImageDescriptor descriptor) {
         // Stable versioned content identity, also suitable for filenames or database keys.
         var identity = format + ":" + ComplexityPolicy.CURRENT.fingerprint()

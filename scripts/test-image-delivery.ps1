@@ -34,6 +34,18 @@ function Assert-Svg($Response) {
     }
 }
 
+function Assert-Jpeg($Response) {
+    Assert-Status $Response 200
+    $bytes = $Response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
+    if ($Response.Content.Headers.ContentType.MediaType -ne 'image/jpeg' -or
+            $bytes.Length -lt 4 -or $bytes[0] -ne 255 -or $bytes[1] -ne 216) { throw 'Expected JPEG' }
+    if ((Header $Response 'X-Content-Type-Options') -ne 'nosniff' -or
+            (Header $Response 'Referrer-Policy') -ne 'no-referrer' -or
+            $Response.Headers.Contains('Set-Cookie') -or $Response.Headers.Contains('Access-Control-Allow-Credentials')) {
+        throw 'JPEG security headers lost'
+    }
+}
+
 $network = "${ProjectName}_header-fixture"
 $upstream = "${ProjectName}-header-upstream"
 $ingress = "${ProjectName}-header-ingress"
@@ -51,6 +63,14 @@ try {
     Assert-Status $redirect 307
     if ((Header $redirect 'Location') -ne "$ImageUrl/exp?formula=x%5E2") { throw 'Legacy redirect lost origin/query' }
     Assert-Svg (Get-Response "$ImageUrl/exp?formula=x%5E2" $credentials)
+    foreach ($path in @('/exp-jpg?formula=x%5E2', "/html-jpg?$(([uri]$url).Query.TrimStart('?'))")) {
+        $redirect = Get-Response "$BaseUrl$path" $credentials
+        Assert-Status $redirect 307
+        if ((Header $redirect 'Location') -ne "$ImageUrl$path") { throw 'JPEG redirect lost query' }
+        Assert-Jpeg (Get-Response "$ImageUrl$path" $credentials)
+        Assert-Status (Get-Response "$ImageUrl$path" @{} 'POST') 403
+        Assert-Status (Get-Response "$ImageUrl$path" @{'Origin'=$BaseUrl} 'OPTIONS') 204
+    }
     foreach ($path in @('/url?formula=x', '/url-encode?text=x', '/decode?ubcq=bad', '/swagger-ui/index.html', '/v3/api-docs', '/exp;ignored?formula=x', '/')) {
         Assert-Status (Get-Response "$ImageUrl$path") 404
     }
@@ -80,7 +100,7 @@ try {
 
     $image = (docker inspect "${ProjectName}-ingress-1" | ConvertFrom-Json)[0].Config.Image
     $probe = Join-Path $taskRoot 'docker/ingress/delivery-probe.sh'
-    foreach ($path in @('/exp?formula=x', '/exp;ignored?formula=x')) {
+    foreach ($path in @('/exp?formula=x', '/exp;ignored?formula=x', '/exp-jpg?formula=x', '/html-jpg?ubcq=bad')) {
         $direct = docker run --rm --network "${ProjectName}_api-private" --read-only --cap-drop ALL `
             --security-opt no-new-privileges:true --mount "type=bind,source=$probe,target=/probe.sh,readonly" `
             --entrypoint sh $image /probe.sh $path
@@ -121,7 +141,7 @@ try {
         throw 'API credentials must survive; spoofed image-delivery marker must be removed'
     }
     if (!$api.Headers.Contains('Set-Cookie')) { throw 'Echo fixture must set its control cookie' }
-    foreach ($path in @('/exp', '/html')) {
+    foreach ($path in @('/exp', '/html', '/exp-jpg', '/html-jpg')) {
         $imageResponse = Get-Response "$imageFixture$path" $credentials
         Assert-Status $imageResponse 200
         if ((Text $imageResponse) -ne '|||1' -or $imageResponse.Headers.Contains('Set-Cookie')) {
@@ -129,7 +149,28 @@ try {
         }
         if ((Header $imageResponse 'Content-Security-Policy') -notmatch 'sandbox') { throw 'Proxy dropped CSP' }
     }
-    Write-Output 'Native upstream fixture confirms Cookie/Authorization/Proxy-Authorization stripping and Set-Cookie suppression on both image endpoints.'
+    Write-Output 'Native upstream fixture confirms Cookie/Authorization/Proxy-Authorization stripping and Set-Cookie suppression on all image endpoints.'
+
+    docker rm -f $ingress | Out-Null
+    $ingressCreated = $false
+    docker run -d --name $ingress --network $network --read-only --cap-drop ALL --security-opt no-new-privileges:true `
+        --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m,mode=1777 -p 127.0.0.1::8080 `
+        -e PERMMATH_DEPLOYMENT_PROFILE=single-host -e PERMMATH_HOST=http://math.example.test -e PERMMATH_IMAGE_HOST=http://math.example.test $image | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot start single-host header ingress' }
+    $ingressCreated = $true
+    $ports = (docker inspect $ingress | ConvertFrom-Json)[0].NetworkSettings.Ports
+    $singleFixture = "http://127.0.0.1:$($ports.'8080/tcp'[0].HostPort)"
+    foreach ($path in @('/exp', '/html', '/exp-jpg', '/html-jpg')) {
+        $imageResponse = Get-Response "$singleFixture$path" $credentials
+        Assert-Status $imageResponse 200
+        if ((Text $imageResponse) -ne '|||1' -or $imageResponse.Headers.Contains('Set-Cookie')) {
+            throw 'Single-host image ingress leaked credentials or cookies'
+        }
+        Assert-Status (Get-Response "$singleFixture$path" @{} 'POST') 403
+        Assert-Status (Get-Response "$singleFixture$path;ignored") 404
+    }
+    Write-Output 'Single-host native ingress fixture confirms all SVG/JPEG routes strip credentials and reject alternate paths/methods.'
+
 } finally {
     if ($ingressCreated) { docker rm -f $ingress | Out-Null }
     if ($upstreamCreated) { docker rm -f $upstream | Out-Null }

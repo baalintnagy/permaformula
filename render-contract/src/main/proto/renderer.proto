@@ -13,6 +13,8 @@ message RenderRequest {
   oneof input {
     HtmlDocument html = 2;
     AsciiMathFormula formula = 3;
+    // Validated source SVG to rasterize, never the original HTML.
+    string jpeg_svg = 4;
   }
 }
 message HtmlDocument {

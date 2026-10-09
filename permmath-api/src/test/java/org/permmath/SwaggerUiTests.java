@@ -49,6 +49,20 @@ class SwaggerUiTests {
             assertTrue(imageResponse.text().startsWith("<svg"));
             assertTrue(imageResponse.text().contains("width=\"220\""));
             assertTrue(imageResponse.text().contains("<path"));
+            Object jpegResult = page.evaluate("""
+                async permalink => {
+                    for (const url of ['/exp-jpg?formula=' + encodeURIComponent('sqrt(x^2+y^2)'),
+                            '/html-jpg?' + new URL(permalink).search.substring(1)]) {
+                        const response = await fetch(url);
+                        if (!response.ok || response.headers.get('content-type') !== 'image/jpeg') return false;
+                        const image = await createImageBitmap(await response.blob());
+                        if (image.width < 1 || image.height < 1) return false;
+                        image.close();
+                    }
+                    return true;
+                }
+                """, response.text());
+            assertTrue(Boolean.TRUE.equals(jpegResult));
         }
     }
 }
