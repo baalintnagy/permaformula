@@ -336,7 +336,7 @@ export function App() {
         <div className="intro">
           <span className="eyebrow">FORMULA TO SCALABLE VECTOR GRAPHICS</span>
           <h1>
-            Publish <span>math</span> easily
+            <span>Create</span> and <span>publish</span> formulae
           </h1>
           <p>
             Write <AsciiMathLink />. Define style. Share anywhere.
