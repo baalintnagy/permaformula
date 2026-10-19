@@ -1,0 +1,31 @@
+syntax = "proto3";
+package permaformula.renderer.v1;
+option java_package = "org.permaformula.contract.v1";
+option java_multiple_files = true;
+
+service Renderer {
+    rpc Render(RenderRequest) returns (RenderResponse);
+}
+
+// Reusable job envelope: a future queue adapter can carry the same messages.
+message RenderRequest {
+    string request_id = 1;
+    oneof input {
+        HtmlDocument html = 2;
+        AsciiMathFormula formula = 3;
+        // Validated source SVG to rasterize, never the original HTML.
+        string jpeg_svg = 4;
+    }
+}
+message HtmlDocument {
+    // Fully prepared document: sanitized HTML and embedded sanitized CSS.
+    string document = 1;
+    uint32 width = 2;
+}
+message AsciiMathFormula {
+    string formula = 1;
+}
+message RenderResponse {
+    string request_id = 1;
+    bytes svg = 2;
+}

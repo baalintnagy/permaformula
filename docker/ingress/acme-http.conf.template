@@ -1,0 +1,16 @@
+    acme_issuer permaformula {
+        uri ${PERMAFORMULA_ACME_DIRECTORY};
+        # The router forwards HTTPS; validate on 443 without depending on
+        # the router's intercepted public HTTP listener.
+        challenge tls-alpn-01;
+        state_path /var/lib/nginx/acme;
+        ssl_trusted_certificate ${PERMAFORMULA_ACME_TRUSTED_CERTIFICATE};
+        ssl_verify on;
+        accept_terms_of_service;
+    }
+    acme_shared_zone zone=permaformula_acme:1m;
+    proxy_headers_hash_max_size 1024;
+    proxy_headers_hash_bucket_size 128;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:permaformula_tls:1m;
+    ssl_session_tickets off;

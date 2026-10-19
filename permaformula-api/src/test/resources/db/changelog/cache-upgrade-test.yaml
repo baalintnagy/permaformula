@@ -1,0 +1,22 @@
+databaseChangeLog:
+  - include:
+      file: db/changelog/db.changelog-master.yaml
+  - changeSet:
+      id: cache-upgrade-test
+      author: permaformula-test
+      changes:
+        - createTable:
+            tableName: cache_migration_probe
+            columns:
+              - column:
+                  name: marker
+                  type: int
+        - insert:
+            tableName: cache_migration_probe
+            columns:
+              - column:
+                  name: marker
+                  valueNumeric: 1
+      rollback:
+        - dropTable:
+            tableName: cache_migration_probe

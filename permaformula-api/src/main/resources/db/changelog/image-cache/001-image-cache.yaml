@@ -1,0 +1,105 @@
+databaseChangeLog:
+  # Initial schema baseline. Keep applied changesets immutable; add future changes
+  # in new changelog files included by db.changelog-master.yaml.
+  - changeSet:
+      id: image-cache-001-table
+      author: permaformula
+      changes:
+        - createTable:
+            tableName: permaformula_image_cache
+            columns:
+              - column:
+                  name: cache_key
+                  type: varchar(64)
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: permaformula_image_cache_pkey
+                    nullable: false
+              - column:
+                  name: svg
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: descriptor
+                  type: text
+              - column:
+                  name: editor_kind
+                  type: varchar(16)
+              - column:
+                  name: source_excerpt
+                  type: varchar(512)
+              - column:
+                  name: descriptor_bytes
+                  type: bigint
+              - column:
+                  name: ubcq
+                  type: text
+              - column:
+                  name: ubcq_bytes
+                  type: bigint
+              - column:
+                  name: ubcq_key
+                  type: varchar(64)
+              - column:
+                  name: size_bytes
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_access_at
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: expires_at
+                  type: bigint
+                  constraints:
+                    nullable: false
+      # SQLite cannot add a CHECK with ALTER TABLE; retain the previous invariant
+      # directly in the generated CREATE TABLE on both backends.
+      modifySql:
+        - regExpReplace:
+            replace: '\)$'
+            with: ', CONSTRAINT permaformula_image_cache_size_positive CHECK (size_bytes > 0))'
+  - changeSet:
+      id: image-cache-002-expiry-index
+      author: permaformula
+      changes:
+        - createIndex:
+            tableName: permaformula_image_cache
+            indexName: permaformula_image_cache_expiry
+            columns:
+              - column:
+                  name: expires_at
+  - changeSet:
+      id: image-cache-003-access-index
+      author: permaformula
+      changes:
+        - createIndex:
+            tableName: permaformula_image_cache
+            indexName: permaformula_image_cache_access
+            columns:
+              - column:
+                  name: last_access_at
+  - changeSet:
+      id: image-cache-004-library-index
+      author: permaformula
+      changes:
+        - sql:
+            sql: CREATE INDEX permaformula_image_cache_library ON permaformula_image_cache (created_at DESC, cache_key DESC) WHERE descriptor IS NOT NULL
+  - changeSet:
+      id: image-cache-005-ubcq-index
+      author: permaformula
+      changes:
+        - createIndex:
+            tableName: permaformula_image_cache
+            indexName: permaformula_image_cache_ubcq
+            columns:
+              - column:
+                  name: ubcq_key

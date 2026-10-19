@@ -1,0 +1,401 @@
+# Container deployment
+
+Copy `.env.example` to `.env`, set distinct strong database admin/application
+passwords, then run `docker compose up --build -d` from the repository root with
+Docker's Linux engine running. The UI, API and images share `127.0.0.1:5000` by
+default. Set `PORT` for the local port and `PERMAFORMULA_HOST` for the public HTTPS
+origin. The optional `separate-origins` profile retains two listeners.
+
+## Five services
+
+The Maven build verifies all four modules. Docker builds separate targets:
+
+- `runtime`: Spring API, UID/GID 10001, no Chromium or GraalJS. Fetches and sanitizes external CSS, prepares HTML, caches SVG and serves HTTP.
+- `renderer`: gRPC service, UID/GID 10002, Chromium and GraalJS. Prestarts isolated formula and HTML worker pools and reuses successful workers. Contains no API application or credentials.
+- `stylesheet-egress`: Squid 7 from Alpine packages, running as `squid`. Its native ACLs allow CONNECT to public port 443 and reject internal, metadata, reserved and transition addresses, including any blocked answer in a mixed DNS result. No port is published, no TLS interception or content cache is used, and access logging is disabled.
+- `ingress`: nginx from Alpine packages, running as `nginx`. Publishes separate API/html-svg listeners and forwards only to the private API. Access logging is disabled to avoid recording formula/permalink queries. Proxy response timeouts are 65 seconds, beyond the API's 60-second deadline; SVG headers are preserved.
+- `cache-db`: PostgreSQL, private to the API on an isolated `cache-private` network,
+  with no published port. A persistent `cache-data` volume stores generated SVGs.
+  The API logs in as the non-superuser `permaformula`; bootstrap admin credentials are
+  provided only to the database container. The database has a 512 MiB container
+  limit, 64 MiB shared buffers and 20 connections; the API pool defaults to four.
+
+## Persistent image cache
+
+Local/IDE runs use embedded SQLite at `.runtime/image-cache.sqlite`, relative to
+the process working directory. SQLite uses WAL and full commit synchronization,
+with one pooled connection. No external database is needed. Tests use memory by
+default; persistence tests use isolated temporary databases.
+
+Both Compose profiles and the runtime image default to PostgreSQL. The database
+volume survives container recreation and ordinary `docker compose down`.
+`docker compose down --volumes` also removes the persistent cache database; the
+commands below use that only for disposable smoke projects. The init script runs
+only on a new database volume; changing `.env` passwords later also requires
+changing the corresponding PostgreSQL roles. Do not repurpose the smoke passwords
+for normal deployments.
+
+The existing `permaformula.image-cache.expire-after-access` (default **60d**) controls
+both memory and database idle TTL. Successful accesses record visits; persistent expiry updates are batched. See
+[cache availability](../docs/cache-availability.md) for expiry grace and outage behavior. Database-clock timestamps survive
+restarts; reads exclude expired rows immediately. Cleanup runs every five minutes,
+deleting expired entries then older entries exceeding the 2 GiB SVG payload budget.
+This is a soft payload budget, not a filesystem quota: indexes, table free space,
+WAL and temporary growth are additional. Database engines reuse freed space;
+deleting entries need not shrink the physical file.
+
+Configuration under `permaformula.image-cache.persistence`:
+
+| Property | Default | Purpose |
+| --- | --- | --- |
+| `backend` | `sqlite` locally, `postgres` in Docker | `sqlite`, `postgres`, or `memory` |
+| `sqlite-path` | `.runtime/image-cache.sqlite` | Local persistent file |
+| `postgres-url` | `jdbc:postgresql://localhost:5432/permaformula` | Compose uses `cache-db:5432` |
+| `username` | `permaformula` | Restricted PostgreSQL application role |
+| `password` | empty locally | Required for PostgreSQL; Compose reads `PERMAFORMULA_CACHE_DB_PASSWORD` |
+| `maximum-pool-size` | `4` | PostgreSQL connection limit; SQLite uses one |
+| `maximum-size` | `2GB` | Persistent UTF-8 SVG payload budget |
+| `cleanup-interval` | `5m` | Background expiry/budget cleanup |
+
+Spring environment variables use the `PERMAFORMULA_IMAGE_CACHE_PERSISTENCE_` prefix
+(for example `...BACKEND=postgres`, `...POSTGRES_URL=jdbc:postgresql://db:5432/permaformula`).
+Liquibase applies the versioned YAML changelog at
+`permaformula-api/src/main/resources/db/changelog/db.changelog-master.yaml` before
+starting the cache, for both SQLite and PostgreSQL. Schema changes use new, ordered Liquibase changesets. Applied changesets and the
+initial baseline remain immutable. Liquibase manages migration history, locking
+and checksums; startup applies pending changes without automatically resetting
+cache or tracking tables. Migration failures stop startup and require an explicit
+migration or operator resolution. Existing data is preserved by default. Memory-only mode runs no migrations. PostgreSQL runs migrations as the restricted application
+role, which owns the cache and Liquibase tables. Only
+successful output is saved, and persisted SVG is revalidated on read. Existing
+versioned keys isolate renderer/sanitizer changes. No cache migration between
+SQLite and PostgreSQL is needed: missing images regenerate from their permalinks.
+
+Database startup/schema failures stop the API instead of silently disabling the
+configured backend. Runtime storage failures retain memory/rendering service;
+expiry refresh cannot be guaranteed during an outage. Diagnostics omit driver
+messages, SQL, content and credentials and are throttled. Requests in one API
+process still share a generation; multiple API processes may independently render
+the same initial miss. A shared database alone is not a distributed render lock.
+
+SQLite persistence/TTL tests run in ordinary Maven verification. The matching
+PostgreSQL tests require a **disposable database** with the `permaformula` role (they
+clear the cache table), `PERMAFORMULA_POSTGRES_TEST_PASSWORD` and:
+
+```bash
+mvn -pl permaformula-api -am "-Dtest=PostgresImageCacheTests" "-Dsurefire.failIfNoSpecifiedTests=false" "-Dpostgres.tests=true" "-Dpostgres.test-url=jdbc:postgresql://localhost:55432/permaformula" test
+```
+
+## Production profiles and image delivery
+
+The default `compose.yaml` is the **single-host production profile**. Set
+`PERMAFORMULA_HOST=https://your-provider-hostname.example` and run:
+
+```sh
+docker compose up --build -d
+```
+
+Terminate HTTPS in front of `127.0.0.1:${PORT:-5000}`. One public hostname serves
+the Builder, API, Swagger and exact `/html-svg` and `/exp-svg` routes. No image port is
+published and `PERMAFORMULA_IMAGE_HOST` is deliberately ignored by this Compose file:
+permalinks always use `PERMAFORMULA_HOST`. A provider-assigned hostname is sufficient;
+buying domains is optional. The repository does not provision production TLS.
+
+Image routes retain the mandatory trusted-ingress marker, strip Cookie,
+Authorization and Proxy-Authorization, and suppress Set-Cookie and
+WWW-Authenticate. GET/HEAD and OPTIONS are allowed; other methods are denied.
+Alternate image paths are rejected by nginx. Requests reaching a selected image
+handler without the trusted marker return 403 before decoding or rendering,
+avoiding same-origin redirect loops. Keep the API container private.
+
+Sanitized SVG responses retain `Content-Security-Policy: sandbox` without
+`allow-scripts` or `allow-same-origin`, restrictive resource directives, `nosniff`
+and `no-referrer`. This prevents an opened SVG document from accessing the
+application origin's DOM/storage in conforming browsers. HTML/CSS sanitization,
+API-side SVG output validation, renderer sandboxing, resource quotas, mandatory
+stylesheet proxy and network isolation remain enabled. The profile is intended
+for the existing anonymous application: same-origin fetches can read SVG text,
+and the browser may send cookies before nginx strips them. It does not provide
+the independent cookie/site boundary of separate domains. Never remove the CSP
+sandbox or put authenticated/user HTML on image routes; reassess the profile if
+sessions, sensitive endpoints or additional user-content formats are introduced.
+
+The previous deployment is preserved as the **separate-origins profile**:
+
+```sh
+docker compose -f compose.separate-origins.yaml up --build -d
+```
+
+Set `PERMAFORMULA_HOST=https://math.example.com` and
+`PERMAFORMULA_IMAGE_HOST=https://math-images.example.net`. Map each HTTPS host only
+to its corresponding localhost listener (`PORT` / `IMAGE_PORT`, default 5000 / 5001).
+Use different registrable domains for independent cookie scope; the image host
+must remain anonymous. API image routes redirect with HTTP 307 preserving queries.
+The image listener exposes only exact `/html-svg` and `/exp-svg`. Anonymous CORS permits
+only the configured API origin; credentialed cross-origin reads remain denied.
+This profile sets `PERMAFORMULA_IMAGE_DELIVERY_SEPARATE_ORIGIN_REQUIRED=true`, which
+fails startup if the origins are equivalent or the delivery boundary is disabled.
+
+Both profiles set `PERMAFORMULA_IMAGE_DELIVERY_REQUIRED=true`, require a trusted
+nginx IP, overwrite image markers and clear them on API routes, and configure
+OpenAPI with the public API origin. Standalone/Eclipse mode defaults the boundary
+to false. Origins must be HTTP(S), without credentials, paths, queries or fragments.
+nginx uses `envsubst` with an explicit variable list; native variables are preserved.
+
+Validate nginx credential/header behavior in both profiles:
+
+```sh
+docker build -f docker/egress/Dockerfile --target ingress -t permaformula-ingress-security .
+bash scripts/tests/docker/test-production-ingress.sh
+bash scripts/tests/docker/test-production-ingress.sh --profile separate-origins
+```
+The renderer has `network_mode: none`. gRPC uses Netty's Unix-domain socket transport with generated Protocol Buffers on `/run/permaformula/render.sock`. The named volume contains only the socket; it is writable in the renderer and read-only in the API. Directory mode 0750 and socket mode 0660 restrict access to renderer group 10002, which is a supplementary API group. Do not mount this volume into other workloads. Plaintext gRPC is confined to this filesystem boundary; neither a renderer TCP port nor host socket is exposed.
+
+External styles remain supported. Apache HttpClient's `DefaultProxyRoutePlanner`
+forces stylesheet downloads, imports and redirects through Squid; failure or denial
+never falls back to a direct route. The HTTPS certificate/hostname is still verified
+by Java against the destination. Squid independently resolves and checks all cached
+destination addresses used for its connection. It uses a deny list rather than a
+negated public-address allowlist, so mixed public/private answers reject the tunnel.
+
+The API joins `api-private` and `cache-private`, internal bridges with gateway mode `isolated`.
+It has no external/default route, published port, or host bridge address. nginx
+provides ingress and Squid provides egress; each joins its own separate external
+network and `api-private`. The renderer still has no network. API-private peers
+are limited to the API and these two proxies; mount no unrelated workloads there.
+This configuration requires Docker Engine with isolated gateway mode (verified on
+28.5.1). Unsupported engines must fail deployment rather than remove this setting:
+an ordinary internal bridge still permits access to the host's bridge address.
+[Docker gateway modes](https://docs.docker.com/engine/network/port-publishing/#gateway-modes),
+[Squid ACLs](https://www.squid-cache.org/Doc/config/acl/).
+
+Compose sets `PERMAFORMULA_STYLESHEET_FETCH_PROXY_REQUIRED=true` and
+`PERMAFORMULA_STYLESHEET_FETCH_PROXY=http://stylesheet-egress:3128`. Missing/invalid
+proxy configuration fails application startup; unavailable/denying proxies fail
+the fetch. Standalone/Eclipse development defaults to direct fetching with the
+existing DNS snapshot validation. To use a managed proxy there, set the same two
+properties (environment variables or Spring configuration). Direct development
+mode does not provide an independent network boundary.
+
+The proxies use a digest-pinned Alpine base and distribution packages, read-only
+filesystems, dropped capabilities and private 32 MiB tmpfs. Squid has 128 MiB memory,
+0.5 CPU, 32 PIDs and an 8,192 file-descriptor limit; nginx has 256 MiB, 0.5 CPU and
+32 PIDs. Keep their packages patched. Other deployment platforms need equivalent mandatory
+proxy routing, network isolation and destination ACLs.
+
+nginx overwrites `X-Forwarded-For` with its socket client address and removes
+`Forwarded` and `X-Real-IP`. Its API-private IP is pinned to
+`PERMAFORMULA_INGRESS_IP` (default `172.30.86.2`) and is the API's only trusted forwarding
+peer. The network subnet is `PERMAFORMULA_API_SUBNET` (default `172.30.86.0/24`), with
+dynamic allocation restricted to `PERMAFORMULA_API_DYNAMIC_RANGE` (default
+`172.30.86.128/25`). Keep the pinned ingress IP inside the subnet and outside the
+dynamic range. Change all three together if they conflict with host networks, and use distinct subnets
+for simultaneous Compose projects. `docker/egress/smoke.env` supplies a separate
+test subnet. Existing deployments need `docker compose down` followed by
+`docker compose up --build -d` to recreate the network when applying these IPAM
+changes. Keep `SERVER_FORWARD_HEADERS_STRATEGY=none`; application or Tomcat
+forwarding rewrites would hide the actual peer from this trust check. An upstream
+load balancer/NAT must preserve client IPs or have an explicitly reviewed nginx
+real-IP configuration; arbitrary incoming forwarded headers are never appended.
+
+## Execution limits
+
+### Ingress connections and slow clients
+
+Native nginx connection accounting is shared across both listeners and uses the
+socket client address, ignoring supplied forwarding headers. Overload returns
+HTTP 429 with `Retry-After: 1`; anonymous image CORS headers remain present.
+These environment variables configure the ingress container:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `PERMAFORMULA_INGRESS_CLIENT_CONNECTIONS` | 64 | Active requests per socket client IP across both listeners |
+| `PERMAFORMULA_INGRESS_TOTAL_CONNECTIONS` | 128 | Active requests across both listeners |
+| `PERMAFORMULA_INGRESS_HEADER_TIMEOUT_SECONDS` | 15 | Time to finish the complete request header |
+| `PERMAFORMULA_INGRESS_BODY_TIMEOUT_SECONDS` | 30 | Idle time between request-body reads |
+| `PERMAFORMULA_INGRESS_SEND_TIMEOUT_SECONDS` | 30 | Idle time between response writes to the client |
+| `PERMAFORMULA_INGRESS_KEEPALIVE_TIMEOUT_SECONDS` | 15 | Idle time between keepalive requests |
+
+Values must be positive decimal integers without leading zeros; invalid settings
+fail startup. Keepalive connections are recycled after 1,000 requests. Request
+bodies are capped at 8 MiB; the existing two 20 MiB large-header buffers preserve
+the generous permalink/request-line allowance. Upstream read/write timeouts remain
+65 seconds, allowing the API's 60-second deadline to finish; client write timeout
+is an idle timeout and does not impose a 30-second total render deadline.
+
+The single worker's 256 socket slots also include upstream sockets and idle or
+incomplete-header clients. Native `limit_conn` counts only requests whose headers
+are complete; header timeout closes partial requests but does not prevent a flood
+of new sockets or simultaneous large-header allocations. With the retained large
+URI allowance, the 256 MiB container can still exhaust memory before all socket
+slots fill. Production TLS/front-door infrastructure must additionally bound
+connections before header parsing and apply a header-memory budget. Body/write
+timeouts are idle limits, so trickling traffic can retain a counted slot. These
+controls bound admitted concurrency and idle waits, not distributed DoS. NAT or
+a load balancer hiding source IPs shares the per-client allowance; review real-IP
+trust at the front door before deployment. Raising concurrency also requires
+reviewing worker socket capacity and container memory.
+
+Run `./scripts/tests/docker/test-ingress-limits.sh` after `docker compose build ingress` to
+exercise the production image with short test-only limits and native nginx
+upstreams. The script creates and removes its own containers/network.
+
+`RENDERER_CONCURRENCY` defaults to 1. The supervisor uses fixed Java workers and a
+bounded FIFO waiting queue, with immediate rejection when admission is full:
+
+| Environment variable | Default | Meaning |
+| --- | --- | --- |
+| `RENDERER_QUEUE_CAPACITY` | 16 | Waiting jobs; 0 disables waiting, maximum 1024 |
+| `RENDERER_QUEUE_WAIT_SECONDS` | 15 | Maximum wait, positive and at most 60 seconds |
+| `RENDERER_QUEUE_MAX_RETAINED_BYTES` | 67108864 | Conservative retained-input budget, capped at 25% of supervisor heap |
+| `RENDERER_WORKER_STARTUP_SECONDS` | 60 | Worker initialization timeout, positive and at most 300 seconds |
+| `RENDERER_WORKER_MAX_JOBS` | 100 | Successful jobs before worker recycling; 1 makes workers single-use |
+
+Each render kind has `RENDERER_CONCURRENCY` prestarted processes, but both pools
+share the same execution concurrency cap. Idle formula workers retain initialized
+GraalJS/MathJax; idle HTML workers retain Chromium. HTML requests use fresh browser
+contexts and temporary documents are removed after each render. Worker pools warm
+asynchronously; listener readiness does not imply all workers have initialized.
+Review the 3 GiB memory and 256 PID limits before increasing concurrency.
+
+The byte budget charges running and waiting requests at three times protobuf
+serialized size plus 1 KiB per job; count and memory admission happen before input
+validation. This does not bound all JVM/transport/output allocations. Startup logs
+report configured and effective budgets. Full admission returns gRPC
+RESOURCE_EXHAUSTED / HTTP 503 with Retry-After: 1 and no-store. Queue expiry returns
+HTTP 504. Cancelled/expired queued jobs are removed and cannot execute later;
+they do not restart the container or interrupt active jobs. Running cancellation
+retains worker/count/byte admission until actual exit.
+
+Both render paths have a 30-second execution maximum (`RENDERER_TIMEOUT_SECONDS`,
+positive and at most five minutes). The renderer service caps total RPC processing
+at execution maximum plus queue wait; the API's `PERMAFORMULA_RENDERING_TIMEOUT`
+defaults to 45s and is further restricted by the remaining 60s API deadline.
+Changing queue/execution limits requires reviewing the API RPC budget too; no stage
+renews an existing deadline. The supervisor terminates job descendants on running
+cancellation, timeout or failure, then replenishes the affected slot. Failed process
+cleanup causes service exit and Compose restarts the container, clearing its PID
+namespace. A supervisor is required when running outside Compose. Worker stdout
+uses bounded length-delimited Protobuf frames with readiness/status bytes; gRPC
+messages are unchanged. Content-free elapsed stage timings are written to stderr.
+
+The API still admits only two unique generations, including renderer waiting,
+and one per client. A default single API therefore normally occupies at most one
+running and one waiting renderer job. The renderer's 16 waiting slots are a shared
+ceiling, not an increase in API preprocessing concurrency. Cached/shared results
+bypass the queue. Review heap, preprocessing/fetch pressure and replica-wide
+client quotas before increasing API admission; a queue adds no rendering capacity.
+
+The API defaults to four preparation operations, two unique image generations and
+two stylesheet batches, with no queue and HTTP 503 on occupied capacity. Configure
+`PERMAFORMULA_API_WORK_PREPARATION_CONCURRENCY`, `PERMAFORMULA_API_WORK_GENERATION_CONCURRENCY`
+and `PERMAFORMULA_API_WORK_FETCH_CONCURRENCY`. `PERMAFORMULA_API_WORK_TIMEOUT` defaults to
+60s across preparation, fetching, shared-image waits and rendering. Cache hits skip
+generation/fetching but decoding and identity preparation still use bounded slots.
+Timeout returns HTTP 504 and interrupts work; non-cooperative DNS/parsers retain
+their slots until exit. These do not forcibly terminate API parsers.
+
+Bucket4j additionally limits each client to 600 requests/minute with a burst of
+120 and 32 concurrent requests, and 60 new render attempts/minute with a burst of
+10 and one concurrent generation. Configure `PERMAFORMULA_RATE_LIMIT_REQUESTS_PER_MINUTE`,
+`REQUEST_BURST`, `REQUEST_CONCURRENCY`, `GENERATIONS_PER_MINUTE`, `GENERATION_BURST`
+and `GENERATION_CONCURRENCY` under that same prefix. Cache hits/shared results
+spend only request tokens; both image endpoints share the render quota. HTTP 429
+includes `Retry-After` and `Cache-Control: no-store`. Client state is capped at
+100,000 identities (`PERMAFORMULA_RATE_LIMIT_MAXIMUM_CLIENTS`) and expires after 1h
+idle (`PERMAFORMULA_RATE_LIMIT_EXPIRE_AFTER_ACCESS`), only after full bucket refill and
+with no active requests/workers. Capacity exhaustion rejects new identities rather
+than resetting existing quotas. Limits are in memory per API instance; replicas
+need a shared Bucket4j backend, and clients behind NAT share quotas. The generation
+slot includes renderer queue waiting, so queued work cannot evade this client cap.
+
+Content and SVG payloads are limited to 16 MiB; the gRPC envelope allows 64 KiB extra. Each job has a 1 GiB JVM heap; the supervisor has 256 MiB. Browser/native allocations are additionally bounded by the container. API decompression and endpoint inputs have separate byte/JSON limits; API admission separately bounds concurrent parsing and preparation. See the [validation inventory](../docs/validation-inventory.md).
+
+Both containers use read-only root filesystems, dropped capabilities, no-new-privileges, private 512 MiB tmpfs, two CPUs and 256 processes/threads. The API has 2 GiB memory, a JVM heap sized at 50% of container memory (approximately 1 GiB), and a cache configured for 256 MiB and capped at 25% of JVM maximum heap; the renderer has 3 GiB memory and private 512 MiB shared memory, with no extra swap. Private `/tmp` mounts permit execution for Playwright and the native Netty epoll library used by Unix gRPC; both remain nosuid/nodev. Logs rotate; core dumps are disabled.
+
+`RENDERER_CHROMIUM_SANDBOX=true` enables the Chromium sandbox. The bundled seccomp profile permits its user namespaces. The Linux host must permit unprivileged user namespaces; verify sandbox operation on the actual deployment host. Never replace a launch failure with privileged mode or an unsandboxed production browser. Images are digest-pinned; maintain JDK/browser/library/base-image updates.
+
+## TCP deployments and development
+
+The renderer also supports gRPC TCP. It binds to `127.0.0.1:9090` by default. Non-loopback binding requires mutual TLS: `RENDERER_BIND_ADDRESS`, `RENDERER_PORT`, `RENDERER_TLS_CERTIFICATE`, `RENDERER_TLS_KEY`, and `RENDERER_TLS_CLIENT_CA`. The API uses `PERMAFORMULA_RENDERING_TARGET`, optional `PERMAFORMULA_RENDERING_TLS_CA`, and the paired `PERMAFORMULA_RENDERING_TLS_CERTIFICATE` / `PERMAFORMULA_RENDERING_TLS_KEY`. TCP uses TLS by default on the API; `PERMAFORMULA_RENDERING_PLAINTEXT=true` is an explicit local-development option.
+
+Remote TCP deployment requires its own private network, authentication, egress and restart policy; Compose's network-none guarantee applies to the Unix-socket setup. Keep the renderer endpoint private: it accepts prepared documents and is not a public sanitization endpoint.
+
+## Verification
+
+`docker compose config --quiet` validates configuration. Check `/exp-svg?formula=x`, then use `/ubcq` to create a styled descriptor, then URL-encode it in an `/html-svg?ubcq=...` image URL. Confirm external styles survive rendering.
+
+Inspect the renderer with `docker inspect`: NetworkMode must be `none`, user 10002, read-only root, resource limits and security options present. `/proc/net/dev` should contain only loopback. Application/browser files must be unwritable. Chromium must launch without `--no-sandbox` and with seccomp active. Repeat these checks on production hosts after runtime upgrades.
+
+For the independent egress smoke test, start a separate project on ports 5017/5018:
+
+```bash
+docker compose -f compose.separate-origins.yaml --env-file docker/egress/smoke.env -p permaformula-egress-smoke up --build -d
+bash scripts/tests/docker/test-egress.sh
+docker compose -p permaformula-egress-smoke down --volumes
+```
+
+The script verifies isolated network membership/default-route absence, direct
+internet denial, public HTTPS success, forbidden IP/port/DNS destinations and mixed
+DNS answers using a test-only dnsmasq fixture. It then renders formula and Bootstrap
+HTML through nginx and checks SVG headers/styles. It removes only fixtures it creates;
+the caller shuts down the separate Compose project. CDN checks require internet
+availability. This is not a complete native-proxy vulnerability or DNS-race audit.
+
+To verify rate limits through nginx, use a fresh project with test-only small
+quotas (do not apply this override to normal deployments):
+
+```bash
+docker compose -f compose.separate-origins.yaml --env-file docker/egress/smoke.env -p permaformula-rate-smoke -f docker/rate-limit/smoke.override.yaml up --build -d
+bash scripts/tests/docker/test-rate-limits.sh
+docker compose -f compose.separate-origins.yaml --env-file docker/egress/smoke.env -p permaformula-rate-smoke -f docker/rate-limit/smoke.override.yaml down --volumes
+```
+
+The script checks HTTP 429 headers, continued cached SVG access after render-token
+exhaustion and that changing incoming forwarding headers cannot grant another
+allowance. The egress and rate-limit projects use the same test port/subnet; shut
+down one before starting the other.
+
+For concurrent renderer queue smoke coverage, use a fresh normal-quota deployment:
+
+```bash
+docker compose -f compose.separate-origins.yaml --env-file docker/egress/smoke.env -p permaformula-queue-smoke up --build -d
+bash scripts/tests/docker/test-render-queue.sh
+docker compose -f compose.separate-origins.yaml --env-file docker/egress/smoke.env -p permaformula-queue-smoke down --volumes
+```
+
+The script starts two independent Docker client identities concurrently, requests
+distinct uncached formulas through the image listener, and requires both SVGs.
+This respects the one-generation-per-client quota. It removes only its own probe
+containers. Maven regressions separately cover queue saturation, retained bytes,
+expiry/cancellation, process termination and active-job isolation.
+
+For delivery-origin verification, use a fresh project with the normal quotas:
+
+```bash
+docker compose -f compose.separate-origins.yaml --env-file docker/egress/smoke.env -p permaformula-delivery-smoke up --build -d
+bash scripts/tests/docker/test-image-delivery.sh
+docker compose -f compose.separate-origins.yaml --env-file docker/egress/smoke.env -p permaformula-delivery-smoke down --volumes
+```
+
+This checks public descriptor creation, cross-origin redirects, route/method/CORS
+restrictions, actual SVG/JPEG headers and forged markers against the private API. A native nginx upstream fixture also checks
+which Cookie/Authorization/Proxy-Authorization headers reach the upstream and
+that Set-Cookie is suppressed on all four image endpoints in both ingress profiles. Fixture ports are ephemeral
+and fixtures are removed on completion; shut down the main test project yourself.
+
+While that deployment is running, the opt-in Chromium regression also verifies
+anonymous API-to-image fetches and rejection of credentialed cross-origin reads:
+
+```bash
+mvn -o -pl permaformula-api -am "-Dtest=ImageDeliveryBrowserTests" "-Dsurefire.failIfNoSpecifiedTests=false" "-Ddelivery.tests=true" test
+```
+
+Override `delivery.api-url` / `delivery.image-url` for other test origins. Run smoke
+scripts and browser probes sequentially: the renderer still admits one job at a time.
+
+The socket healthcheck verifies listener-file presence for startup ordering; it is not a render probe. Monitor render latency/errors/restarts separately. After an abnormal shutdown a stale socket is removed on restart. Use `docker compose down --volumes` to remove this deployment's transient socket volume.
+
+## Future asynchronous work
+
+`render-contract` holds versioned messages and request IDs. `renderer-core` exposes transport-independent `RenderJobExecutor`; a future RabbitMQ consumer can call it without changing the rendering machinery. No broker, job database or asynchronous endpoint is implemented. Future async endpoints need durable job/result state, bounded admission, acknowledgement/retry/idempotency policies and a polling or notification contract. A rendering-indicator image should represent pending state, never replace a completed artifact in the SVG cache.

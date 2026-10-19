@@ -1,0 +1,41 @@
+{
+    "name": "permaformula-ui",
+    "private": true,
+    "version": "1.0.0",
+    "type": "module",
+    "scripts": {
+        "dev": "node scripts/copy-mathjax.mjs && vite --host 127.0.0.1",
+        "build": "node scripts/copy-mathjax.mjs && tsc --noEmit && vite build",
+        "check": "tsc --noEmit",
+        "test": "vitest run",
+        "test:browser": "node scripts/playwright.mjs test",
+        "test:browser:install": "node scripts/playwright.mjs install chromium",
+        "format": "prettier --write src tests scripts *.ts *.json *.html",
+        "format:check": "prettier --check src tests scripts *.ts *.json *.html",
+        "preview": "vite preview --host 127.0.0.1"
+    },
+    "dependencies": {
+        "@codemirror/lang-css": "^6.3.1",
+        "@codemirror/lang-html": "^6.4.9",
+        "@codemirror/language": "^6.11.3",
+        "@codemirror/state": "^6.5.2",
+        "@codemirror/view": "^6.38.6",
+        "@lezer/highlight": "^1.2.3",
+        "codemirror": "^6.0.2",
+        "dompurify": "^3.3.0",
+        "react": "^19.2.0",
+        "react-dom": "^19.2.0"
+    },
+    "devDependencies": {
+        "@playwright/test": "^1.59.0",
+        "@types/node": "^24.0.0",
+        "@types/react": "^19.2.0",
+        "@types/react-dom": "^19.2.0",
+        "@vitejs/plugin-react": "^5.0.4",
+        "jsdom": "^27.0.0",
+        "prettier": "^3.9.9",
+        "typescript": "^5.9.3",
+        "vite": "^7.1.9",
+        "vitest": "^3.2.4"
+    }
+}

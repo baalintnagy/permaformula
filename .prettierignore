@@ -1,0 +1,12 @@
+**/node_modules/
+**/target/
+.runtime/
+frontend/dist/
+frontend/public/
+frontend/test-results/
+frontend/playwright-report/
+renderer-core/src/main/resources/mathjax/
+renderer-core/src/main/resources/svg/renderer.js
+renderer-core/src/main/resources/export-svg.js
+renderer-core/src/main/resources/browser-guards.js
+**/package-lock.json

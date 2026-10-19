@@ -1,0 +1,24 @@
+# Connection admission runs before TLS and URL parsing, in this nginx process.
+stream {
+    access_log off;
+    limit_conn_zone $binary_remote_addr zone=tcp_clients:64k;
+    # A literal constant shares one budget across IPv4/IPv6 and HTTP/HTTPS.
+    limit_conn_zone "permaformula" zone=tcp_total:32k;
+    limit_conn tcp_clients ${PERMAFORMULA_EDGE_CLIENT_CONNECTIONS};
+    limit_conn tcp_total ${PERMAFORMULA_EDGE_TOTAL_CONNECTIONS};
+    limit_conn_log_level info;
+    proxy_protocol on;
+    proxy_connect_timeout 1s;
+    proxy_timeout 75s;
+    proxy_buffer_size 4k;
+    server {
+        listen 8443;
+        listen [::]:8443;
+        proxy_pass unix:/tmp/permaformula-https.sock;
+    }
+    server {
+        listen 8080;
+        listen [::]:8080;
+        proxy_pass unix:/tmp/permaformula-http.sock;
+    }
+}

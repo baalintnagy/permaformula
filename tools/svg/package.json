@@ -1,0 +1,29 @@
+{
+    "name": "permaformula-svg-bundle",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "node build.mjs",
+        "build:formula": "node build.mjs formula",
+        "build:html": "node build.mjs html",
+        "build:guards": "node build.mjs guards",
+        "lint": "eslint .",
+        "test": "node --test *.test.mjs",
+        "format": "prettier --write \"*.js\" \"*.mjs\" package.json .prettierrc.json",
+        "format:check": "prettier --check \"*.js\" \"*.mjs\" package.json .prettierrc.json",
+        "check:bundles": "node build.mjs --check",
+        "check": "npm run lint && npm run format:check && npm test && npm run check:bundles"
+    },
+    "overrides": {
+        "@xmldom/xmldom": "0.9.12"
+    },
+    "devDependencies": {
+        "@eslint/js": "10.0.1",
+        "esbuild": "0.25.12",
+        "eslint": "10.12.0",
+        "globals": "17.13.0",
+        "html-to-image": "1.11.13",
+        "mathjax-full": "3.2.2",
+        "prettier": "3.9.9"
+    }
+}

@@ -1,0 +1,207 @@
+services:
+  cache-db:
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    user: postgres
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [cache-private]
+    volumes:
+      - cache-data:/var/lib/postgresql/data
+      - ./docker/postgres/init-cache.sh:/docker-entrypoint-initdb.d/10-cache.sh:ro
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777
+      - /var/run/postgresql:rw,nosuid,nodev,noexec,size=16m,mode=1777
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1.0
+    pids_limit: 64
+    shm_size: 64m
+    environment:
+      POSTGRES_DB: ${PERMAFORMULA_CACHE_DATABASE:-permaformula}
+      POSTGRES_USER: cache_owner
+      POSTGRES_PASSWORD: '${PERMAFORMULA_CACHE_DB_ADMIN_PASSWORD:?Set the database admin password in .env}'
+      PERMAFORMULA_CACHE_DB_PASSWORD: '${PERMAFORMULA_CACHE_DB_PASSWORD:?Set the database application password in .env}'
+      POSTGRES_INITDB_ARGS: '--auth-host=scram-sha-256 --auth-local=trust'
+    command:
+      [
+        postgres,
+        -c,
+        shared_buffers=64MB,
+        -c,
+        max_connections=20,
+        -c,
+        log_statement=none,
+        -c,
+        log_min_error_statement=panic,
+      ]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U permaformula -d ${PERMAFORMULA_CACHE_DATABASE:-permaformula}']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: '3' }
+
+  stylesheet-egress:
+    build: { context: ., dockerfile: docker/egress/Dockerfile, target: egress }
+    init: true
+    restart: on-failure
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [api-private, stylesheet-public]
+    tmpfs: ['/tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777']
+    mem_limit: 128m
+    memswap_limit: 128m
+    cpus: 0.5
+    pids_limit: 32
+    ulimits:
+      core: 0
+      nofile: { soft: 8192, hard: 8192 }
+    healthcheck:
+      test: [CMD-SHELL, 'nc -z 127.0.0.1 3128']
+      interval: 5s
+      timeout: 2s
+      retries: 3
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: '3' }
+  ingress:
+    build: { context: ., dockerfile: docker/egress/Dockerfile, target: ingress }
+    depends_on:
+      permaformula: { condition: service_started }
+    init: true
+    restart: on-failure
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks:
+      api-private:
+        ipv4_address: '${PERMAFORMULA_INGRESS_IP:-172.30.86.2}'
+      ingress-public: {}
+    tmpfs: ['/tmp:rw,nosuid,nodev,noexec,size=32m,mode=1777']
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.5
+    pids_limit: 32
+    ports:
+      - '127.0.0.1:${PORT:-5000}:8080'
+      - '127.0.0.1:${IMAGE_PORT:-5001}:8081'
+    environment:
+      PERMAFORMULA_HOST: '${PERMAFORMULA_HOST:-http://localhost:${PORT:-5000}}'
+      PERMAFORMULA_IMAGE_HOST: '${PERMAFORMULA_IMAGE_HOST:-http://localhost:${IMAGE_PORT:-5001}}'
+      PERMAFORMULA_DEPLOYMENT_PROFILE: 'separate-origins'
+      PERMAFORMULA_INGRESS_CLIENT_CONNECTIONS: '${PERMAFORMULA_INGRESS_CLIENT_CONNECTIONS:-64}'
+      PERMAFORMULA_INGRESS_TOTAL_CONNECTIONS: '${PERMAFORMULA_INGRESS_TOTAL_CONNECTIONS:-128}'
+      PERMAFORMULA_INGRESS_HEADER_TIMEOUT_SECONDS: '${PERMAFORMULA_INGRESS_HEADER_TIMEOUT_SECONDS:-15}'
+      PERMAFORMULA_INGRESS_BODY_TIMEOUT_SECONDS: '${PERMAFORMULA_INGRESS_BODY_TIMEOUT_SECONDS:-30}'
+      PERMAFORMULA_INGRESS_SEND_TIMEOUT_SECONDS: '${PERMAFORMULA_INGRESS_SEND_TIMEOUT_SECONDS:-30}'
+      PERMAFORMULA_INGRESS_KEEPALIVE_TIMEOUT_SECONDS: '${PERMAFORMULA_INGRESS_KEEPALIVE_TIMEOUT_SECONDS:-15}'
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: '3' }
+  renderer:
+    build:
+      context: .
+      target: renderer
+    init: true
+    restart: on-failure
+    network_mode: none
+    environment:
+      RENDERER_QUEUE_CAPACITY: '${RENDERER_QUEUE_CAPACITY:-16}'
+      RENDERER_QUEUE_MAX_RETAINED_BYTES: '${RENDERER_QUEUE_MAX_RETAINED_BYTES:-67108864}'
+      RENDERER_QUEUE_WAIT_SECONDS: '${RENDERER_QUEUE_WAIT_SECONDS:-15}'
+    user: '10002:10002'
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./docker/seccomp-chromium.json
+    volumes:
+      - render-socket:/run/permaformula
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,size=512m,mode=1777
+    shm_size: 512m
+    mem_limit: 3g
+    memswap_limit: 3g
+    cpus: 2.0
+    pids_limit: 256
+    ulimits:
+      core: 0
+      nofile: { soft: 8192, hard: 8192 }
+    healthcheck:
+      test: [CMD-SHELL, 'test -S /run/permaformula/render.sock']
+      interval: 5s
+      timeout: 2s
+      retries: 3
+      start_period: 10s
+    stop_grace_period: 10s
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: '3' }
+  permaformula:
+    build:
+      context: .
+      target: runtime
+    depends_on:
+      cache-db: { condition: service_healthy }
+      renderer: { condition: service_healthy }
+      stylesheet-egress: { condition: service_healthy }
+    init: true
+    user: '10001:10001'
+    group_add: ['10002']
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - render-socket:/run/permaformula:ro
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,size=512m,mode=1777
+    mem_limit: 2g
+    memswap_limit: 2g
+    cpus: 2.0
+    pids_limit: 256
+    ulimits:
+      core: 0
+      nofile: { soft: 8192, hard: 8192 }
+    networks: [api-private, cache-private]
+    environment:
+      PORT: '5000'
+      PERMAFORMULA_IMAGE_CACHE_PERSISTENCE_BACKEND: postgres
+      PERMAFORMULA_ADMIN_PASSWORD: '${PERMAFORMULA_ADMIN_PASSWORD:-}'
+      PERMAFORMULA_IMAGE_CACHE_PERSISTENCE_POSTGRES_URL: jdbc:postgresql://cache-db:5432/${PERMAFORMULA_CACHE_DATABASE:-permaformula}
+      PERMAFORMULA_IMAGE_CACHE_PERSISTENCE_USERNAME: permaformula
+      PERMAFORMULA_IMAGE_CACHE_PERSISTENCE_PASSWORD: '${PERMAFORMULA_CACHE_DB_PASSWORD:?Set the database application password in .env}'
+      PERMAFORMULA_HOST: '${PERMAFORMULA_HOST:-http://localhost:${PORT:-5000}}'
+      PERMAFORMULA_IMAGE_HOST: '${PERMAFORMULA_IMAGE_HOST:-http://localhost:${IMAGE_PORT:-5001}}'
+      PERMAFORMULA_STYLESHEET_FETCH_PROXY_REQUIRED: 'true'
+      PERMAFORMULA_IMAGE_DELIVERY_REQUIRED: 'true'
+      PERMAFORMULA_IMAGE_DELIVERY_SEPARATE_ORIGIN_REQUIRED: 'true'
+      PERMAFORMULA_STYLESHEET_FETCH_PROXY: 'http://stylesheet-egress:3128'
+      PERMAFORMULA_RATE_LIMIT_TRUSTED_PROXIES: '${PERMAFORMULA_INGRESS_IP:-172.30.86.2}'
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: '3' }
+volumes:
+  cache-data:
+  render-socket:
+networks:
+  api-private:
+    internal: true
+    ipam:
+      config:
+        - subnet: '${PERMAFORMULA_API_SUBNET:-172.30.86.0/24}'
+          ip_range: '${PERMAFORMULA_API_DYNAMIC_RANGE:-172.30.86.128/25}'
+    driver_opts:
+      com.docker.network.bridge.gateway_mode_ipv4: isolated
+  cache-private:
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.gateway_mode_ipv4: isolated
+  stylesheet-public:
+  ingress-public:

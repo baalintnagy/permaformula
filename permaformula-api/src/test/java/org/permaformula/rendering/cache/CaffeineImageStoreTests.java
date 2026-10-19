@@ -1,0 +1,193 @@
+package org.permaformula.rendering.cache;
+
+import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.io.IOException;
+import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.IntStream;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
+import org.permaformula.rendering.WorkDeadline;
+import org.springframework.util.unit.DataSize;
+import org.springframework.web.server.ResponseStatusException;
+
+class CaffeineImageStoreTests {
+
+    @Test
+    void sharedFailurePreservesOriginalExceptionAndAllowsRetry() throws Exception {
+        var store = store(65536, new AtomicLong());
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var failure = new IOException("private-failure",
+            new IllegalArgumentException("private-cause"));
+        try (var callers = Executors.newFixedThreadPool(2)) {
+            var owner = callers.submit(() -> store.getOrGenerate("failed", () -> {
+                entered.countDown();
+                try {
+                    assertTrue(release.await(5, TimeUnit.SECONDS));
+                } catch (InterruptedException interrupted) {
+                    throw new IOException(interrupted);
+                }
+                throw failure;
+            }));
+            try {
+                assertTrue(entered.await(2, TimeUnit.SECONDS));
+                var waiter = callers.submit(() -> store.getOrGenerate("failed", () -> {
+                    throw new AssertionError("Must share the active generation");
+                }));
+                await()
+                    .atMost(Duration.ofSeconds(2))
+                    .until(() -> store.stats().hitCount() == 1);
+                release.countDown();
+                assertSame(failure, assertThrows(ExecutionException.class,
+                    () -> owner.get(2, TimeUnit.SECONDS)).getCause());
+                assertSame(failure, assertThrows(ExecutionException.class,
+                    () -> waiter.get(2, TimeUnit.SECONDS)).getCause());
+                assertEquals("recovered", store.getOrGenerate("failed", () -> "recovered"));
+                assertEquals(1, store.stats().loadFailureCount());
+            } finally {
+                release.countDown();
+            }
+        }
+    }
+
+    @Test
+    void cacheBudgetLeavesHeapHeadroomAndHonorsSmallerConfiguration() {
+        var properties = new ImageCacheProperties(DataSize.ofMegabytes(128), Duration.ofHours(1));
+        assertEquals(DataSize.ofMegabytes(64).toBytes(),
+            properties.effectiveMaximumBytes(DataSize.ofMegabytes(256).toBytes()));
+        assertEquals(DataSize.ofMegabytes(128).toBytes(),
+            properties.effectiveMaximumBytes(DataSize.ofMegabytes(1024).toBytes()));
+        assertThrows(IllegalArgumentException.class, () -> properties.effectiveMaximumBytes(0));
+    }
+
+    @Test
+    void concurrentRequestsShareOneGeneration() throws Exception {
+        var store = store(65536, new AtomicLong());
+        var calls = new AtomicInteger();
+        var ready = new CountDownLatch(8);
+        var start = new CountDownLatch(1);
+        try (var workers = Executors.newFixedThreadPool(8)) {
+            var results = IntStream.range(0, 8)
+                .mapToObj(_ -> workers.submit(() -> {
+                    ready.countDown();
+                    assertTrue(start.await(5, TimeUnit.SECONDS));
+                    return store.getOrGenerate("same", () -> {
+                        calls.incrementAndGet();
+                        return "<svg/>";
+                    });
+                }))
+                .toList();
+            assertTrue(ready.await(5, TimeUnit.SECONDS));
+            start.countDown();
+            assertAll(results.stream()
+                .<Executable>map(
+                    result -> () -> assertEquals("<svg/>", result.get(5, TimeUnit.SECONDS))));
+        }
+        assertEquals(1, calls.get());
+        assertEquals(1, store.stats().loadSuccessCount());
+    }
+
+    @Test
+    void failuresAreNotCachedAndCheckedExceptionsArePreserved() throws Exception {
+        var store = store(65536, new AtomicLong());
+        var failure = new IOException("render failed");
+        assertSame(failure, assertThrows(IOException.class, () -> store.getOrGenerate("key", () -> {
+            throw failure;
+        })));
+        assertThrows(IllegalArgumentException.class, () -> store.getOrGenerate("key", () -> {
+            throw new IllegalArgumentException("bad formula");
+        }));
+        assertEquals("success", store.getOrGenerate("key", () -> "success"));
+    }
+
+    @Test
+    void expiredContentIsRegeneratedWithoutSleeping() throws Exception {
+        var time = new AtomicLong();
+        var store = store(65536, time);
+        assertEquals("old", store.getOrGenerate("key", () -> "old"));
+        time.set(Duration.ofHours(1).toNanos());
+        assertEquals("new", store.getOrGenerate("key", () -> "new"));
+    }
+
+    @Test
+    void cacheHitsResetTheFullConfiguredTtl() throws Exception {
+        var time = new AtomicLong();
+        var store = store(65536, time);
+        assertEquals("original", store.getOrGenerate("key", () -> "original"));
+        time.set(Duration.ofMinutes(45).toNanos());
+        assertEquals("original", store.getOrGenerate("key", () -> {
+            throw new AssertionError("Entry should still be cached");
+        }));
+        // Beyond the original TTL, but within one TTL of the previous hit.
+        time.set(Duration.ofMinutes(90).toNanos());
+        assertEquals("original", store.getOrGenerate("key", () -> {
+            throw new AssertionError("Hit must extend expiry");
+        }));
+        time.set(Duration.ofMinutes(151).toNanos());
+        assertEquals("regenerated", store.getOrGenerate("key", () -> "regenerated"));
+        assertEquals(2, store.stats().loadSuccessCount());
+    }
+
+    @Test
+    void oversizedImagesAreReturnedButNotRetained() throws Exception {
+        var store = store(256, new AtomicLong());
+        var calls = new AtomicInteger();
+        assertAll(IntStream.range(0, 2).mapToObj(_ -> (Executable) () -> {
+            assertEquals("svg".repeat(1000), store.getOrGenerate("key", () -> {
+                calls.incrementAndGet();
+                return "svg".repeat(1000);
+            }));
+            // Caffeine eviction maintenance is asynchronous; force it for this assertion.
+            store.cleanUp();
+        }));
+        assertEquals(2, calls.get());
+    }
+
+    private static CaffeineImageStore store(long bytes, AtomicLong time) {
+        return new CaffeineImageStore(
+            new ImageCacheProperties(DataSize.ofBytes(bytes), Duration.ofHours(1)), time::get);
+    }
+
+    @Test
+    void duplicateWaiterTimesOutWithoutCancellingOrReplacingSharedGeneration() throws Exception {
+        var store = store(65536, new AtomicLong());
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        try (var caller = Executors.newSingleThreadExecutor()) {
+            var active = caller.submit(() -> store.getOrGenerate("same", () -> {
+                entered.countDown();
+                try {
+                    release.await();
+                } catch (InterruptedException interrupted) {
+                    throw new IOException(interrupted);
+                }
+                return "done";
+            }));
+            try {
+                assertTrue(entered.await(2, TimeUnit.SECONDS));
+                try (var _ = WorkDeadline.open(Duration.ofMillis(100))) {
+                    assertEquals(504, assertThrows(ResponseStatusException.class,
+                        () -> store.getOrGenerate("same", () -> {
+                            throw new AssertionError("duplicate generation");
+                        }))
+                        .getStatusCode().value());
+                }
+            } finally {
+                release.countDown();
+            }
+            assertEquals("done", active.get(2, TimeUnit.SECONDS));
+            assertEquals("done", store.getOrGenerate("same", () -> {
+                throw new AssertionError("must remain cached");
+            }));
+        }
+    }
+}
