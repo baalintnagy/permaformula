@@ -5,6 +5,91 @@ const svg =
 const ubcq = 'H4sI+a/b+/==';
 const permalink = 'http://localhost:8086/html-svg?ubcq=' + encodeURIComponent(ubcq);
 
+test('formula preview fades themes without replacing its document', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'no-preference' });
+    await page.goto('/');
+    const preview = page.frameLocator('iframe[title="Formula live preview"]');
+    await expect(preview.locator('svg')).toBeVisible();
+    await preview.locator('html').evaluate((element) => element.setAttribute('data-test', 'same'));
+    for (const theme of ['dark', 'light']) {
+        await page.getByRole('button', { name: `Switch to ${theme} theme` }).click();
+        const root = preview.locator('html');
+        await expect(root).toHaveAttribute('data-theme', theme);
+        const colors = await root.evaluate((element) => {
+            const animations = element.getAnimations();
+            const duration = animations.map((animation) => animation.effect?.getTiming().duration);
+            for (const animation of animations) {
+                animation.pause();
+                animation.currentTime = 400;
+            }
+            return { duration, background: getComputedStyle(element).backgroundColor };
+        });
+        expect(colors.duration).toContain(800);
+        expect(colors.background).not.toBe('rgb(20, 21, 26)');
+        expect(colors.background).not.toBe('rgb(231, 231, 236)');
+        await root.evaluate((element) =>
+            element.getAnimations().forEach((animation) => animation.finish()),
+        );
+        await expect(root).toHaveCSS(
+            'background-color',
+            theme === 'dark' ? 'rgb(20, 21, 26)' : 'rgb(231, 231, 236)',
+        );
+        await expect(root).toHaveAttribute('data-test', 'same');
+    }
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.getByRole('button', { name: 'Switch to dark theme' }).click();
+    await expect(preview.locator('html')).toHaveCSS('background-color', 'rgb(20, 21, 26)');
+    expect(
+        await preview.locator('html').evaluate((element) => element.getAnimations().length),
+    ).toBe(0);
+});
+
+test('formula updates do not create temporary outer scrollbars', async ({ page }) => {
+    await page.goto('/');
+    const preview = page.locator('.formula-preview .preview-scroll');
+    await expect(
+        page.frameLocator('iframe[title="Formula live preview"]').locator('svg'),
+    ).toBeVisible();
+    for (const width of [1280, 390]) {
+        await page.setViewportSize({ width, height: 844 });
+        await preview.evaluate((element) => {
+            const samples: boolean[] = [];
+            const sample = () => {
+                samples.push(
+                    element.scrollHeight > element.clientHeight ||
+                        element.scrollWidth > element.clientWidth,
+                );
+                if (element.hasAttribute('data-sampling')) {
+                    requestAnimationFrame(sample);
+                }
+            };
+            element.setAttribute('data-sampling', 'true');
+            (element as HTMLElement & { overflowSamples: boolean[] }).overflowSamples = samples;
+            requestAnimationFrame(sample);
+        });
+        for (const formula of ['x + 1', 'x + 12', 'x + 123']) {
+            await page
+                .getByRole('textbox', { name: 'AsciiMath formula', exact: true })
+                .fill(formula);
+            await expect
+                .poll(async () =>
+                    (
+                        await page
+                            .locator('iframe[title="Formula live preview"]')
+                            .getAttribute('srcdoc')
+                    )?.includes(`"formula":${JSON.stringify(formula)},`),
+                )
+                .toBe(true);
+        }
+        const samples = await preview.evaluate((element) => {
+            element.removeAttribute('data-sampling');
+            return (element as HTMLElement & { overflowSamples: boolean[] }).overflowSamples;
+        });
+        expect(samples.length).toBeGreaterThan(0);
+        expect(samples.some(Boolean)).toBe(false);
+    }
+});
+
 test('each source editor has an independent top zoom control', async ({ page }) => {
     await page.goto('/');
     const card = page.locator('.expression-editor-panel');

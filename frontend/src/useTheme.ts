@@ -35,7 +35,17 @@ export function useTheme() {
         return () => systemTheme.removeEventListener('change', update);
     }, [themeChoice]);
     useEffect(() => {
-        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        const root = document.documentElement;
+        const theme = dark ? 'dark' : 'light';
+        if (root.dataset.theme && root.dataset.theme !== theme) {
+            root.classList.add('theme-transition');
+        }
+        root.dataset.theme = theme;
+        const timer = window.setTimeout(() => root.classList.remove('theme-transition'), 850);
+        return () => {
+            window.clearTimeout(timer);
+            root.classList.remove('theme-transition');
+        };
     }, [dark]);
     return { dark, setThemeChoice };
 }

@@ -39,6 +39,20 @@
 * {
     box-sizing: border-box;
 }
+@media (prefers-reduced-motion: no-preference) {
+    :root.theme-transition,
+    :root.theme-transition *,
+    :root.theme-transition *::before,
+    :root.theme-transition *::after {
+        transition:
+            color 800ms ease,
+            background-color 800ms ease,
+            border-color 800ms ease,
+            box-shadow 800ms ease,
+            fill 800ms ease,
+            stroke 800ms ease !important;
+    }
+}
 html {
     scroll-behavior: smooth;
     scroll-padding-top: 90px;

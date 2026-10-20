@@ -83,9 +83,17 @@ export function previewDocument(
     return `<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="${escapeHtml(csp)}">
     <style>${formula !== undefined ? `html{color-scheme:${dark ? 'dark' : 'light'};background:${dark ? '#14151a' : '#e7e7ec'};color:${dark ? '#e4e9f4' : '#172033'}}body{color:inherit;margin:0;padding:16px;box-sizing:border-box;min-height:100vh}#formula-preview{display:flex;align-items:center;justify-content:center;min-height:calc(100vh - 32px);width:max-content;min-width:100%}#formula-preview svg{max-width:none;height:auto}` : 'html{color-scheme:light;background:white;color:black}'}</style>
     ${links}<style id="user-css"></style>
+    ${formula !== undefined ? `<style>html[data-theme='light']{color-scheme:light;background:#e7e7ec;color:#172033}html[data-theme='dark']{color-scheme:dark;background:#14151a;color:#e4e9f4}@media(prefers-reduced-motion:no-preference){html.theme-transition{transition:background-color 800ms ease,color 800ms ease}}</style>` : ''}
     <script nonce="${nonce}">
       const payload=${payload};
       const loaded=new Promise(resolve=>window.addEventListener('load',resolve,{once:true}));
+      window.addEventListener('message',event=>{
+        if(event.source!==parent || event.data?.type!=='permaformula-theme' || payload.formula===undefined){return;}
+        if(typeof event.data.dark!=='boolean'){return;}
+        const root=document.documentElement;
+        root.classList.toggle('theme-transition',event.data.animate===true);
+        root.dataset.theme=event.data.dark?'dark':'light';
+      });
       window.addEventListener('message',event=>{
         if(event.source!==parent || event.data?.type!=='permaformula-zoom' || payload.formula===undefined)return;
         const zoom=event.data.zoom;

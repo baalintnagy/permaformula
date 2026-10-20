@@ -48,10 +48,9 @@ export function Preview({
                 css,
                 styleRefs: JSON.parse(refsIdentity),
                 imageWidth,
-                dark,
                 externalStylesAllowed: stylesAllowed,
             }),
-        [formula, html, css, refsIdentity, imageWidth, dark, reload, stylesAllowed],
+        [formula, html, css, refsIdentity, imageWidth, reload, stylesAllowed],
     );
 
     useEffect(() => {
@@ -119,6 +118,16 @@ export function Preview({
         }
     }, [zoom, active, pending, formula]);
     useEffect(() => {
+        if (formula !== undefined) {
+            for (const [source, frame] of frames.current) {
+                frame.contentWindow?.postMessage(
+                    { type: 'permaformula-theme', dark, animate: source === active },
+                    '*',
+                );
+            }
+        }
+    }, [dark, active, pending, formula]);
+    useEffect(() => {
         if (!pending || status !== 'loading') {
             return;
         }
@@ -174,12 +183,16 @@ export function Preview({
                                 sandbox="allow-scripts"
                                 referrerPolicy="no-referrer"
                                 srcDoc={source}
-                                onLoad={(event) =>
+                                onLoad={(event) => {
                                     event.currentTarget.contentWindow?.postMessage(
                                         { type: 'permaformula-zoom', zoom },
                                         '*',
-                                    )
-                                }
+                                    );
+                                    event.currentTarget.contentWindow?.postMessage(
+                                        { type: 'permaformula-theme', dark, animate: false },
+                                        '*',
+                                    );
+                                }}
                                 style={{
                                     ...(formula === undefined
                                         ? { width: imageWidth || 500, zoom: zoom / 100 }
@@ -187,6 +200,8 @@ export function Preview({
                                     ...(source !== active
                                         ? {
                                               position: 'absolute',
+                                              top: 0,
+                                              left: 0,
                                               visibility: 'hidden',
                                               pointerEvents: 'none',
                                           }
