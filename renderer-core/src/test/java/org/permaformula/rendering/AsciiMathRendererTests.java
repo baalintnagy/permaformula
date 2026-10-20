@@ -22,6 +22,16 @@ import org.xml.sax.InputSource;
 
 class AsciiMathRendererTests {
     @Test
+    void rendersDynamicFontGlyphsWithoutAModuleLoader() throws Exception {
+        try (var renderer = new AsciiMathRenderer()) {
+            String svg = renderer.render("↝");
+            assertTrue(svg.contains("data-c=\"219D\""));
+            assertTrue(parse(svg).getElementsByTagNameNS("http://www.w3.org/2000/svg", "path")
+                .getLength() > 0);
+        }
+    }
+
+    @Test
     void configuredPolicyReachesGraalMathJaxAndRejectsExpandedTrees() throws Exception {
         var policy = ComplexityPolicy.load(new Properties(),
             Map.of("PERMAFORMULA_COMPLEXITY_MATH_NODES", "20"));

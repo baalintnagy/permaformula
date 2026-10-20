@@ -44,7 +44,7 @@ async function main(args) {
         '/v3/api-docs',
         '/exp-svg;ignored?formula=x',
         '/',
-        '/mathjax/tex-svg.js',
+        '/mathjax/startup.js',
     ]) {
         status(await request(images + path), 404);
     }
@@ -59,7 +59,7 @@ async function main(args) {
     status(builder, 200);
     assert.match(builder.text, /PermaFormula/);
     assert.match(builder.headers['content-type'], /^text\/html/);
-    status(await request(`${api}/mathjax/tex-svg.js`), 200);
+    status(await request(`${api}/mathjax/startup.js`), 200);
     for (const path of ['/decode?ubcq=bad', '/url?formula=x', '/url-encode?text=x']) {
         status(await request(api + path), 404);
     }

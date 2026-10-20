@@ -2,6 +2,11 @@
 
 Static React/TypeScript UI for the existing Java API. Node.js 24 is used only for development and builds. There is no frontend runtime server in production.
 
+Live previews use the renderer's locally bundled MathJax 4.1.3, including its
+integrated AsciiMath input and New Computer Modern SVG glyphs. No CDN is used.
+Rebuild `tools/svg` after changing MathJax dependencies, then rebuild the frontend
+to copy the matching browser components and font chunks.
+
 ## Development
 
 The development runtime connects to the Java services launched in Eclipse. It runs independently of Docker and reloads frontend changes immediately.
@@ -81,7 +86,7 @@ After building the frontend, `mvn -o -pl permaformula-api -am '-Dtest=BuilderUiT
 ## Preview and delivery
 
 - Formula URLs are encoded exactly once by `URLSearchParams`. `/url-encode` is never called.
-- MathJax 3.2.2 assets are copied from the renderer's checked-in distribution during dev/build, with its license. The checked-in distribution also includes provenance. No CDN or duplicate math engine dependency.
+- MathJax 4.1.3 assets are copied from the renderer's checked-in distribution during dev/build, with its license and local SVG font chunks. The checked-in distribution also includes provenance. No CDN or duplicate math engine dependency.
 - User HTML is sanitized with DOMPurify, then placed in an opaque-origin iframe (`sandbox="allow-scripts"`, without `allow-same-origin`). Only nonce-authorized preview code and bundled MathJax can execute. External HTTPS CSS/fonts can load; images, scripts supplied by the user, forms, navigation, and API requests are blocked.
 - CSS is assigned as text to a stylesheet, never interpolated into HTML. App theme changes do not alter the white image canvas.
 - External stylesheets and fonts wait for **Load styles** before the live preview downloads them. The control hides after clicking and returns when stylesheet references or external CSS imports/font URLs change. Its hint explains that third-party hosts can observe the browser's IP address and request timing. The Java API fetches and validates stylesheets separately when rendering; the generated server image is authoritative.

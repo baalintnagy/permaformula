@@ -6,7 +6,10 @@ import { waitForAssets } from './browser-assets.js';
 const renderer = { state: 'loading', svg: null, error: null };
 window.PermaFormulaRenderer = renderer;
 window.MathJax = {
-    loader: { load: ['input/asciimath', 'ui/safe'] },
+    loader: {
+        load: ['input/tex', 'input/asciimath', 'output/svg', 'ui/safe', 'a11y/assistive-mml'],
+    },
+    output: { fontPath: '/mathjax/fonts/%%FONT%%-font', linebreaks: { inline: false } },
     options: safeMathOptions(),
     startup: {
         ready() {

@@ -1,6 +1,6 @@
 # SVG bundles
 
-This bundles MathJax 3.2.2's [AsciiMath](https://asciimath.org/) input, SVG output, and lightweight DOM
+This bundles MathJax 4.1.3's [AsciiMath](https://asciimath.org/) input, SVG output, and lightweight DOM
 adapter into a script for GraalJS. No browser, Node process, network access,
 or JavaScript host access is needed at runtime.
 
@@ -19,6 +19,18 @@ npm run build
 ```
 
 MathJax's upstream license is in `renderer-core/src/main/resources/mathjax/LICENSE`.
+
+`@mathjax/src`, `mathjax` and `@mathjax/mathjax-newcm-font` are pinned together.
+MathJax supplies the integrated AsciiMath parser; there is no separate standalone
+AsciiMath dependency. The browser renderer and live previews load `startup.js` with
+explicit input, SVG, safe-mode and assistive-MathML components. Font glyph chunks
+are served locally from `mathjax/fonts/`, with no CDN dependency. Inline equation
+breaking is disabled to retain the existing single-equation preview and zoom behavior.
+
+The GraalJS bundle includes all New Computer Modern SVG glyph tables at build time,
+so rendering remains synchronous without a module loader or network access.
+`mathjax-assets.mjs` replaces the generated browser distribution during a full build;
+`check:bundles` also verifies the bundled assets against the installed packages.
 
 `export-styled-svg.js` is the source adapter for html-to-image 1.11.13. Its bundled
 output is `renderer-core/src/main/resources/export-svg.js`; edit the adapter and

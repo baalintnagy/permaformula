@@ -380,6 +380,7 @@ test('library viewers zoom independently without opening the editor', async ({ p
     }
 });
 test('library syntax colors match Builder HTML and CSS in both themes', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     const id = 'c'.repeat(64);
     const item = {
         id,
@@ -464,6 +465,7 @@ test('library syntax colors match Builder HTML and CSS in both themes', async ({
 });
 
 test('expression syntax matches the editor in public and admin libraries', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     const id = 'f'.repeat(64);
     const formula = 'sqrt(x^2) + pi = "area"';
     const item = { id, ubcq: id, kind: 'formula', descriptor: { forumla: formula }, createdAt: 1 };
@@ -496,6 +498,7 @@ test('expression syntax matches the editor in public and admin libraries', async
         await expect(
             page.getByRole('textbox', { name: 'AsciiMath formula', exact: true }),
         ).toContainText(formula);
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
         const expected = await tokens('.editor-asciimath');
         expect(expected.map((token) => token.text)).toEqual(
             expect.arrayContaining(['sqrt', '2', 'pi', '"area"']),

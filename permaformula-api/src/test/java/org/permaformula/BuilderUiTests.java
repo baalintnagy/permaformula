@@ -49,7 +49,7 @@ class BuilderUiTests {
             assertEquals(200, index.statusCode());
             assertTrue(index.body().contains("PermaFormula"));
             assertTrue(index.body().contains("/assets/"));
-            for (String asset : java.util.List.of("/mathjax/tex-svg.js",
+            for (String asset : java.util.List.of("/mathjax/startup.js",
                 "/mathjax/input/asciimath.js", "/mathjax/ui/safe.js")) {
                 var response = client.send(
                     HttpRequest.newBuilder(URI.create(origin + asset)).build(),

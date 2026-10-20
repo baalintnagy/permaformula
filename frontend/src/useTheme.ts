@@ -39,6 +39,8 @@ export function useTheme() {
         const theme = dark ? 'dark' : 'light';
         if (root.dataset.theme && root.dataset.theme !== theme) {
             root.classList.add('theme-transition');
+            // Commit the starting colors before changing theme, even on a fast first click.
+            void getComputedStyle(root).backgroundColor;
         }
         root.dataset.theme = theme;
         const timer = window.setTimeout(() => root.classList.remove('theme-transition'), 850);

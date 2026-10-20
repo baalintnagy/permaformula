@@ -205,7 +205,7 @@ class BrowserRenderingTests {
         String template;
         try (var input = getClass().getResourceAsStream("/wrapper.html")) {
             template = new String(input.readAllBytes(), StandardCharsets.UTF_8)
-                .replace("/mathjax/tex-svg.js", "/mathjax/missing.js");
+                .replace("/mathjax/startup.js", "/mathjax/missing.js");
         }
         try (var assets = new RenderAssets();
             var renderer = new ChromiumRenderer(new BrowserSettings(

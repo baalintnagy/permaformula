@@ -81,6 +81,11 @@ function decodeSvg(dataUrl) {
 }
 
 function normalizeSvg(svg) {
+    // MathJax 4 uses this attribute for its stylesheet selectors. The clone already
+    // contains the computed styles, so the exported image does not need it.
+    svg.querySelectorAll('mjx-container').forEach((node) => {
+        node.removeAttribute('overflow');
+    });
     // The library emits this obsolete SVG 1.1 attribute; no external resources are supported.
     svg.querySelectorAll('foreignObject').forEach((node) => {
         node.removeAttribute('externalResourcesRequired');

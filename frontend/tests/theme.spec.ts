@@ -1,5 +1,49 @@
 import { expect, test } from '@playwright/test';
 
+test('main and admin theme changes fade page and panel colors equally', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'no-preference' });
+    for (const path of ['/', '/admin.html']) {
+        await page.goto(path);
+        await expect(page.locator('html')).toHaveAttribute('data-app-state', 'ready');
+        if ((await page.locator('html').getAttribute('data-theme')) !== 'light') {
+            await page.getByRole('button', { name: 'Switch to light theme' }).click();
+            await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(226, 227, 232)');
+        }
+        await page.getByRole('button', { name: 'Switch to dark theme' }).click();
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+        const transition = await page.locator('html').evaluate((root) => {
+            const panel = document.querySelector('.panel')!;
+            const backgroundTransition = (element: Element) =>
+                element
+                    .getAnimations()
+                    .find(
+                        (item) =>
+                            item instanceof CSSTransition &&
+                            item.transitionProperty === 'background-color',
+                    );
+            const animation = backgroundTransition(root);
+            const panelAnimation = backgroundTransition(panel);
+            if (!animation || !panelAnimation) {
+                throw new Error('Page and panel backgrounds must both animate');
+            }
+            animation.pause();
+            animation.currentTime = 400;
+            return {
+                duration: animation.effect?.getTiming().duration,
+                panelDuration: panelAnimation.effect?.getTiming().duration,
+                midpoint: getComputedStyle(root).backgroundColor,
+            };
+        });
+        expect(transition.panelDuration).toBe(800);
+        expect(transition.duration).toBe(800);
+        expect(transition.midpoint).not.toBe('rgb(226, 227, 232)');
+        expect(transition.midpoint).not.toBe('rgb(18, 19, 24)');
+        await page.locator('html').evaluate((root) => {
+            root.getAnimations().forEach((animation) => animation.finish());
+        });
+    }
+});
+
 test('phone hamburger menu works on main and admin pages', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 780 });
     for (const path of ['/', '/admin.html']) {

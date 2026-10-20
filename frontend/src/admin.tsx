@@ -4,6 +4,7 @@ import { Library } from './Library';
 import { responseError } from './api';
 import { SiteHeader } from './SiteHeader';
 import { useTheme } from './useTheme';
+import { AppReady } from './AppReady';
 import './styles.css';
 
 function Admin() {
@@ -123,6 +124,8 @@ function Admin() {
 
 createRoot(document.getElementById('root')!).render(
     <StrictMode>
-        <Admin />
+        <AppReady>
+            <Admin />
+        </AppReady>
     </StrictMode>,
 );

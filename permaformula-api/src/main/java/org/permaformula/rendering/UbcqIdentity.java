@@ -6,9 +6,9 @@ import org.permaformula.validation.QuickValidator;
 
 /** Bind opaque token lookups to the same renderer and security versions as content keys. */
 public final class UbcqIdentity {
-    public static final String HTML = "html-svg-v12:input-validation-1:complexity-policy-2:html-to-image-1.11.13:presentation-policy-4:"
+    public static final String HTML = "html-svg-v13:input-validation-1:complexity-policy-2:mathjax-4.1.3:html-to-image-1.11.13:presentation-policy-4:"
         + SvgOutputPolicy.VERSION;
-    public static final String FORMULA = "formula-svg-v6:input-validation-1:complexity-policy-2:mathjax-3.2.2:"
+    public static final String FORMULA = "formula-svg-v7:input-validation-1:complexity-policy-2:mathjax-4.1.3:"
         + SvgOutputPolicy.VERSION;
 
     private UbcqIdentity() {

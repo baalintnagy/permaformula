@@ -1,17 +1,23 @@
-import { mathjax } from 'mathjax-full/js/mathjax.js';
-import { AsciiMath } from 'mathjax-full/js/input/asciimath.js';
-import { SVG } from 'mathjax-full/js/output/svg.js';
-import { liteAdaptor } from 'mathjax-full/js/adaptors/liteAdaptor.js';
-import { RegisterHTMLHandler } from 'mathjax-full/js/handlers/html.js';
-import { SafeHandler } from 'mathjax-full/js/ui/safe/SafeHandler.js';
+import { mathjax } from '@mathjax/src/js/mathjax.js';
+import { AsciiMath } from '@mathjax/src/js/input/asciimath.js';
+import { SVG } from '@mathjax/src/js/output/svg.js';
+import { liteAdaptor } from '@mathjax/src/js/adaptors/liteAdaptor.js';
+import { RegisterHTMLHandler } from '@mathjax/src/js/handlers/html.js';
+import { SafeHandler } from '@mathjax/src/js/ui/safe/SafeHandler.js';
+import { MathJaxNewcmFont } from '@mathjax/mathjax-newcm-font/js/svg.js';
+import 'permaformula-font-data';
 import { safeMathOptions, installMathValidation } from './mathjax-safety.js';
 import { limits, validateTree, validateDimensions } from './complexity-limits.js';
 
 const adaptor = liteAdaptor();
 SafeHandler(RegisterHTMLHandler(adaptor));
+const font = new MathJaxNewcmFont();
+for (const data of Object.values(MathJaxNewcmFont.dynamicFiles)) {
+    data.setup(font);
+}
 const document = mathjax.document('', {
     InputJax: new AsciiMath(),
-    OutputJax: new SVG({ fontCache: 'local' }),
+    OutputJax: new SVG({ fontCache: 'local', fontData: font }),
     ...safeMathOptions({ discoverInputs: false }),
 });
 installMathValidation(document);

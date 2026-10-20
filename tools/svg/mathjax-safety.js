@@ -1,6 +1,6 @@
 // Use MathJax's discovered expressions and compiled MML tree; no delimiter/math lexer.
 import { limits, validateMathInput, validateTree } from './complexity-limits.js';
-import { Styles } from 'mathjax-full/js/util/Styles.js';
+import { Styles } from '@mathjax/src/js/util/Styles.js';
 const BEFORE_COMPILE = 15;
 const AFTER_COMPILE = 25;
 const INVALID_NODES = Symbol('PermaFormula invalid math attributes');

@@ -158,7 +158,8 @@ export function previewDocument(
         reportScroll();
       });
       document.getElementById('user-css').textContent=payload.css;
-      window.MathJax={loader:{load:['input/asciimath','ui/safe'],paths:{mathjax:${JSON.stringify(assets.slice(0, -1))}}},
+      window.MathJax={loader:{load:['input/tex','input/asciimath','output/svg','ui/safe','a11y/assistive-mml'],paths:{mathjax:${JSON.stringify(assets.slice(0, -1))}}},
+        output:{fontPath:${JSON.stringify(`${assets}fonts/%%FONT%%-font`)},linebreaks:{inline:false}},
         options:{enableMenu:false,safeOptions:{allow:{URLs:'none',classes:'safe',cssIDs:'none',styles:'safe'}}},
         svg:{fontCache:'local'},startup:{typeset:false,ready(){
           MathJax.startup.defaultReady();
@@ -172,6 +173,6 @@ export function previewDocument(
             parent.postMessage({type:'permaformula-preview',ok:true},'*');
           }).catch(()=>parent.postMessage({type:'permaformula-preview',ok:false},'*'));
         }}};
-    </script><script nonce="${nonce}" src="${escapeHtml(assets)}tex-svg.js"></script>
+    </script><script nonce="${nonce}" src="${escapeHtml(assets)}startup.js"></script>
     </head><body>${formula !== undefined ? '<div id="formula-preview"></div>' : safeHtml}</body></html>`;
 }

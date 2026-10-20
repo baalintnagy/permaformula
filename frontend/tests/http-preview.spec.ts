@@ -5,7 +5,7 @@ test('keeps the last render visible until its replacement is ready', async ({ pa
     let gate = Promise.resolve();
     let fail = false;
     let requests = 0;
-    await page.context().route('**/mathjax/tex-svg.js', async (route) => {
+    await page.context().route('**/mathjax/startup.js', async (route) => {
         requests++;
         await gate;
         if (fail) {

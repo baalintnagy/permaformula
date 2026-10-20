@@ -131,7 +131,7 @@ class WarmRenderingTests {
         String document = """
             <!doctype html><html><head><script src='/export-svg.js'></script><script \
             id='mathjax-script' defer \
-            src='/mathjax/tex-svg.js'></script></head><body>%s</body></html>\
+            src='/mathjax/startup.js'></script></head><body>%s</body></html>\
             """.formatted(body);
         return RenderRequest.newBuilder().setRequestId(id)
             .setHtml(HtmlDocument.newBuilder().setWidth(320).setDocument(document)).build();
