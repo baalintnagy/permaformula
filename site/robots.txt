@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /permaformula/
+
+Sitemap: https://baalintnagy.github.io/permaformula/sitemap.xml

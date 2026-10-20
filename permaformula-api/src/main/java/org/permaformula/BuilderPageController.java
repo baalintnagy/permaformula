@@ -33,6 +33,29 @@ public class BuilderPageController {
                 origins.host()));
     }
 
+    @GetMapping(value = "/robots.txt", produces = MediaType.TEXT_PLAIN_VALUE)
+    @ResponseBody
+    public String robots() {
+        return """
+            User-agent: *
+            Allow: /
+            Disallow: /admin
+
+            Sitemap: %s/sitemap.xml
+            """.formatted(origins.host());
+    }
+
+    @GetMapping(value = "/sitemap.xml", produces = MediaType.APPLICATION_XML_VALUE)
+    @ResponseBody
+    public String sitemap() {
+        return """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+                <url><loc>%s/</loc></url>
+            </urlset>
+            """.formatted(HtmlUtils.htmlEscape(origins.host()));
+    }
+
     static String withPublicMetadata(String html, String origin) {
         String url = HtmlUtils.htmlEscape(origin + "/");
         String image = HtmlUtils.htmlEscape(origin + "/assets/og.jpg");

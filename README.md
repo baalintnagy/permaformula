@@ -5,6 +5,9 @@ HTML, then share them through self-contained permanent URLs.
 
 **Try the live system: [https://permaformula.kozow.com](https://permaformula.kozow.com).**
 
+The [project website](https://baalintnagy.github.io/permaformula/) introduces the
+Builder and API. See [website publishing](site/README.md) for GitHub Pages setup.
+
 The Builder provides live previews, HTML/CSS editing, external stylesheet support,
 SVG/JPG links, light and dark themes, and a public image library. Library entries
 can restore the original source, styles and canvas width for editing.

@@ -473,7 +473,8 @@ export function App() {
                             <span>Create</span> and <span>publish</span> formulae
                         </h1>
                         <p>
-                            Write <AsciiMathLink />. Define style. Share anywhere.
+                            Write <AsciiMathLink />. Define style. Share permanent SVG and JPEG
+                            images.
                         </p>
                         <div className="intro-meta">
                             <span className="live-dot" /> Live local previews{' '}

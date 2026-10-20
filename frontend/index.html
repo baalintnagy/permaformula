@@ -8,7 +8,7 @@
         <title>PermaFormula - Formulae with style</title>
         <meta
             name="description"
-            content="Create styled mathematical formulae. Preview, customize, and share permanent SVG and JPEG links with PermaFormula."
+            content="Convert AsciiMath formulas and styled HTML to SVG and JPEG images. Preview, customize with CSS, and share permanent image URLs with PermaFormula."
         />
         <meta property="og:title" content="PermaFormula - Formulae with style" />
         <meta
@@ -36,6 +36,23 @@
             content="PermaFormula - Formulae with style. Create, style, and share mathematical formulae."
         />
         <!-- PERMAFORMULA_PUBLIC_METADATA -->
+        <script type="application/ld+json">
+            {
+                "@context": "https://schema.org",
+                "@type": "WebApplication",
+                "name": "PermaFormula Builder",
+                "applicationCategory": "EducationalApplication",
+                "operatingSystem": "Any",
+                "description": "Create SVG and JPEG images from AsciiMath formulas and styled HTML, preview changes, and share self-contained permanent URLs.",
+                "featureList": [
+                    "AsciiMath to SVG and JPEG",
+                    "HTML and CSS formula composer",
+                    "Live previews",
+                    "Permanent image URLs",
+                    "Public source library"
+                ]
+            }
+        </script>
         <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
         <script>
             try {
@@ -55,7 +72,20 @@
         </script>
     </head>
     <body>
-        <div id="root"></div>
+        <div id="root">
+            <main>
+                <h1>PermaFormula — AsciiMath to SVG and JPEG</h1>
+                <p>
+                    Create mathematical formula images from AsciiMath, or combine formulas with HTML
+                    and CSS. Preview your work and share self-contained permanent SVG and JPEG URLs.
+                    Browse the public library to restore and edit published source.
+                </p>
+                <p>Enable JavaScript to use the interactive Builder and library.</p>
+                <a href="https://github.com/baalintnagy/permaformula"
+                    >Source code and API documentation</a
+                >
+            </main>
+        </div>
         <script type="module" src="/src/main.tsx"></script>
     </body>
 </html>
