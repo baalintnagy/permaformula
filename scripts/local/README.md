@@ -29,16 +29,18 @@ After upgrading from the shared output layout, run once without `--skip-build`.
 The default local API is on port 8086; the renderer listens on 9090. These
 development services do not have the container deployment's isolation. Pass the admin password with the mandatory `--admin-password` parameter. It is passed to the API through its process environment.
 
-For Eclipse-owned Java processes, start only Vite:
+For Eclipse- or VS Code-owned Java processes, start only Vite:
 
 ```bash
 bash scripts/local/start-ui.sh --api-origin http://localhost:8086
 ```
 
 `start-tunnel.sh --configure-only --public-origin https://api.example.org
---ui-public-origin https://ui.example.org` updates the Eclipse API launch and
+--ui-public-origin https://ui.example.org` updates the Eclipse and VS Code API launches and
 ignored `frontend/.env.local` configuration without launching tunnels. Refresh
-Eclipse and restart Java/Vite after changing these settings.
+Eclipse and restart Java/Vite after changing these settings. VS Code uses
+[shared launches](../../.vscode/README.md) in `.vscode/launch.json`; both real tunnel
+startup and the tunnel step in `start-local.sh` use the same configuration writer.
 
 If a machine crash leaves `.runtime/local/shell.lock`, inspect running services
 before removing that stale lock; the launcher never takes over another session.

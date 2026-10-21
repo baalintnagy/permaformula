@@ -4,8 +4,9 @@ set -Eeuo pipefail
 directory=$(cd "$(dirname "$0")" && pwd)
 fixture=$(mktemp -d)
 trap 'rm -rf -- "$fixture"' EXIT
-mkdir -p "$fixture/scripts/local" "$fixture/frontend" "$fixture/eclipse" "$fixture/bin" "$fixture/.runtime/local/shell.lock"
+mkdir -p "$fixture/scripts/local" "$fixture/frontend" "$fixture/eclipse" "$fixture/.vscode" "$fixture/bin" "$fixture/.runtime/local/shell.lock"
 cp "$directory/"*.sh "$directory/configure-origins.cjs" "$fixture/scripts/local/"
+cp "$directory/../../.vscode/launch.json" "$fixture/.vscode/launch.json"
 cat >"$fixture/eclipse/PermaFormula API.launch" <<'EOF'
 <launchConfiguration><mapAttribute key="org.eclipse.debug.core.environmentVariables"><mapEntry key="OTHER" value="retained"/><mapEntry key="PERMAFORMULA_HOST" value="old"/></mapAttribute></launchConfiguration>
 EOF
@@ -24,6 +25,34 @@ grep -q 'OTHER.*retained' "$fixture/eclipse/PermaFormula API.launch"
 grep -q 'PERMAFORMULA_HOST.*https://api.example.org' "$fixture/eclipse/PermaFormula API.launch"
 grep -q '^PERMAFORMULA_DEV_API=https://api.example.org$' "$fixture/frontend/.env.local"
 grep -q '^PERMAFORMULA_DEV_UI_ORIGIN=https://ui.example.org$' "$fixture/frontend/.env.local"
+node - "$fixture/.vscode/launch.json" <<'EOF'
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const launchPath = process.argv[2];
+const launch = JSON.parse(fs.readFileSync(launchPath, 'utf8'));
+const api = launch.configurations.find((entry) => entry.name === 'PermaFormula API');
+assert.equal(api.env.PERMAFORMULA_HOST, 'https://api.example.org');
+assert.equal(api.env.PERMAFORMULA_IMAGE_HOST, 'https://api.example.org');
+assert.equal(api.env.PERMAFORMULA_RENDERING_PLAINTEXT, 'true');
+const local = launch.configurations.find((entry) => entry.name === 'PermaFormula Local');
+assert.equal(local.serverReadyAction.name, api.name);
+assert.equal(local.serverReadyAction.pattern, 'event=renderer_ready transport=tcp');
+api.env.OTHER = 'retained';
+launch.configurations.push({ name: 'Personal launch', env: { OTHER: 'retained' } });
+fs.writeFileSync(launchPath, JSON.stringify(launch));
+EOF
+bash "$fixture/scripts/local/start-tunnel.sh" --configure-only --public-origin https://replacement.example.org --no-ui
+node - "$fixture/.vscode/launch.json" <<'EOF'
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const launch = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+const api = launch.configurations.find((entry) => entry.name === 'PermaFormula API');
+assert.equal(api.env.PERMAFORMULA_HOST, 'https://replacement.example.org');
+assert.equal(api.env.PERMAFORMULA_IMAGE_HOST, 'https://replacement.example.org');
+assert.equal(api.env.OTHER, 'retained');
+assert.equal(launch.configurations.at(-1).env.OTHER, 'retained');
+EOF
+grep -q '^PERMAFORMULA_DEV_UI_ORIGIN=$' "$fixture/frontend/.env.local"
 bash "$fixture/scripts/local/stop-local.sh"
 [[ -f $fixture/.runtime/local/stop-shell ]]
 for name in start-local start-tunnel start-ui install-rendering stop-local; do

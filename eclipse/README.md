@@ -72,7 +72,8 @@ config aside; inspect `.runtime/tunnel/<session>/*.log` if startup fails.
 The frontend's development setting controls both copied URLs and its proxy target,
 so browser API requests also pass through the tunnel. An `--api-origin` argument or
 `PERMAFORMULA_DEV_API` environment variable overrides `.env.local`; omit those overrides.
-The script changes the tracked API launch file; review those changes before committing.
+The script changes the tracked Eclipse API launch and VS Code `.vscode/launch.json`;
+review those changes before committing.
 `.env.local` and tunnel logs are ignored by Git. Stopping a tunnel leaves the last
 URL in the settings; rerun the script to replace it.
 

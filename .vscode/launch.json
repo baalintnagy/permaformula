@@ -1,0 +1,51 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "request": "launch",
+            "name": "PermaFormula API",
+            "mainClass": "org.permaformula.PermaFormulaApplication",
+            "projectName": "permaformula-api",
+            "cwd": "${workspaceFolder}",
+            "console": "internalConsole",
+            "vmArgs": "--enable-native-access=ALL-UNNAMED",
+            "env": {
+                "PERMAFORMULA_RENDERING_PLAINTEXT": "true",
+                "PERMAFORMULA_HOST": "https://changelog-applicable-orange-notifications.trycloudflare.com",
+                "PERMAFORMULA_IMAGE_HOST": "https://changelog-applicable-orange-notifications.trycloudflare.com"
+            }
+        },
+        {
+            "type": "java",
+            "request": "launch",
+            "name": "PermaFormula Renderer",
+            "mainClass": "org.permaformula.renderer.RendererServiceMain",
+            "projectName": "renderer-service",
+            "cwd": "${workspaceFolder}",
+            "console": "internalConsole",
+            "vmArgs": "--enable-native-access=ALL-UNNAMED",
+            "env": {
+                "RENDERER_CHROMIUM_SANDBOX": "false"
+            }
+        },
+        {
+            "type": "java",
+            "request": "launch",
+            "name": "PermaFormula Local",
+            "mainClass": "org.permaformula.renderer.RendererServiceMain",
+            "projectName": "renderer-service",
+            "cwd": "${workspaceFolder}",
+            "console": "internalConsole",
+            "vmArgs": "--enable-native-access=ALL-UNNAMED",
+            "env": {
+                "RENDERER_CHROMIUM_SANDBOX": "false"
+            },
+            "serverReadyAction": {
+                "pattern": "event=renderer_ready transport=tcp",
+                "action": "startDebugging",
+                "name": "PermaFormula API"
+            }
+        }
+    ]
+}

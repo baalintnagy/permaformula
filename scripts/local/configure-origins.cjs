@@ -23,6 +23,19 @@ launch = launch.replace(block, (_, start, entries, end) => {
     return start + entries + end;
 });
 const envPath = path.join(root, 'frontend/.env.local');
+const vscodePath = path.join(root, '.vscode/launch.json');
+const vscode = JSON.parse(fs.readFileSync(vscodePath, 'utf8'));
+const apiLaunch = vscode.configurations.find(
+    (configuration) => configuration.name === 'PermaFormula API',
+);
+if (!apiLaunch) {
+    throw new Error('VS Code PermaFormula API launch missing');
+}
+apiLaunch.env = {
+    ...apiLaunch.env,
+    PERMAFORMULA_HOST: api,
+    PERMAFORMULA_IMAGE_HOST: api,
+};
 let env = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
 for (const [key, value] of Object.entries({ PERMAFORMULA_DEV_API: api, PERMAFORMULA_DEV_UI_ORIGIN: ui })) {
     const pattern = new RegExp(`^[ \\t]*${key}[ \\t]*=[^\\r\\n]*`, 'm');
@@ -30,6 +43,7 @@ for (const [key, value] of Object.entries({ PERMAFORMULA_DEV_API: api, PERMAFORM
     env = pattern.test(env) ? env.replace(pattern, line) : `${env.trimEnd()}\n${line}\n`;
 }
 fs.writeFileSync(launchPath, launch);
+fs.writeFileSync(vscodePath, JSON.stringify(vscode, null, 4) + '\n');
 fs.writeFileSync(envPath, env);
 if (readyFile) {
     fs.writeFileSync(readyFile + '.tmp', JSON.stringify({ ApiOrigin: api, UiOrigin: ui }));

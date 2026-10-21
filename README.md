@@ -77,7 +77,7 @@ For Eclipse-owned Java services, start only Vite:
 bash scripts/local/start-ui.sh --api-origin http://localhost:8086
 ```
 
-See [local development](scripts/local/README.md), [Eclipse setup](eclipse/README.md)
+See [local development](scripts/local/README.md), [VS Code setup](.vscode/README.md), [Eclipse setup](eclipse/README.md)
 and the [frontend guide](frontend/README.md).
 
 ## Run with Docker
