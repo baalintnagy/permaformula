@@ -15,7 +15,7 @@ Commands and source paths below are relative to the repository root.
 
 `/html-svg` uses `ubcq`: a GZIP-compressed UTF-8 JSON image descriptor,
 Base64-encoded and URL-encoded in image URLs. `/ubcq` returns raw Base64, including
-for short formulas. The `compressUrlQuery` option and uncompressed input modes
+for short formulae. The `compressUrlQuery` option and uncompressed input modes
 have been removed. `/html-svg` requires `ubcq`. The public `/decode` endpoint and
 the former `/image-cq` and `/decode-cq` route names are no longer available.
 
@@ -119,7 +119,7 @@ compressed descriptors for `/html-svg` and `/html-jpg`.
 
 Response: `200 OK`, `Content-Type: image/svg+xml`. The standalone formula SVG
 contains embedded glyph paths and can be used as an HTML image source. Missing
-or blank formulas return `400 Bad Request`. Query parameters must still be
+or blank formulae return `400 Bad Request`. Query parameters must still be
 URL-encoded, including literal `+` characters.
 
 Formula, HTML, CSS and stylesheet references are preserved without whitespace

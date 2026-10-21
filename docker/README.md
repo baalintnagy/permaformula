@@ -365,7 +365,7 @@ docker compose -f compose.separate-origins.yaml --env-file docker/egress/smoke.e
 ```
 
 The script starts two independent Docker client identities concurrently, requests
-distinct uncached formulas through the image listener, and requires both SVGs.
+distinct uncached formulae through the image listener, and requires both SVGs.
 This respects the one-generation-per-client quota. It removes only its own probe
 containers. Maven regressions separately cover queue saturation, retained bytes,
 expiry/cancellation, process termination and active-job isolation.

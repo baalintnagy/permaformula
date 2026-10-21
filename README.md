@@ -1,6 +1,6 @@
 # PermaFormula
 
-Create SVG and JPEG images from [AsciiMath](https://asciimath.org/) formulas or styled
+Create SVG and JPEG images from [AsciiMath](https://asciimath.org/) formulae or styled
 HTML, then share them through self-contained permanent URLs.
 
 **Try the live system: [https://permaformula.kozow.com](https://permaformula.kozow.com).**

@@ -3,8 +3,8 @@
 ```html
 
 	<div class="div-root">
-    <h1 class="display-5 text-light">A title for the formulas</h1>
-    <p class="lead text-secondary">A paragraph for the formulas</p>
+    <h1 class="display-5 text-light">A title for the formulae</h1>
+    <p class="lead text-secondary">A paragraph for the formulae</p>
     <p class="example-formula">
         `sum_(i=1)^n i^3=((n(n+1))/2)^2`
     </p>

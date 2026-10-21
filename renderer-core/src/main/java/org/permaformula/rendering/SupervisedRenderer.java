@@ -21,7 +21,7 @@ public final class SupervisedRenderer implements RenderJobExecutor, AutoCloseabl
     private final BrowserSettings settings;
 
     private final Semaphore permits;
-    private final RenderWorkerPool formulas;
+    private final RenderWorkerPool formulae;
     private final RenderWorkerPool html;
 
     public SupervisedRenderer(BrowserSettings settings, int concurrency) {
@@ -40,7 +40,7 @@ public final class SupervisedRenderer implements RenderJobExecutor, AutoCloseabl
             () -> new IllegalArgumentException("Invalid renderer worker settings"));
         this.settings = settings;
         permits = new Semaphore(concurrency);
-        formulas = new RenderWorkerPool(concurrency, () -> worker("formula"), startupTimeout,
+        formulae = new RenderWorkerPool(concurrency, () -> worker("formula"), startupTimeout,
             maxJobs);
         html = new RenderWorkerPool(concurrency, () -> worker("html"), startupTimeout, maxJobs);
     }
@@ -57,7 +57,7 @@ public final class SupervisedRenderer implements RenderJobExecutor, AutoCloseabl
         }
         try {
             return (request.hasHtml()
-                || request.hasJpegSvg() ? html : formulas).execute(request, budget);
+                || request.hasJpegSvg() ? html : formulae).execute(request, budget);
         } finally {
             permits.release();
         }
@@ -84,7 +84,7 @@ public final class SupervisedRenderer implements RenderJobExecutor, AutoCloseabl
     @Override
     public void close() {
         try {
-            formulas.close();
+            formulae.close();
         } finally {
             html.close();
         }

@@ -315,9 +315,9 @@ Rendering waits for MathJax, fonts, and images, with a configurable timeout
 The `/html-svg` response type is `image/svg+xml` instead of
 `image/jpeg`; existing compressed permalinks resolve to SVG without changing their
 payload. HTML SVG exports use `foreignObject` with computed styles embedded,
-and keep MathJax formulas as vector paths. They are intended for browsers;
+and keep MathJax formulae as vector paths. They are intended for browsers;
 SVG tools that do not support `foreignObject` should use `/exp-svg` for individual
-formulas. Ordinary HTML text still uses the viewer's fonts.
+formulae. Ordinary HTML text still uses the viewer's fonts.
 
 Styled HTML export uses bundled html-to-image 1.11.13 through the small source
 adapter in `tools/svg/export-styled-svg.js`. Node.js is needed only to rebuild

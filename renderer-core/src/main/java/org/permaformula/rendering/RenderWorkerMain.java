@@ -14,14 +14,14 @@ public final class RenderWorkerMain {
     public static void main(String[] args) {
         boolean html = "html".equals(args[0]);
         long started = System.nanoTime();
-        try (AsciiMathRenderer formulas = html ? null : new AsciiMathRenderer();
+        try (AsciiMathRenderer formulae = html ? null : new AsciiMathRenderer();
             RenderAssets assets = html ? new RenderAssets() : null;
             ChromiumRenderer chromium = html
                 ? new ChromiumRenderer(new BrowserSettings(Path.of(args[1]),
                     Duration.ofMillis(Long.parseLong(args[2])), Boolean.parseBoolean(args[3])))
                 : null) {
-            if (formulas != null) {
-                formulas.warmUp();
+            if (formulae != null) {
+                formulae.warmUp();
             }
             RenderTimings.elapsed(html ? "html_initialize" : "formula_initialize", started);
             System.out.write(RenderWorkerPool.READY);
@@ -50,7 +50,7 @@ public final class RenderWorkerMain {
                             assets.remove(url);
                         }
                     } else {
-                        svg = formulas.render(request.getFormula().getFormula())
+                        svg = formulae.render(request.getFormula().getFormula())
                             .getBytes(StandardCharsets.UTF_8);
                     }
                     QuickValidator.validate(

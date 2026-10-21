@@ -246,7 +246,7 @@ public class PermaFormulaController {
             """)
     @GetMapping(path = "/html-jpg", produces = "image/jpeg")
     @ApiResponse(responseCode = "200",
-        description = "Binary JPEG including validated HTML, CSS and formulas; transparent areas become white.",
+        description = "Binary JPEG including validated HTML, CSS and formulae; transparent areas become white.",
         content = @Content(mediaType = "image/jpeg",
             schema = @Schema(type = "string", format = "binary")))
     @ImageDelivery
