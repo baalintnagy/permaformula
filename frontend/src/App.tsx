@@ -476,10 +476,6 @@ export function App() {
                             Write <AsciiMathLink />. Define style. Share permanent SVG and JPEG
                             images.
                         </p>
-                        <div className="intro-meta">
-                            <span className="live-dot" /> Live local previews{' '}
-                            <span className="meta-divider">/</span> SVG output
-                        </div>
                     </div>
 
                     <section id="formula" className="workspace" aria-labelledby="formula-heading">
@@ -489,7 +485,6 @@ export function App() {
                             </div>
                             <div>
                                 <h2 id="formula-heading">Simple expression</h2>
-                                <p>A single expression.</p>
                             </div>
                             <span className="section-tag">
                                 <AsciiMathLink /> → SVG
@@ -526,9 +521,10 @@ export function App() {
                             </div>
                             <div>
                                 <h2 id="composer-heading">Formula + HTML + CSS</h2>
-                                <p>Bring layout, typography, and formulas together.</p>
                             </div>
-                            <span className="section-tag">HTML + CSS → SVG</span>
+                            <span className="section-tag">
+                                <AsciiMathLink /> + HTML + CSS → SVG
+                            </span>
                         </div>
                         <div className="workspace-grid composer-grid">
                             <div className="composer-editors">
@@ -731,11 +727,6 @@ export function App() {
                             </div>
                         </div>
                         <div className="composer-actions">
-                            <p>
-                                <span className="live-dot" />
-                                Ready
-                                <small>Generate an SVG to view here and share.</small>
-                            </p>
                             <button
                                 className="primary-button"
                                 disabled={composerBusy || !html.trim() || !widthValid || !refsValid}
@@ -827,7 +818,6 @@ export function App() {
                                 onChange={(event) => setDecodeInput(event.target.value)}
                             />
                             <div className="composer-actions">
-                                <p>Load the decoded content into the editors and live preview.</p>
                                 <button
                                     className="primary-button"
                                     disabled={decodeBusy || composerBusy || !decodeInput.trim()}
@@ -846,7 +836,6 @@ export function App() {
 
                     <footer>
                         <span className="footer-brand">∑ PermaFormula</span>
-                        <p>Made for expressions worth sharing.</p>
                         <a href="/swagger-ui/index.html">
                             API documentation
                             <Icon name="external" />

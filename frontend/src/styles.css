@@ -815,6 +815,9 @@ code {
     margin-top: 23px;
     gap: 20px;
 }
+.composer-actions > .primary-button:only-child {
+    margin-left: auto;
+}
 .composer-actions p {
     font-size: 12px;
     margin: 0;

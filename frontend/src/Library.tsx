@@ -360,7 +360,6 @@ export function Library({
                 <h1>
                     Rendered <span>library</span>
                 </h1>
-                <p>Explore shared creations. Open an image to make it your own.</p>
             </div>
             {deleteError && (
                 <div className="error-message" role="alert">
