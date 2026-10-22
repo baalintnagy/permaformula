@@ -24,8 +24,12 @@ public class LibraryAdmissionConfiguration implements WebMvcConfigurer {
             Object handler) {
             if (!(handler instanceof HandlerMethod method)
                 || !LibraryController.class.isAssignableFrom(method.getBeanType())
-                || !(method.getMethod().getName().equals("list")
-                    || method.getMethod().getName().equals("detail"))) {
+                || !(method.getMethod()
+                    .getName()
+                    .equals("list")
+                    || method.getMethod()
+                        .getName()
+                        .equals("detail"))) {
                 return true;
             }
             if (!slots.tryAcquire()) {

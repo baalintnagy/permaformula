@@ -31,7 +31,7 @@ final class BoundedWork {
             return result;
         }
         if (!slots.tryAcquire()) {
-            throw new WorkOverloadedException(name + " capacity is occupied", null);
+            throw new WorkOverloadedException("%s capacity is occupied".formatted(name), null);
         }
         AtomicBoolean ran = new AtomicBoolean();
         FutureTask<T> task = new FutureTask<T>(() -> {
@@ -47,15 +47,18 @@ final class BoundedWork {
                 slots.release();
             }
         });
-        Thread worker = Thread.ofPlatform().daemon(true).name("api-" + name).unstarted(() -> {
-            try {
-                task.run();
-            } finally {
-                if (!ran.get()) {
-                    slots.release();
+        Thread worker = Thread.ofPlatform()
+            .daemon(true)
+            .name("api-%s".formatted(name))
+            .unstarted(() -> {
+                try {
+                    task.run();
+                } finally {
+                    if (!ran.get()) {
+                        slots.release();
+                    }
                 }
-            }
-        });
+            });
         try {
             worker.start();
         } catch (RuntimeException | Error failure) {
@@ -63,13 +66,15 @@ final class BoundedWork {
             throw failure;
         }
         try {
-            return task.get(Math.max(1, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+            return task.get(Math.max(1, deadline - System.nanoTime()),
+                TimeUnit.NANOSECONDS);
         } catch (TimeoutException _) {
             task.cancel(true);
             throw WorkDeadline.timedOut();
         } catch (InterruptedException _) {
             task.cancel(true);
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                .interrupt();
             throw WorkDeadline.timedOut();
         } catch (ExecutionException failed) {
             if (failed.getCause() instanceof IOException checked) {

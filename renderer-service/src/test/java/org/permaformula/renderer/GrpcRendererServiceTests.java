@@ -1,18 +1,34 @@
 package org.permaformula.renderer;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
-import java.util.concurrent.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import com.google.protobuf.ByteString;
-import io.grpc.*;
-import io.grpc.inprocess.*;
+import io.grpc.ManagedChannel;
+import io.grpc.Server;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
+import io.grpc.inprocess.InProcessChannelBuilder;
+import io.grpc.inprocess.InProcessServerBuilder;
 import org.junit.jupiter.api.Test;
-import org.permaformula.contract.v1.*;
-import org.permaformula.rendering.*;
+import org.permaformula.contract.v1.AsciiMathFormula;
+import org.permaformula.contract.v1.RenderRequest;
+import org.permaformula.contract.v1.RenderResponse;
+import org.permaformula.contract.v1.RendererServiceGrpc;
+import org.permaformula.rendering.RenderException;
+import org.permaformula.rendering.RenderJobExecutor;
+import org.permaformula.rendering.RenderQueueSettings;
+import org.permaformula.rendering.RenderWorkQueue;
 
 class GrpcRendererServiceTests {
 
@@ -22,30 +38,38 @@ class GrpcRendererServiceTests {
         var release = new CountDownLatch(1);
         var restarts = new AtomicInteger();
         try (var queue = new RenderWorkQueue(1,
-            new RenderQueueSettings(1, 1_000_000, Duration.ofMillis(150)), (request, _) -> {
+            new RenderQueueSettings(1, 1_000_000, Duration.ofMillis(150)),
+            (request, _) -> {
                 entered.countDown();
                 try {
                     assertTrue(release.await(5, TimeUnit.SECONDS));
                 } catch (InterruptedException _) {
-                    throw new RenderException(RenderException.Kind.CANCELLED, "active interrupted");
+                    throw new RenderException(RenderException.Kind.CANCELLED,
+                        "active interrupted");
                 }
-                return RenderResponse.newBuilder().setRequestId(request.getRequestId())
-                    .setSvg(ByteString.copyFromUtf8("<svg/>")).build();
+                return RenderResponse.newBuilder()
+                    .setRequestId(request.getRequestId())
+                    .setSvg(ByteString.copyFromUtf8("<svg/>"))
+                    .build();
             });
             var fixture = new Fixture(queue, _ -> restarts.incrementAndGet());
             var callers = Executors.newVirtualThreadPerTaskExecutor()) {
-            var stub = RendererGrpc.newBlockingStub(fixture.channel);
+            var stub = RendererServiceGrpc.newBlockingStub(fixture.channel);
             var active = callers.submit(() -> stub.render(validRequest("active")));
             try {
                 assertTrue(entered.await(2, TimeUnit.SECONDS));
                 assertEquals(Status.Code.DEADLINE_EXCEEDED,
                     assertThrows(StatusRuntimeException.class,
-                        () -> stub.render(validRequest("expired"))).getStatus().getCode());
+                        () -> stub.render(validRequest("expired")))
+                        .getStatus()
+                        .getCode());
                 assertEquals(0, restarts.get());
                 assertFalse(active.isDone());
                 release.countDown();
-                assertEquals("active", active.get(2, TimeUnit.SECONDS).getRequestId());
-                assertEquals("next", stub.render(validRequest("next")).getRequestId());
+                assertEquals("active", active.get(2, TimeUnit.SECONDS)
+                    .getRequestId());
+                assertEquals("next", stub.render(validRequest("next"))
+                    .getRequestId());
                 assertEquals(0, restarts.get());
             } finally {
                 release.countDown();
@@ -60,20 +84,24 @@ class GrpcRendererServiceTests {
         var restarts = new AtomicInteger();
         var executions = new AtomicInteger();
         try (var queue = new RenderWorkQueue(1,
-            new RenderQueueSettings(1, 1_000_000, Duration.ofSeconds(2)), (request, _) -> {
+            new RenderQueueSettings(1, 1_000_000, Duration.ofSeconds(2)),
+            (request, _) -> {
                 executions.incrementAndGet();
                 entered.countDown();
                 try {
                     assertTrue(release.await(5, TimeUnit.SECONDS));
                 } catch (InterruptedException _) {
-                    throw new RenderException(RenderException.Kind.CANCELLED, "active interrupted");
+                    throw new RenderException(RenderException.Kind.CANCELLED,
+                        "active interrupted");
                 }
-                return RenderResponse.newBuilder().setRequestId(request.getRequestId())
-                    .setSvg(ByteString.copyFromUtf8("<svg/>")).build();
+                return RenderResponse.newBuilder()
+                    .setRequestId(request.getRequestId())
+                    .setSvg(ByteString.copyFromUtf8("<svg/>"))
+                    .build();
             });
             var fixture = new Fixture(queue, _ -> restarts.incrementAndGet());
             var callers = Executors.newVirtualThreadPerTaskExecutor()) {
-            var stub = RendererGrpc.newBlockingStub(fixture.channel);
+            var stub = RendererServiceGrpc.newBlockingStub(fixture.channel);
             var active = callers.submit(() -> stub.render(validRequest("active")));
             try {
                 assertTrue(entered.await(2, TimeUnit.SECONDS));
@@ -81,11 +109,13 @@ class GrpcRendererServiceTests {
                     assertThrows(StatusRuntimeException.class,
                         () -> stub.withDeadlineAfter(100, TimeUnit.MILLISECONDS)
                             .render(validRequest("cancelled")))
-                        .getStatus().getCode());
+                        .getStatus()
+                        .getCode());
                 assertFalse(active.isDone());
                 release.countDown();
                 active.get(2, TimeUnit.SECONDS);
-                assertEquals("next", stub.render(validRequest("next")).getRequestId());
+                assertEquals("next", stub.render(validRequest("next"))
+                    .getRequestId());
                 assertEquals(2, executions.get());
                 assertEquals(0, restarts.get());
             } finally {
@@ -95,25 +125,37 @@ class GrpcRendererServiceTests {
     }
 
     static RenderRequest validRequest(String id) {
-        return RenderRequest.newBuilder().setRequestId(id)
-            .setFormula(AsciiMathFormula.newBuilder().setFormula("x")).build();
+        return RenderRequest.newBuilder()
+            .setRequestId(id)
+            .setFormula(AsciiMathFormula.newBuilder()
+                .setFormula("x"))
+            .build();
     }
 
     @Test
     void exchangesMessagesAndMapsOverload() throws Exception {
         try (var fixture = new Fixture((request, _) -> {
-            if (request.getRequestId().equals("busy")) {
+            if (request.getRequestId()
+                .equals("busy")) {
                 throw new RenderException(RenderException.Kind.OVERLOADED, "busy");
             }
-            return RenderResponse.newBuilder().setRequestId(request.getRequestId())
-                .setSvg(ByteString.copyFromUtf8("<svg/>")).build();
+            return RenderResponse.newBuilder()
+                .setRequestId(request.getRequestId())
+                .setSvg(ByteString.copyFromUtf8("<svg/>"))
+                .build();
         })) {
-            var stub = RendererGrpc.newBlockingStub(fixture.channel);
+            var stub = RendererServiceGrpc.newBlockingStub(fixture.channel);
             assertEquals("job",
-                stub.render(RenderRequest.newBuilder().setRequestId("job").build()).getRequestId());
+                stub.render(RenderRequest.newBuilder()
+                    .setRequestId("job")
+                    .build())
+                    .getRequestId());
             assertEquals(Status.Code.RESOURCE_EXHAUSTED, assertThrows(StatusRuntimeException.class,
-                () -> stub.render(RenderRequest.newBuilder().setRequestId("busy").build()))
-                .getStatus().getCode());
+                () -> stub.render(RenderRequest.newBuilder()
+                    .setRequestId("busy")
+                    .build()))
+                .getStatus()
+                .getCode());
         }
     }
 
@@ -130,10 +172,13 @@ class GrpcRendererServiceTests {
             }
         })) {
             assertEquals(Status.Code.DEADLINE_EXCEEDED, assertThrows(StatusRuntimeException.class,
-                () -> RendererGrpc.newBlockingStub(fixture.channel)
+                () -> RendererServiceGrpc.newBlockingStub(fixture.channel)
                     .withDeadlineAfter(1, TimeUnit.SECONDS)
-                    .render(RenderRequest.newBuilder().setRequestId("job").build()))
-                .getStatus().getCode());
+                    .render(RenderRequest.newBuilder()
+                        .setRequestId("job")
+                        .build()))
+                .getStatus()
+                .getCode());
             assertTrue(interrupted.await(5, TimeUnit.SECONDS));
         }
     }
@@ -153,10 +198,14 @@ class GrpcRendererServiceTests {
 
         Fixture(RenderJobExecutor jobs, Consumer<RenderException> failedJob) throws Exception {
             var name = InProcessServerBuilder.generateName();
-            server = InProcessServerBuilder.forName(name).executor(executor)
+            server = InProcessServerBuilder.forName(name)
+                .executor(executor)
                 .addService(new GrpcRendererService(jobs, Duration.ofSeconds(10), failedJob))
-                .build().start();
-            channel = InProcessChannelBuilder.forName(name).directExecutor().build();
+                .build()
+                .start();
+            channel = InProcessChannelBuilder.forName(name)
+                .directExecutor()
+                .build();
         }
 
         @Override

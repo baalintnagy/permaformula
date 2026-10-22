@@ -1,6 +1,7 @@
 package org.permaformula.url;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Collections;
 import java.util.List;
@@ -17,7 +18,8 @@ class InputLimitsTests {
     private static ImageDescriptor checkedDescriptor(String content, Integer width,
         List<String> refs, String style) {
         var descriptor = new ImageDescriptor(content, width, refs, style);
-        TestServices.validated(new Boundary()).accept(descriptor);
+        TestServices.validated(new Boundary())
+            .accept(descriptor);
         return descriptor;
     }
 
@@ -27,7 +29,8 @@ class InputLimitsTests {
     }
 
     private static void checkedFormula(String value) {
-        TestServices.validated(new FormulaBoundary()).accept(value);
+        TestServices.validated(new FormulaBoundary())
+            .accept(value);
     }
 
     public static class FormulaBoundary {
@@ -48,15 +51,17 @@ class InputLimitsTests {
     @Test
     void descriptorAcceptsBoundariesAndRejectsOversizedFields() {
         assertDoesNotThrow(() -> checkedDescriptor("x".repeat(InputLimits.MAX_CONTENT_BYTES),
-            4000, Collections.nCopies(8, "https://example.com/"
-                + "r".repeat(InputLimits.MAX_REF_BYTES - "https://example.com/".length())),
+            4000, Collections.nCopies(8, "https://example.com/%s".formatted(
+                "r".repeat(InputLimits.MAX_REF_BYTES - "https://example.com/".length()))),
             " ".repeat(InputLimits.MAX_STYLE_BYTES)));
         assertThrows(ConstraintViolationException.class, () -> checkedDescriptor(
-            "漢".repeat(InputLimits.MAX_CONTENT_BYTES / 3 + 1), null, null, null));
+            "漢".repeat(InputLimits.MAX_CONTENT_BYTES / 3 + 1),
+            null, null, null));
         assertThrows(ConstraintViolationException.class, () -> checkedDescriptor(
             "x", 219, null, null));
         assertThrows(ConstraintViolationException.class, () -> checkedDescriptor(
-            "x", null, List.of("r".repeat(InputLimits.MAX_REF_BYTES + 1)), null));
+            "x", null, List.of("r".repeat(InputLimits.MAX_REF_BYTES + 1)),
+            null));
         assertThrows(ConstraintViolationException.class, () -> checkedDescriptor(
             "x", null, null, "s".repeat(InputLimits.MAX_STYLE_BYTES + 1)));
     }
@@ -64,7 +69,7 @@ class InputLimitsTests {
     @Test
     void formulaLimitCountsBytesAndPreservesBoundaryWhitespace() {
         assertDoesNotThrow(
-            () -> checkedFormula(" " + "x".repeat(InputLimits.MAX_FORMULA_BYTES - 1)));
+            () -> checkedFormula(" %s".formatted("x".repeat(InputLimits.MAX_FORMULA_BYTES - 1))));
         assertThrows(ConstraintViolationException.class,
             () -> checkedFormula("x".repeat(InputLimits.MAX_FORMULA_BYTES + 1)));
         assertThrows(ConstraintViolationException.class, () -> checkedFormula(" "));

@@ -1,6 +1,10 @@
 package org.permaformula.rendering;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
@@ -19,14 +23,27 @@ class RenderContentPolicyTests {
         var html = RenderContentPolicy.document("<html><head></head><body></body></html>",
             descriptor,
             List.of(
-                ":root {--accent:255,0,0;} @media (min-width:200px) {.title {color:rgba(var(--accent),1)}}",
+                """
+                :root {--accent:255,0,0;} @media (min-width:200px) {.title {color:rgba(var(--\
+                accent),1)}}\
+                """
+                ,
                 "p {color:blue}"));
-        var styles = Jsoup.parse(html).select("style");
+        var styles = Jsoup.parse(html)
+            .select("style");
         assertEquals(3, styles.size());
-        assertTrue(styles.get(0).data().contains("var(--accent)"));
-        assertTrue(styles.get(0).data().contains("@media"));
-        assertTrue(styles.get(1).data().contains("color:blue"));
-        assertTrue(styles.get(2).data().contains("color:green"));
+        assertTrue(styles.get(0)
+            .data()
+            .contains("var(--accent)"));
+        assertTrue(styles.get(0)
+            .data()
+            .contains("@media"));
+        assertTrue(styles.get(1)
+            .data()
+            .contains("color:blue"));
+        assertTrue(styles.get(2)
+            .data()
+            .contains("color:green"));
         assertFalse(html.contains("evil.example"));
     }
 
@@ -59,7 +76,8 @@ class RenderContentPolicyTests {
             "<p style='background:url(https://evil.example/x)'>hello</p>")) {
             assertThrows(ConstraintViolationException.class, () -> RenderContentPolicy.document(
                 "<html><head></head><body></body></html>",
-                new ImageDescriptor(html, 320, null, null), List.of()), html);
+                new ImageDescriptor(html, 320, null, null), List.of()),
+                html);
         }
     }
 
@@ -78,7 +96,8 @@ class RenderContentPolicyTests {
             "http://127.0.0.1:1234/mathjax/input/asciimath.js", "GET", "script"));
         assertAll(List.of("http://169.254.169.254/latest/meta-data/", "http://localhost:1234/",
             "http://127.0.0.1:8086/", "https://example.com/", "file:///etc/passwd",
-            "http://127.0.0.1:1234/document/other", "http://127.0.0.1:1234/mathjax/../document/abc")
+            "http://127.0.0.1:1234/document/other",
+            "http://127.0.0.1:1234/mathjax/../document/abc")
             .stream()
             .<Executable>map(target -> () -> {
                 assertFalse(ChromiumRenderer.allowedRequest(url, target, "GET", "document"),

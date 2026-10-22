@@ -1,10 +1,11 @@
 package org.permaformula.rendering;
 
+import static org.permaformula.validation.QuickValidator.validate;
+
 import java.time.Duration;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
-import org.permaformula.validation.QuickValidator;
 import org.permaformula.validation.RecordValidation;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -20,7 +21,7 @@ public record ApiWorkProperties(
     public ApiWorkProperties {
         RecordValidation.requireValid(ApiWorkProperties.class, preparationConcurrency,
             generationConcurrency, fetchConcurrency, timeout);
-        QuickValidator.validate(
+        validate(
             !(timeout.isNegative()
                 || timeout.isZero()
                 || timeout.compareTo(Duration.ofMinutes(5)) > 0),

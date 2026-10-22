@@ -1,6 +1,7 @@
 package org.permaformula.renderer;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -15,11 +16,14 @@ class RendererStartupTests {
     @Test
     void launchGroupCanObserveReadinessOnStandardOutput() throws Exception {
         var builder = new ProcessBuilder(
-            Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+            Path.of(System.getProperty("java.home"), "bin", "java")
+                .toString(),
             "--enable-native-access=ALL-UNNAMED", "-cp", System.getProperty("java.class.path"),
             RendererServiceMain.class.getName());
-        builder.environment().clear();
-        builder.environment().put("RENDERER_PORT", "0");
+        builder.environment()
+            .clear();
+        builder.environment()
+            .put("RENDERER_PORT", "0");
         var process = builder.start();
         try (
             var reader = new BufferedReader(
@@ -33,7 +37,8 @@ class RendererStartupTests {
             } finally {
                 // Terminate before closing the executor so failed readiness cannot leave a blocked
                 // reader.
-                var children = process.descendants().toList();
+                var children = process.descendants()
+                    .toList();
                 process.destroy();
                 if (!process.waitFor(5, TimeUnit.SECONDS)) {
                     process.destroyForcibly();

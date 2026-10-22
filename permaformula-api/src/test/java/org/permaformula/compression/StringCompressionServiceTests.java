@@ -24,10 +24,13 @@ class StringCompressionServiceTests {
         assertEquals(boundary, service.decompress(service.compress(boundary)));
         var bytes = new ByteArrayOutputStream();
         // Two legal members must not each receive a separate expansion allowance.
-        bytes.write(Base64.getDecoder().decode(service.compress(boundary)));
-        bytes.write(Base64.getDecoder().decode(service.compress("x")));
+        bytes.write(Base64.getDecoder()
+            .decode(service.compress(boundary)));
+        bytes.write(Base64.getDecoder()
+            .decode(service.compress("x")));
         assertThrows(ConstraintViolationException.class,
-            () -> service.decompress(Base64.getEncoder().encodeToString(bytes.toByteArray())));
+            () -> service.decompress(Base64.getEncoder()
+                .encodeToString(bytes.toByteArray())));
     }
 
     @Test
@@ -35,7 +38,8 @@ class StringCompressionServiceTests {
         int limit = InputLimits.MAX_COMPRESSED_BYTES;
         assertThrows(ConstraintViolationException.class, () -> service.decompress(
             "!".repeat(InputLimits.MAX_ENCODED_CHARS + 1)));
-        String oversized = Base64.getEncoder().encodeToString(new byte[limit + 1]);
+        String oversized = Base64.getEncoder()
+            .encodeToString(new byte[limit + 1]);
         assertThrows(ConstraintViolationException.class, () -> service.decompress(oversized));
     }
 
@@ -68,13 +72,15 @@ class StringCompressionServiceTests {
 
     @Test
     void nonGzipPayloadIsRejected() {
-        String payload = Base64.getEncoder().encodeToString(new byte[] { 1, 2, 3, 4 });
+        String payload = Base64.getEncoder()
+            .encodeToString(new byte[] { 1, 2, 3, 4 });
         assertThrows(IOException.class, () -> service.decompress(payload));
     }
 
     @Test
     void truncatedGzipIsRejected() throws Exception {
-        byte[] bytes = Base64.getDecoder().decode(service.compress("valid content"));
+        byte[] bytes = Base64.getDecoder()
+            .decode(service.compress("valid content"));
         String truncated = Base64.getEncoder()
             .encodeToString(Arrays.copyOf(bytes, bytes.length - 1));
         assertThrows(IOException.class, () -> service.decompress(truncated));

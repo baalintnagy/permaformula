@@ -1,13 +1,16 @@
 package org.permaformula.rendering;
 
+import static org.permaformula.validation.QuickValidator.notNull;
+import static org.permaformula.validation.QuickValidator.validate;
+
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 
 import com.google.protobuf.ByteString;
 import org.permaformula.contract.ComplexityPolicy;
-import org.permaformula.contract.v1.*;
-import org.permaformula.validation.QuickValidator;
+import org.permaformula.contract.v1.RenderRequest;
+import org.permaformula.contract.v1.RenderResponse;
 
 /** Private, sequential worker protocol; untrusted content never enters executable source. */
 public final class RenderWorkerMain {
@@ -18,7 +21,8 @@ public final class RenderWorkerMain {
             RenderAssets assets = html ? new RenderAssets() : null;
             ChromiumRenderer chromium = html
                 ? new ChromiumRenderer(new BrowserSettings(Path.of(args[1]),
-                    Duration.ofMillis(Long.parseLong(args[2])), Boolean.parseBoolean(args[3])))
+                    Duration.ofMillis(Long.parseLong(args[2])),
+                    Boolean.parseBoolean(args[3])))
                 : null) {
             if (formulae != null) {
                 formulae.warmUp();
@@ -30,38 +34,44 @@ public final class RenderWorkerMain {
                 RenderRequest request = WorkerMessages.read(System.in, RenderRequest.parser());
                 started = System.nanoTime();
                 try {
-                    QuickValidator.validate(
+                    validate(
                         !((request.hasHtml()
                             || request.hasJpegSvg()) != html),
                         () -> new IllegalArgumentException("Wrong worker kind"));
                     byte[] svg;
-                    if (request.hasJpegSvg()) {
-                        String url = assets.add("<!doctype html><html><body></body></html>");
+                    if (html) {
+                        RenderAssets activeAssets = notNull(assets);
+                        ChromiumRenderer activeChromium = notNull(chromium);
+                        String document = request.hasJpegSvg()
+                            ? "<!doctype html><html><body></body></html>"
+                            : request.getHtml()
+                                .getDocument();
+                        String url = activeAssets.add(document);
                         try {
-                            svg = chromium.jpeg(url, request.getJpegSvg());
+                            svg = request.hasJpegSvg()
+                                ? activeChromium.jpeg(url, request.getJpegSvg())
+                                : activeChromium.render(url, request.getHtml()
+                                    .getWidth());
                         } finally {
-                            assets.remove(url);
-                        }
-                    } else if (html) {
-                        String url = assets.add(request.getHtml().getDocument());
-                        try {
-                            svg = chromium.render(url, request.getHtml().getWidth());
-                        } finally {
-                            assets.remove(url);
+                            activeAssets.remove(url);
                         }
                     } else {
-                        svg = formulae.render(request.getFormula().getFormula())
+                        svg = notNull(formulae)
+                            .render(request.getFormula()
+                                .getFormula())
                             .getBytes(StandardCharsets.UTF_8);
                     }
-                    QuickValidator.validate(
+                    validate(
                         !(svg.length == 0
                             || svg.length > ComplexityPolicy.CURRENT
                                 .get(ComplexityPolicy.Limit.SVG_BYTES)),
                         () -> new IllegalArgumentException("Render output exceeds limit"));
                     System.out.write(RenderWorkerPool.OK);
                     WorkerMessages.write(System.out,
-                        RenderResponse.newBuilder().setRequestId(request.getRequestId())
-                            .setSvg(ByteString.copyFrom(svg)).build());
+                        RenderResponse.newBuilder()
+                            .setRequestId(request.getRequestId())
+                            .setSvg(ByteString.copyFrom(svg))
+                            .build());
                 } catch (IllegalArgumentException _) {
                     System.out.write(RenderWorkerPool.INVALID);
                     System.out.flush();
@@ -71,8 +81,9 @@ public final class RenderWorkerMain {
                 }
             }
         } catch (Exception failed) {
-            System.err
-                .println("event=render_worker_failed type=" + failed.getClass().getSimpleName());
+            System.err.println("event=render_worker_failed type=%s".formatted(
+                failed.getClass()
+                    .getSimpleName()));
             System.exit(1);
         }
     }

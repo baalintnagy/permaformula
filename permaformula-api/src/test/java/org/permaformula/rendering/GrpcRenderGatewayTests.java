@@ -1,6 +1,8 @@
 package org.permaformula.rendering;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -9,12 +11,16 @@ import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 import com.google.protobuf.ByteString;
-import io.grpc.*;
-import io.grpc.netty.shaded.io.grpc.netty.*;
+import io.grpc.Context;
+import io.grpc.Status;
+import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
+import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
 import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
-import org.permaformula.contract.v1.*;
+import org.permaformula.contract.v1.RenderRequest;
+import org.permaformula.contract.v1.RenderResponse;
+import org.permaformula.contract.v1.RendererServiceGrpc;
 import org.springframework.web.server.ResponseStatusException;
 
 class GrpcRenderGatewayTests {
@@ -22,17 +28,24 @@ class GrpcRenderGatewayTests {
     @Test
     void grpcReceivesRemainingRequestBudgetRatherThanFullRendererTimeout() throws Exception {
         var server = NettyServerBuilder.forAddress(new InetSocketAddress("127.0.0.1", 0))
-            .addService(new RendererGrpc.RendererImplBase() {
+            .addService(new RendererServiceGrpc.RendererServiceImplBase() {
                 @Override
-                public void render(RenderRequest request, StreamObserver<RenderResponse> observer) {
-                    long remaining = Context.current().getDeadline()
+                public void render(RenderRequest request,
+                    StreamObserver<RenderResponse> observer) {
+                    long remaining = Context.current()
+                        .getDeadline()
                         .timeRemaining(TimeUnit.MILLISECONDS);
-                    observer.onNext(RenderResponse.newBuilder().setRequestId(request.getRequestId())
-                        .setSvg(ByteString.copyFromUtf8(Long.toString(remaining))).build());
+                    observer.onNext(RenderResponse.newBuilder()
+                        .setRequestId(request.getRequestId())
+                        .setSvg(ByteString.copyFromUtf8(Long.toString(remaining)))
+                        .build());
                     observer.onCompleted();
                 }
-            }).build().start();
-        var channel = NettyChannelBuilder.forAddress("127.0.0.1", server.getPort()).usePlaintext()
+            })
+            .build()
+            .start();
+        var channel = NettyChannelBuilder.forAddress("127.0.0.1", server.getPort())
+            .usePlaintext()
             .build();
         try (var gateway = new GrpcRenderGateway(channel, Duration.ofSeconds(5));
             var _ = WorkDeadline.open(Duration.ofSeconds(2))) {
@@ -48,12 +61,17 @@ class GrpcRenderGatewayTests {
     @Test
     void actualGrpcTransportPreservesContentAndMapsErrors() throws Exception {
         var server = NettyServerBuilder.forAddress(new InetSocketAddress("127.0.0.1", 0))
-            .addService(new RendererGrpc.RendererImplBase() {
+            .addService(new RendererServiceGrpc.RendererServiceImplBase() {
 
-                public void render(RenderRequest request, StreamObserver<RenderResponse> observer) {
-                    var input = request.hasHtml() ? request.getHtml().getDocument()
-                        : request.hasJpegSvg() ? request.getJpegSvg()
-                            : request.getFormula().getFormula();
+                public void render(RenderRequest request,
+                    StreamObserver<RenderResponse> observer) {
+                    var input = request.hasHtml()
+                        ? request.getHtml()
+                            .getDocument()
+                        : request.hasJpegSvg()
+                            ? request.getJpegSvg()
+                            : request.getFormula()
+                                .getFormula();
                     if (input.equals("busy")) {
                         observer.onError(Status.RESOURCE_EXHAUSTED.asRuntimeException());
                         return;
@@ -64,15 +82,21 @@ class GrpcRenderGatewayTests {
                         return;
                     }
                     if (request.hasHtml()) {
-                        assertEquals(240, request.getHtml().getWidth());
+                        assertEquals(240, request.getHtml()
+                            .getWidth());
                     }
                     observer.onNext(RenderResponse.newBuilder()
-                        .setRequestId(input.equals("wrong") ? "wrong" : request.getRequestId())
-                        .setSvg(ByteString.copyFromUtf8(input)).build());
+                        .setRequestId(input.equals("wrong") ? "wrong"
+                            : request.getRequestId())
+                        .setSvg(ByteString.copyFromUtf8(input))
+                        .build());
                     observer.onCompleted();
                 }
-            }).build().start();
-        var channel = NettyChannelBuilder.forAddress("127.0.0.1", server.getPort()).usePlaintext()
+            })
+            .build()
+            .start();
+        var channel = NettyChannelBuilder.forAddress("127.0.0.1", server.getPort())
+            .usePlaintext()
             .build();
         try (var gateway = new GrpcRenderGateway(channel, Duration.ofSeconds(5))) {
             assertEquals("<p>π</p>",
@@ -87,9 +111,12 @@ class GrpcRenderGatewayTests {
             assertEquals("Invalid rendering content", invalid.getMessage());
             var overloaded = assertThrows(ResponseStatusException.class,
                 () -> gateway.renderFormula("busy"));
-            assertEquals(503, overloaded.getStatusCode().value());
-            assertEquals("1", overloaded.getHeaders().getFirst("Retry-After"));
-            assertEquals("no-store", overloaded.getHeaders().getCacheControl());
+            assertEquals(503, overloaded.getStatusCode()
+                .value());
+            assertEquals("1", overloaded.getHeaders()
+                .getFirst("Retry-After"));
+            assertEquals("no-store", overloaded.getHeaders()
+                .getCacheControl());
         } finally {
             server.shutdownNow();
         }

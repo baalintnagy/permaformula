@@ -1,11 +1,24 @@
 package org.permaformula.rendering;
 
+import static org.permaformula.validation.QuickValidator.notNull;
+import static org.permaformula.validation.QuickValidator.validate;
+
 import java.time.Duration;
-import java.util.concurrent.*;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.permaformula.contract.v1.RenderRequest;
 import org.permaformula.contract.v1.RenderResponse;
-import org.permaformula.validation.QuickValidator;
 
 /** Fixed workers and bounded admission. Cancellation never frees a running worker early. */
 public final class RenderWorkQueue implements RenderJobExecutor, AutoCloseable {
@@ -17,23 +30,27 @@ public final class RenderWorkQueue implements RenderJobExecutor, AutoCloseable {
     private long retainedBytes;
 
     public RenderWorkQueue(int concurrency, RenderQueueSettings settings, RenderJobExecutor jobs) {
-        QuickValidator.validate(
+        validate(
             !(concurrency < 1
                 || concurrency > 64),
             () -> new IllegalArgumentException("Renderer concurrency must be 1..64"));
-        this.settings = QuickValidator.notNull(settings);
-        this.jobs = QuickValidator.notNull(jobs);
+        this.settings = notNull(settings);
+        this.jobs = notNull(jobs);
         byteLimit = settings.effectiveRetainedBytes();
         outstanding = new Semaphore(concurrency + settings.capacity());
         BlockingQueue<Runnable> waiting = settings.capacity() == 0 ? new SynchronousQueue<>()
             : new ArrayBlockingQueue<>(settings.capacity());
         executor = new ThreadPoolExecutor(concurrency, concurrency, 0, TimeUnit.SECONDS, waiting,
-            Thread.ofPlatform().daemon(true).name("renderer-work-", 0).factory(),
+            Thread.ofPlatform()
+                .daemon(true)
+                .name("renderer-work-", 0)
+                .factory(),
             new ThreadPoolExecutor.AbortPolicy());
     }
 
     public int maxOutstanding() {
-        return executor.getMaximumPoolSize() + settings.capacity();
+        return executor.getMaximumPoolSize()
+            + settings.capacity();
     }
 
     public long effectiveRetainedBytes() {
@@ -45,12 +62,14 @@ public final class RenderWorkQueue implements RenderJobExecutor, AutoCloseable {
     }
 
     int waitingJobs() {
-        return executor.getQueue().size();
+        return executor.getQueue()
+            .size();
     }
 
     @Override
     public RenderResponse execute(RenderRequest request, Duration budget) throws RenderException {
-        if (Thread.currentThread().isInterrupted()) {
+        if (Thread.currentThread()
+            .isInterrupted()) {
             throw new RenderException(RenderException.Kind.QUEUE_CANCELLED,
                 "Rendering cancelled before admission");
         }
@@ -60,10 +79,12 @@ public final class RenderWorkQueue implements RenderJobExecutor, AutoCloseable {
         }
         // Clamp direct callers too; service callers supply the remaining RPC budget.
         long budgetNanos = (budget.compareTo(Duration.ofMinutes(5)) > 0 ? Duration.ofMinutes(5)
-            : budget).toNanos();
+            : budget)
+            .toNanos();
         long now = System.nanoTime();
         long deadline = now + budgetNanos;
-        long queueDeadline = now + Math.min(budgetNanos, settings.maxWait().toNanos());
+        long queueDeadline = now + Math.min(budgetNanos, settings.maxWait()
+            .toNanos());
         // Conservative payload accounting includes protobuf bytes and UTF-16 strings.
         // Charge running requests too, so dequeue/cancellation cannot create extra memory headroom.
         long weight = 1024L + 3L * request.getSerializedSize();
@@ -96,13 +117,15 @@ public final class RenderWorkQueue implements RenderJobExecutor, AutoCloseable {
                     throw queueExpired();
                 }
             }
-            return task.get(Math.max(1, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+            return task.get(Math.max(1, deadline - System.nanoTime()),
+                TimeUnit.NANOSECONDS);
         } catch (InterruptedException cancelled) {
             boolean waiting = task.cancelWaiting();
             if (!waiting) {
                 task.cancel(true);
             }
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                .interrupt();
             throw new RenderException(
                 waiting ? RenderException.Kind.QUEUE_CANCELLED : RenderException.Kind.CANCELLED,
                 "Rendering cancelled", cancelled);
@@ -217,7 +240,8 @@ public final class RenderWorkQueue implements RenderJobExecutor, AutoCloseable {
 
     @Override
     public void close() {
-        executor.shutdownNow().stream()
+        executor.shutdownNow()
+            .stream()
             .map(Job.class::cast)
             .forEach(Job::cancelWaiting);
     }

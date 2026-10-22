@@ -17,7 +17,8 @@ public final class JpegOutputPolicy {
 
     public static String encode(byte[] bytes) throws IOException {
         validate(bytes);
-        return PREFIX + Base64.getEncoder().encodeToString(bytes);
+        return "%s%s".formatted(PREFIX, Base64.getEncoder()
+            .encodeToString(bytes));
     }
 
     public static byte[] decode(String stored) throws IOException {
@@ -26,7 +27,8 @@ public final class JpegOutputPolicy {
                 || stored.length() > 4L * RenderProtocol.MAX_CONTENT_BYTES / 3 + 16) {
                 throw new IOException("Invalid cached JPEG");
             }
-            byte[] bytes = Base64.getDecoder().decode(stored.substring(PREFIX.length()));
+            byte[] bytes = Base64.getDecoder()
+                .decode(stored.substring(PREFIX.length()));
             validate(bytes);
             return bytes;
         } catch (IllegalArgumentException invalid) {
@@ -49,7 +51,8 @@ public final class JpegOutputPolicy {
             ImageReader reader = readers.next();
             try {
                 reader.setInput(input);
-                int width = reader.getWidth(0), height = reader.getHeight(0);
+                int width = reader.getWidth(0),
+                    height = reader.getHeight(0);
                 ComplexityPolicy policy = ComplexityPolicy.CURRENT;
                 if (width < 1
                     || height < 1

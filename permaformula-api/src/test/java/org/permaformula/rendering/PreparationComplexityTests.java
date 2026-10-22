@@ -1,6 +1,7 @@
 package org.permaformula.rendering;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import jakarta.validation.ConstraintViolationException;
 import org.jsoup.Jsoup;
@@ -12,12 +13,14 @@ class PreparationComplexityTests {
     void acceptsSubstantialDocumentsAndStyles() {
         String html = "<p>Some useful mathematics `sqrt(x^2)`</p>".repeat(1000);
         assertDoesNotThrow(() -> PreparationComplexity.html(html));
-        assertDoesNotThrow(() -> PreparationComplexity.dom(Jsoup.parse(html).body()));
+        assertDoesNotThrow(() -> PreparationComplexity.dom(Jsoup.parse(html)
+            .body()));
         assertDoesNotThrow(
-            () -> StylesheetPolicy.stylesheet("/*" + "x".repeat(10000) + "*/ .a{color:red}"));
+            () -> StylesheetPolicy.stylesheet("/*%s*/ .a{color:red}".formatted("x".repeat(10000))));
         assertDoesNotThrow(() -> StylesheetPolicy
             .stylesheet(".a{display:grid;grid-template-columns:repeat(1024,1px)}"));
-        assertDoesNotThrow(() -> ComplexityPolicy.CURRENT.checkMathInput("x+".repeat(10000) + "x"));
+        assertDoesNotThrow(() -> ComplexityPolicy.CURRENT.checkMathInput("%sx".formatted(
+            "x+".repeat(10000))));
     }
 
     @Test
@@ -30,7 +33,8 @@ class PreparationComplexityTests {
             () -> PreparationComplexity.html("<p>x</p>".repeat(20001)));
         // Math expression discovery is owned by MathJax, rather than a second delimiter scanner.
         assertDoesNotThrow(
-            () -> PreparationComplexity.dom(Jsoup.parse("<p>&#96;x&#96;</p>").body()));
+            () -> PreparationComplexity.dom(Jsoup.parse("<p>&#96;x&#96;</p>")
+                .body()));
     }
 
     @Test
@@ -38,7 +42,7 @@ class PreparationComplexityTests {
         assertThrows(ConstraintViolationException.class,
             () -> StylesheetPolicy.stylesheet("@media all{".repeat(33)));
         assertThrows(ConstraintViolationException.class,
-            () -> StylesheetPolicy.stylesheet(".x{width:" + "calc(".repeat(65) + "1px}"));
+            () -> StylesheetPolicy.stylesheet(".x{width:%s1px}".formatted("calc(".repeat(65))));
         assertThrows(ConstraintViolationException.class,
             () -> StylesheetPolicy.stylesheet(".x{color:red}".repeat(20001)));
         assertThrows(ConstraintViolationException.class,
@@ -48,7 +52,7 @@ class PreparationComplexityTests {
         assertThrows(ConstraintViolationException.class,
             () -> StylesheetPolicy.stylesheet(".x{grid-template-columns:repeat(+100000000,1px)}"));
         assertThrows(ConstraintViolationException.class,
-            () -> StylesheetPolicy.stylesheet("." + "x".repeat(4097) + "{color:red}"));
+            () -> StylesheetPolicy.stylesheet(".%s{color:red}".formatted("x".repeat(4097))));
     }
 
     @Test
@@ -64,12 +68,13 @@ class PreparationComplexityTests {
     @Test
     void libraryLexersHandleCommentsStringsEscapesAndImpliedHtmlClosures() {
         assertDoesNotThrow(
-            () -> PreparationComplexity.html("<ul>" + "<li>Item".repeat(1000) + "</ul>"));
+            () -> PreparationComplexity.html("<ul>%s</ul>".formatted("<li>Item".repeat(1000))));
         assertDoesNotThrow(() -> StylesheetPolicy
-            .stylesheet(".a{content:'" + "({[".repeat(1000) + "';color:red}"));
+            .stylesheet(".a{content:'%s';color:red}".formatted("({[".repeat(1000))));
         assertDoesNotThrow(
-            () -> StylesheetPolicy.stylesheet("/*" + "({[".repeat(1000) + "*/ .a{color:red}"));
+            () -> StylesheetPolicy
+                .stylesheet("/*%s*/ .a{color:red}".formatted("({[".repeat(1000))));
         assertThrows(ConstraintViolationException.class,
-            () -> StylesheetPolicy.stylesheet(".a{width:" + "c\\61 lc(".repeat(65) + "1px}"));
+            () -> StylesheetPolicy.stylesheet(".a{width:%s1px}".formatted("c\\61 lc(".repeat(65))));
     }
 }

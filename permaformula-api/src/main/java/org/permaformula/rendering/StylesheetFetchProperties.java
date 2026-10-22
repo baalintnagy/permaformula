@@ -1,8 +1,9 @@
 package org.permaformula.rendering;
 
+import static org.permaformula.validation.QuickValidator.validate;
+
 import java.net.URI;
 
-import org.permaformula.validation.QuickValidator;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
@@ -13,11 +14,11 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 @ConfigurationProperties("permaformula.stylesheet-fetch")
 public record StylesheetFetchProperties(@DefaultValue("false") boolean proxyRequired, URI proxy) {
     public StylesheetFetchProperties {
-        QuickValidator.validate(
+        validate(
             !(proxyRequired
                 && proxy == null),
             () -> new IllegalArgumentException("Stylesheet egress proxy is required"));
-        QuickValidator.validate(
+        validate(
             !(proxy != null
                 && (!"http".equalsIgnoreCase(proxy.getScheme())
                     || proxy.getHost() == null
@@ -27,9 +28,14 @@ public record StylesheetFetchProperties(@DefaultValue("false") boolean proxyRequ
                     || proxy.getRawQuery() != null
                     || proxy.getRawFragment() != null
                     || proxy.getRawPath() != null
-                        && !proxy.getRawPath().isEmpty())),
+                        && !proxy.getRawPath()
+                            .isEmpty())),
             () -> new IllegalArgumentException(
-                "Stylesheet proxy must be an HTTP host and explicit port without credentials or path"));
+                """
+                Stylesheet proxy must be an HTTP host and explicit port without credentials or \
+                path\
+                """
+            ));
     }
 
     static StylesheetFetchProperties direct() {

@@ -14,8 +14,12 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.oauth2.jwt.*;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
@@ -40,11 +44,17 @@ public class AdminLoginController {
                 UsernamePasswordAuthenticationToken.unauthenticated(login.username(),
                     login.password())));
             Instant now = Instant.now();
-            JwtClaimsSet claims = JwtClaimsSet.builder().issuer(AdminSecurityConfiguration.ISSUER)
-                .subject(user.getName()).issuedAt(now).expiresAt(now.plusSeconds(900))
-                .claim("scope", "admin").build();
-            String token = encoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
-            return ResponseEntity.ok().header("Cache-Control", "no-store")
+            JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer(AdminSecurityConfiguration.ISSUER)
+                .subject(user.getName())
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(900))
+                .claim("scope", "admin")
+                .build();
+            String token = encoder.encode(JwtEncoderParameters.from(claims))
+                .getTokenValue();
+            return ResponseEntity.ok()
+                .header("Cache-Control", "no-store")
                 .body(new Token(token, "Bearer", 900));
         } catch (AuthenticationException _) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,

@@ -48,7 +48,8 @@ public class CaffeineImageStore implements GeneratedImageStore, AutoCloseable {
     @Autowired
     public CaffeineImageStore(ImageCacheProperties properties,
         ObjectProvider<JdbcImageCache> persistent) {
-        this(properties, Ticker.systemTicker(), persistent.getIfAvailable());
+        this(properties, Ticker.systemTicker(),
+            persistent.getIfAvailable());
     }
 
     public CaffeineImageStore(ImageCacheProperties properties) {
@@ -69,17 +70,23 @@ public class CaffeineImageStore implements GeneratedImageStore, AutoCloseable {
                     thread.setDaemon(true);
                     return thread;
                 }, new ThreadPoolExecutor.AbortPolicy());
-        long effectiveBytes = properties.effectiveMaximumBytes(Runtime.getRuntime().maxMemory());
+        long effectiveBytes = properties.effectiveMaximumBytes(Runtime.getRuntime()
+            .maxMemory());
         long tokenBytes = effectiveBytes < 65536 ? 0
             : Math.min(4L * 1024 * 1024, effectiveBytes / 64);
-        tokens = Caffeine.newBuilder().maximumWeight(tokenBytes)
+        tokens = Caffeine.newBuilder()
+            .maximumWeight(tokenBytes)
             .weigher((String token, String key) -> 512)
-            .expireAfterAccess(properties.expireAfterAccess()).ticker(ticker).build();
+            .expireAfterAccess(properties.expireAfterAccess())
+            .ticker(ticker)
+            .build();
         // Conservative UTF-16 content estimate plus key and per-entry overhead.
         cache = Caffeine.newBuilder()
             .maximumWeight(effectiveBytes - tokenBytes)
             .weigher((String key, Entry entry) -> (int) Math.min(Integer.MAX_VALUE,
-                2L * (key.length() + entry.output.length()) + 320))
+                2L * (key.length()
+                    + entry.output.length())
+                    + 320))
             .expireAfterAccess(properties.expireAfterAccess())
             .removalListener((String key, Entry _, RemovalCause cause) -> log
                 .debug("event=cache_removed key={} cause={}", key, cause))
@@ -88,7 +95,9 @@ public class CaffeineImageStore implements GeneratedImageStore, AutoCloseable {
             .buildAsync();
         log.info(
             "event=cache_initialized configuredBytes={} effectiveBytes={} expireAfterAccess={}",
-            properties.maximumSize().toBytes(), effectiveBytes, properties.expireAfterAccess());
+            properties.maximumSize()
+                .toBytes(),
+            effectiveBytes, properties.expireAfterAccess());
     }
 
     @Override
@@ -96,10 +105,12 @@ public class CaffeineImageStore implements GeneratedImageStore, AutoCloseable {
         boolean[] loaded = { false };
         Entry entry = memoryGetOrGenerate(key, () -> {
             loaded[0] = true;
-            Stored stored = persistent == null ? null : persistent.findStored(key);
+            Stored stored = persistent == null ? null
+                : persistent.findStored(key);
             if (stored != null) {
                 persistent.accessed(key);
-                return new Entry(stored.output(), stored.described());
+                return new Entry(stored.output(),
+                    stored.described());
             }
             String generated = generator.generate();
             if (persistent != null) {
@@ -124,13 +135,16 @@ public class CaffeineImageStore implements GeneratedImageStore, AutoCloseable {
         if (key == null) {
             return null;
         }
-        Entry entry = cache.synchronous().getIfPresent(key);
+        Entry entry = cache.synchronous()
+            .getIfPresent(key);
         if (entry == null
             && persistent != null) {
             Stored stored = persistent.findStored(key);
             if (stored != null) {
-                entry = new Entry(stored.output(), stored.described());
-                cache.asMap().putIfAbsent(key, CompletableFuture.completedFuture(entry));
+                entry = new Entry(stored.output(),
+                    stored.described());
+                cache.asMap()
+                    .putIfAbsent(key, CompletableFuture.completedFuture(entry));
             }
         }
         if (entry == null) {
@@ -149,7 +163,8 @@ public class CaffeineImageStore implements GeneratedImageStore, AutoCloseable {
         if (tokenKey == null) {
             return;
         }
-        Entry entry = cache.synchronous().getIfPresent(key);
+        Entry entry = cache.synchronous()
+            .getIfPresent(key);
         // Until publication succeeds keep the normal path's bounded retry behavior.
         if (entry != null
             && (persistent == null
@@ -170,7 +185,8 @@ public class CaffeineImageStore implements GeneratedImageStore, AutoCloseable {
         if (persistent == null) {
             return;
         }
-        Entry entry = cache.synchronous().getIfPresent(key);
+        Entry entry = cache.synchronous()
+            .getIfPresent(key);
         if (entry == null
             || entry.described
             || ticker.read() < entry.retryAt
@@ -181,13 +197,15 @@ public class CaffeineImageStore implements GeneratedImageStore, AutoCloseable {
             publication.execute(() -> {
                 Lock lock = publicationLocks.get(key);
                 if (!lock.tryLock()) {
-                    entry.retryAt = ticker.read() + TimeUnit.SECONDS.toNanos(1);
+                    entry.retryAt = ticker.read()
+                        + TimeUnit.SECONDS.toNanos(1);
                     entry.publishing.set(false);
                     return;
                 }
                 try {
                     // An evicted/deleted entry must not be republished by queued work.
-                    if (cache.synchronous().getIfPresent(key) != entry) {
+                    if (cache.synchronous()
+                        .getIfPresent(key) != entry) {
                         return;
                     }
                     Boolean described = persistent.sourcePublished(key);
@@ -195,20 +213,24 @@ public class CaffeineImageStore implements GeneratedImageStore, AutoCloseable {
                         persistent.saveIfAbsent(key, entry.output);
                     }
                     entry.described = Boolean.TRUE.equals(described)
-                        || persistent.describe(key, kind, descriptor.get(), excerpt, tokenContext);
+                        || persistent.describe(key, kind, descriptor.get(), excerpt,
+                            tokenContext);
                 } catch (RuntimeException failure) {
                     log.debug("event=cache_publication_failed key={} errorType={}", key,
-                        failure.getClass().getSimpleName());
+                        failure.getClass()
+                            .getSimpleName());
                 } finally {
                     if (!entry.described) {
-                        entry.retryAt = ticker.read() + TimeUnit.SECONDS.toNanos(30);
+                        entry.retryAt = ticker.read()
+                            + TimeUnit.SECONDS.toNanos(30);
                     }
                     entry.publishing.set(false);
                     lock.unlock();
                 }
             });
         } catch (RejectedExecutionException _) {
-            entry.retryAt = ticker.read() + TimeUnit.SECONDS.toNanos(1);
+            entry.retryAt = ticker.read()
+                + TimeUnit.SECONDS.toNanos(1);
             entry.publishing.set(false);
         }
     }
@@ -239,7 +261,8 @@ public class CaffeineImageStore implements GeneratedImageStore, AutoCloseable {
                 return output;
             } catch (IOException | RuntimeException | Error failure) {
                 log.warn("event=cache_generation_failed key={} errorType={} durationMs={}",
-                    key, failure.getClass().getSimpleName(),
+                    key, failure.getClass()
+                        .getSimpleName(),
                     TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
                 // Caffeine logs failed async loads. Keep submitted content out of those
                 // diagnostics.
@@ -251,13 +274,15 @@ public class CaffeineImageStore implements GeneratedImageStore, AutoCloseable {
         try {
             // A waiter's timeout must never complete or cancel the shared future.
             return completion.get(
-                completion.isDone() ? 0 : WorkDeadline.remainingNanos(Duration.ofSeconds(60)),
+                completion.isDone() ? 0
+                    : WorkDeadline.remainingNanos(Duration.ofSeconds(60)),
                 TimeUnit.NANOSECONDS);
         } catch (TimeoutException _) {
             throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT,
                 "Waiting for image exceeded request deadline");
         } catch (InterruptedException _) {
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                .interrupt();
             throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "Image wait interrupted");
         } catch (ExecutionException failed) {
             Throwable cause = failed.getCause() instanceof GenerationFailure generation
@@ -313,7 +338,8 @@ public class CaffeineImageStore implements GeneratedImageStore, AutoCloseable {
             if (persistent != null) {
                 persistent.delete(key);
             }
-            cache.synchronous().invalidate(key);
+            cache.synchronous()
+                .invalidate(key);
         } finally {
             lock.unlock();
         }
@@ -327,7 +353,8 @@ public class CaffeineImageStore implements GeneratedImageStore, AutoCloseable {
             try {
                 publication.awaitTermination(5, TimeUnit.SECONDS);
             } catch (InterruptedException _) {
-                Thread.currentThread().interrupt();
+                Thread.currentThread()
+                    .interrupt();
             }
         }
     }

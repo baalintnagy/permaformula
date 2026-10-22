@@ -38,32 +38,37 @@ public final class ClientRateLimits {
 
     ClientRateLimits(ClientRateLimitProperties properties, Ticker ticker) {
         this.properties = properties;
-        clients = Caffeine.newBuilder().expireAfter(new Expiry<String, Client>() {
-            private long duration(Client client) {
-                // An interrupted request can leave a non-cooperative worker running.
-                // Pin its identity until the worker actually exits, rather than resetting its
-                // concurrency allowance.
-                return client.leases > 0 ? Long.MAX_VALUE
-                    : Math.max(properties.expireAfterAccess().toNanos(),
-                        client.logins != null ? Duration.ofSeconds(36).toNanos() : 0);
-            }
+        clients = Caffeine.newBuilder()
+            .expireAfter(new Expiry<String, Client>() {
+                private long duration(Client client) {
+                    // An interrupted request can leave a non-cooperative worker running.
+                    // Pin its identity until the worker actually exits, rather than resetting its
+                    // concurrency allowance.
+                    return client.leases > 0 ? Long.MAX_VALUE
+                        : Math.max(properties.expireAfterAccess()
+                            .toNanos(),
+                            client.logins != null ? Duration.ofSeconds(36)
+                                .toNanos() : 0);
+                }
 
-            @Override
-            public long expireAfterCreate(String key, Client value, long now) {
-                return duration(value);
-            }
+                @Override
+                public long expireAfterCreate(String key, Client value, long now) {
+                    return duration(value);
+                }
 
-            @Override
-            public long expireAfterUpdate(String key, Client value, long now, long remaining) {
-                return duration(value);
-            }
+                @Override
+                public long expireAfterUpdate(String key, Client value, long now, long remaining) {
+                    return duration(value);
+                }
 
-            @Override
-            public long expireAfterRead(String key, Client value, long now, long remaining) {
-                return duration(value);
-            }
+                @Override
+                public long expireAfterRead(String key, Client value, long now, long remaining) {
+                    return duration(value);
+                }
 
-        }).ticker(ticker).build();
+            })
+            .ticker(ticker)
+            .build();
         clock = new TimeMeter() {
             @Override
             public long currentTimeNanos() {
@@ -80,7 +85,8 @@ public final class ClientRateLimits {
 
     String identity(HttpServletRequest request) {
         String peer = canonical(request.getRemoteAddr());
-        if (properties.trustedProxies().contains(peer)) {
+        if (properties.trustedProxies()
+            .contains(peer)) {
             Enumeration<String> headers = request.getHeaders("X-Forwarded-For");
             if (!headers.hasMoreElements()) {
                 throw invalidProxyHeader();
@@ -113,19 +119,24 @@ public final class ClientRateLimits {
         clients.cleanUp();
         if (clients.estimatedSize() >= properties.maximumClients()) {
             throw new Limited("Client rate-limit capacity reached",
-                properties.expireAfterAccess().toSeconds() + 1);
+                properties.expireAfterAccess()
+                    .toSeconds() + 1);
         }
         client = new Client(identity,
-            bucket(properties.requestsPerMinute(), properties.requestBurst()),
-            bucket(properties.generationsPerMinute(), properties.generationBurst()),
+            bucket(properties.requestsPerMinute(),
+                properties.requestBurst()),
+            bucket(properties.generationsPerMinute(),
+                properties.generationBurst()),
             new Semaphore(properties.generationConcurrency()));
         clients.put(identity, client);
         return client;
     }
 
     private Bucket bucket(long rate, long burst) {
-        return Bucket.builder().withCustomTimePrecision(clock)
-            .addLimit(limit -> limit.capacity(burst).refillGreedy(rate, Duration.ofMinutes(1)))
+        return Bucket.builder()
+            .withCustomTimePrecision(clock)
+            .addLimit(limit -> limit.capacity(burst)
+                .refillGreedy(rate, Duration.ofMinutes(1)))
             .build();
     }
 
@@ -182,24 +193,28 @@ public final class ClientRateLimits {
         Client client = context.client();
         consume(client.generations(), "Render rate exceeded");
         return () -> {
-            context.owner().acquireGeneration(client);
+            context.owner()
+                .acquireGeneration(client);
             try {
                 return operation.run();
             } finally {
-                context.owner().releaseGeneration(client);
+                context.owner()
+                    .releaseGeneration(client);
             }
         };
     }
 
     private synchronized void acquireGeneration(Client client) {
-        if (!client.slots().tryAcquire()) {
+        if (!client.slots()
+            .tryAcquire()) {
             throw new Limited("Client rendering concurrency exceeded", 1);
         }
         retain(client);
     }
 
     private synchronized void releaseGeneration(Client client) {
-        client.slots().release();
+        client.slots()
+            .release();
         release(client);
     }
 

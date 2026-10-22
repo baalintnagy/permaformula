@@ -1,6 +1,10 @@
 package org.permaformula.rendering;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -10,9 +14,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.microsoft.playwright.*;
+import com.microsoft.playwright.Browser;
+import com.microsoft.playwright.BrowserContext;
+import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Playwright;
+import com.microsoft.playwright.PlaywrightException;
 import com.sun.net.httpserver.HttpServer;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.function.Executable;
 
@@ -28,12 +39,18 @@ class BrowserChannelPolicyTests {
 
     @BeforeAll
     static void launch() {
-        var browsers = Path.of("../.runtime/browsers").toAbsolutePath();
-        playwright = Playwright.create(new Playwright.CreateOptions().setEnv(Map.of(
-            "PLAYWRIGHT_BROWSERS_PATH", browsers.toString(), "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
-            "1")));
-        browser = playwright.chromium().launch(new BrowserType.LaunchOptions()
-            .setExecutablePath(Path.of(playwright.chromium().executablePath())).setHeadless(true));
+        var browsers = Path.of("../.runtime/browsers")
+            .toAbsolutePath();
+        playwright = Playwright.create(new Playwright.CreateOptions()
+            .setEnv(Map.of(
+                "PLAYWRIGHT_BROWSERS_PATH", browsers.toString(),
+                "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
+                "1")));
+        browser = playwright.chromium()
+            .launch(new BrowserType.LaunchOptions()
+                .setExecutablePath(Path.of(playwright.chromium()
+                    .executablePath()))
+                .setHeadless(true));
     }
 
     @AfterAll
@@ -51,24 +68,30 @@ class BrowserChannelPolicyTests {
         try (var fixture = new Fixture();
             var context = BrowserChannelPolicy.newContext(browser, 320)) {
             var page = fixture.page(context);
-            assertEquals("closed", page.evaluate("""
+            assertEquals("closed", page.evaluate(
+                """
                 url => new Promise(resolve => {
                   const socket = new WebSocket(url);
                   socket.onclose = () => resolve('closed');
                   socket.onerror = () => resolve('closed');
                 })
-                """, fixture.base.replace("http:", "ws:") + "/socket"));
-            assertEquals(List.of("SecurityError", "SecurityError"), page.evaluate(
                 """
+                , "%s/socket".formatted(fixture.base.replace("http:", "ws:"))));
+            assertEquals(List.of("SecurityError", "SecurityError"),
+                page.evaluate(
+                    """
                     async () => {
                       const results = [];
-                      for (const register of [navigator.serviceWorker.register, ServiceWorkerContainer.prototype.register]) {
-                        try { await register.call(navigator.serviceWorker, '/export-svg.js'); results.push('registered'); }
+                      for (const register of [navigator.serviceWorker.register, \
+                    ServiceWorkerContainer.prototype.register]) {
+                        try { await register.call(navigator.serviceWorker, '/export-svg.js'); \
+                    results.push('registered'); }
                         catch (error) { results.push(error.name); }
                       }
                       return results;
                     }
-                    """));
+                    """
+                ));
             assertEquals(0,
                 ((Number) page.evaluate(
                     "async () => (await navigator.serviceWorker.getRegistrations()).length"))
@@ -83,9 +106,11 @@ class BrowserChannelPolicyTests {
     void disablesWorkersAndWebRtcBeforeAnyDocumentScriptExecutes() throws Exception {
         try (var fixture = new Fixture();
             var context = BrowserChannelPolicy.newContext(browser, 320)) {
-            fixture.html = """
+            fixture.html =
+                """
                 <script>
-                window.results = ['Worker','SharedWorker','RTCPeerConnection','webkitRTCPeerConnection',
+                window.results = ['Worker','SharedWorker','RTCPeerConnection',\
+                'webkitRTCPeerConnection',
                                   'WebTransport','WebSocketStream'].map(name => {
                   try { new window[name]('/export-svg.js'); return 'allowed'; }
                   catch (error) { return error.name; }
@@ -93,14 +118,17 @@ class BrowserChannelPolicyTests {
                 </script>
                 """;
             var page = fixture.page(context);
-            assertEquals(Collections.nCopies(6, "SecurityError"), page.evaluate("window.results"));
+            assertEquals(Collections.nCopies(6, "SecurityError"),
+                page.evaluate("window.results"));
             assertEquals(Boolean.TRUE, page.evaluate(
                 """
-                    () => {
-                      try { Object.defineProperty(window, 'Worker', {value: function () {}}); return false; }
-                      catch (_) { return true; }
-                    }
-                    """));
+                () => {
+                  try { Object.defineProperty(window, 'Worker', {value: function () {}}); \
+                return false; }
+                  catch (_) { return true; }
+                }
+                """
+            ));
             assertEquals(0, fixture.scriptHits.get());
         }
     }
@@ -113,35 +141,44 @@ class BrowserChannelPolicyTests {
             assertNull(page.evaluate("url => window.open(url)", fixture.url));
             // Closing a just-created page can dispose its protocol object before newPage returns.
             attempt(context::newPage);
-            context.waitForCondition(() -> context.pages().size() == 1);
+            context.waitForCondition(() -> context.pages()
+                .size() == 1);
             page.evaluate(
                 """
-                    url => {const link=document.createElement('a');link.id='native-popup';link.href=url;link.target='_blank';link.textContent='open';document.body.appendChild(link);}\
-                    """,
+                url => {const link=document.createElement('a');link.id='native-popup';\
+                link.href=url;link.target='_blank';link.textContent='open';\
+                document.body.appendChild(link);}\
+                """
+                ,
                 fixture.url);
-            var popup = context.waitForPage(() -> page.locator("#native-popup").click());
+            var popup = context.waitForPage(() -> page.locator("#native-popup")
+                .click());
             context.waitForCondition(popup::isClosed);
             assertFalse(page.isClosed());
-            assertEquals(1, context.pages().size());
+            assertEquals(1, context.pages()
+                .size());
             assertEquals(1, fixture.documentHits.get());
         }
     }
 
     @Test
     void rejectsEvenNonNetworkChildFrames() throws Exception {
-        assertAll(List.of("about:blank", "srcdoc", "data:text/html,child", "same-document").stream()
+        assertAll(List.of("about:blank", "srcdoc", "data:text/html,child", "same-document")
+            .stream()
             .<Executable>map(source -> () -> {
                 try (var fixture = new Fixture();
                     var context = BrowserChannelPolicy.newContext(browser, 320)) {
                     var page = fixture.page(context);
-                    attempt(() -> page.evaluate("""
+                    attempt(() -> page.evaluate(
+                        """
                         source => {
                           const frame = document.createElement('iframe');
                           if (source === 'srcdoc') frame.srcdoc = '<p>child</p>';
                           else frame.src = source === 'same-document' ? location.href : source;
                           document.body.appendChild(frame);
                         }
-                        """, source));
+                        """
+                        , source));
                     context.waitForCondition(page::isClosed);
                     assertEquals(0, fixture.otherHits.get());
                     assertEquals(1, fixture.documentHits.get());
@@ -183,7 +220,8 @@ class BrowserChannelPolicyTests {
             fixture.html = "<script src='/export-svg.js'></script><p>safe</p>";
             fixture.redirectScript = true;
             var page = fixture.page(context);
-            assertEquals("safe", page.locator("p").textContent());
+            assertEquals("safe", page.locator("p")
+                .textContent());
             assertEquals(1, fixture.scriptHits.get());
             assertEquals(0, fixture.otherHits.get());
         }
@@ -201,7 +239,8 @@ class BrowserChannelPolicyTests {
 
         final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
 
-        final AtomicInteger documentHits = new AtomicInteger(), scriptHits = new AtomicInteger(),
+        final AtomicInteger documentHits = new AtomicInteger(),
+            scriptHits = new AtomicInteger(),
             otherHits = new AtomicInteger();
 
         final String base, url;
@@ -211,26 +250,32 @@ class BrowserChannelPolicyTests {
         volatile boolean redirectDocument, redirectScript;
 
         Fixture() throws Exception {
-            base = "http://127.0.0.1:" + server.getAddress().getPort();
-            url = base + "/document/test";
+            base = "http://127.0.0.1:%s".formatted(server.getAddress()
+                .getPort());
+            url = "%s/document/test".formatted(base);
             server.createContext("/", exchange -> {
-                var path = exchange.getRequestURI().getPath();
+                var path = exchange.getRequestURI()
+                    .getPath();
                 boolean document = path.equals("/document/test"),
                     script = path.equals("/export-svg.js");
-                (document ? documentHits : script ? scriptHits : otherHits).incrementAndGet();
+                (document ? documentHits : script ? scriptHits : otherHits)
+                    .incrementAndGet();
                 if ((document
                     && redirectDocument)
                     || (script
                         && redirectScript)) {
-                    exchange.getResponseHeaders().set("Location", base + "/unexpected");
+                    exchange.getResponseHeaders()
+                        .set("Location", "%s/unexpected".formatted(base));
                     exchange.sendResponseHeaders(302, -1);
                 } else {
                     var bytes = (document ? html : "self.addEventListener('fetch', () => {});")
                         .getBytes(StandardCharsets.UTF_8);
-                    exchange.getResponseHeaders().set("Content-Type",
-                        document ? "text/html" : "application/javascript");
+                    exchange.getResponseHeaders()
+                        .set("Content-Type",
+                            document ? "text/html" : "application/javascript");
                     exchange.sendResponseHeaders(200, bytes.length);
-                    exchange.getResponseBody().write(bytes);
+                    exchange.getResponseBody()
+                        .write(bytes);
                 }
                 exchange.close();
             });

@@ -38,104 +38,143 @@ class BuilderUiTests {
 
     @BeforeEach
     void useTestServerOrigin() {
-        origin = "http://localhost:" + port;
+        origin = "http://localhost:%s".formatted(port);
     }
 
     @Test
     void servesPackagedBuilderAndItsMathJaxAssets() throws Exception {
         try (var client = HttpClient.newHttpClient()) {
-            var index = client.send(HttpRequest.newBuilder(URI.create(origin + "/")).build(),
+            var index = client.send(
+                HttpRequest.newBuilder(URI.create("%s/".formatted(origin)))
+                    .build(),
                 HttpResponse.BodyHandlers.ofString());
             assertEquals(200, index.statusCode());
-            assertTrue(index.body().contains("PermaFormula"));
-            assertTrue(index.body().contains("/assets/"));
+            assertTrue(index.body()
+                .contains("PermaFormula"));
+            assertTrue(index.body()
+                .contains("/assets/"));
             for (String asset : java.util.List.of("/mathjax/startup.js",
                 "/mathjax/input/asciimath.js", "/mathjax/ui/safe.js")) {
                 var response = client.send(
-                    HttpRequest.newBuilder(URI.create(origin + asset)).build(),
+                    HttpRequest.newBuilder(URI.create("%s%s".formatted(origin, asset)))
+                        .build(),
                     HttpResponse.BodyHandlers.ofString());
                 assertEquals(200, response.statusCode());
-                assertTrue(response.body().length() > 1000);
+                assertTrue(response.body()
+                    .length() > 1000);
             }
         }
     }
 
     @Test
     void builderGeneratesRealFormulaAndStyledHtmlImages() throws Exception {
-        try (var playwright = Playwright.create(new Playwright.CreateOptions().setEnv(Map.of(
-            "PLAYWRIGHT_BROWSERS_PATH", Path.of("../.runtime/browsers").toAbsolutePath().toString(),
-            "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1")));
-            var browser = playwright.chromium().launch(new BrowserType.LaunchOptions()
-                .setExecutablePath(Path.of(playwright.chromium().executablePath()))
-                .setHeadless(true))) {
+        try (var playwright = Playwright.create(new Playwright.CreateOptions()
+            .setEnv(Map.of(
+                "PLAYWRIGHT_BROWSERS_PATH",
+                Path.of("../.runtime/browsers")
+                    .toAbsolutePath()
+                    .toString(),
+                "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1")));
+            var browser = playwright.chromium()
+                .launch(new BrowserType.LaunchOptions()
+                    .setExecutablePath(Path.of(playwright.chromium()
+                        .executablePath()))
+                    .setHeadless(true))) {
             var page = browser.newPage();
             page.setDefaultTimeout(15000);
             page.navigate(origin);
-            page.frameLocator("iframe[title='Formula live preview']").locator("svg").waitFor();
-            page.frameLocator("iframe[title='HTML live preview']").locator("svg").waitFor();
+            page.frameLocator("iframe[title='Formula live preview']")
+                .locator("svg")
+                .waitFor();
+            page.frameLocator("iframe[title='HTML live preview']")
+                .locator("svg")
+                .waitFor();
             // Simple expressions are preview-only; their image links still use the real API.
             assertEquals(0, page.locator("#formula")
                 .getByRole(AriaRole.BUTTON,
                     new com.microsoft.playwright.Locator.GetByRoleOptions()
-                        .setName("Render").setExact(true))
+                        .setName("Render")
+                        .setExact(true))
                 .count());
             var formulaTab = page.waitForPopup(() -> page.locator("#formula")
                 .getByRole(AriaRole.LINK,
                     new com.microsoft.playwright.Locator.GetByRoleOptions()
-                        .setName("Open SVG").setExact(true))
+                        .setName("Open SVG")
+                        .setExact(true))
                 .click());
             formulaTab.waitForLoadState(LoadState.LOAD);
-            assertTrue(formulaTab.url().startsWith(origin + "/exp-svg?"));
+            assertTrue(formulaTab.url()
+                .startsWith("%s/exp-svg?".formatted(origin)));
             try (var client = HttpClient.newHttpClient()) {
                 var response = client.send(
-                    HttpRequest.newBuilder(URI.create(formulaTab.url())).build(),
+                    HttpRequest.newBuilder(URI.create(formulaTab.url()))
+                        .build(),
                     HttpResponse.BodyHandlers.ofString());
                 assertEquals(200, response.statusCode());
-                assertTrue(response.body().contains("<path"));
+                assertTrue(response.body()
+                    .contains("<path"));
             }
             formulaTab.close();
 
-            page.locator("#composer").getByRole(AriaRole.BUTTON,
-                new com.microsoft.playwright.Locator.GetByRoleOptions().setName("Render")).click();
+            page.locator("#composer")
+                .getByRole(AriaRole.BUTTON,
+                    new com.microsoft.playwright.Locator.GetByRoleOptions()
+                        .setName("Render"))
+                .click();
             // The SVG response CSP prohibits Playwright's injected selector script.
-            assertThat(page.locator("iframe[title='Renered SVG']")).isVisible();
-            assertTrue(page.locator("iframe[title='Renered SVG']").getAttribute("src")
+            assertThat(page.locator("iframe[title='Renered SVG']"))
+                .isVisible();
+            assertTrue(page.locator("iframe[title='Renered SVG']")
+                .getAttribute("src")
                 .startsWith("blob:"));
             page.locator(".generated-viewer")
                 .screenshot(new com.microsoft.playwright.Locator.ScreenshotOptions()
                     .setPath(Path.of("target/builder/generated-viewer.png")));
             var imageTab = page.waitForPopup(() -> page.locator("#composer")
                 .getByRole(AriaRole.LINK,
-                    new com.microsoft.playwright.Locator.GetByRoleOptions().setName("Open SVG")
+                    new com.microsoft.playwright.Locator.GetByRoleOptions()
+                        .setName("Open SVG")
                         .setExact(true))
                 .click());
-            imageTab.waitForURL(origin + "/html-svg?**");
+            imageTab.waitForURL("%s/html-svg?**".formatted(origin));
             imageTab.waitForLoadState(LoadState.LOAD);
             // Inspect the actual response rather than injecting a DOM selector into a sandboxed SVG
             // document.
             try (var client = HttpClient.newHttpClient()) {
                 var imageResponse = client.send(
-                    HttpRequest.newBuilder(URI.create(imageTab.url())).build(),
+                    HttpRequest.newBuilder(URI.create(imageTab.url()))
+                        .build(),
                     HttpResponse.BodyHandlers.ofString());
                 assertEquals(200, imageResponse.statusCode());
-                assertTrue(imageResponse.headers().firstValue("content-type").orElse("")
+                assertTrue(imageResponse.headers()
+                    .firstValue("content-type")
+                    .orElse("")
                     .contains("image/svg+xml"));
-                assertTrue(imageResponse.body().contains("foreignObject"));
-                assertTrue(imageResponse.body().contains("The sum of cubes"));
-                assertTrue(imageResponse.body().contains("<path"));
+                assertTrue(imageResponse.body()
+                    .contains("foreignObject"));
+                assertTrue(imageResponse.body()
+                    .contains("The sum of cubes"));
+                assertTrue(imageResponse.body()
+                    .contains("<path"));
             }
             assertThat(page.getByLabel("Renered SVG URL", new Page.GetByLabelOptions()
-                .setExact(true))).hasValue(imageTab.url());
+                .setExact(true)))
+                .hasValue(imageTab.url());
             for (String section : java.util.List.of("#formula", "#composer")) {
-                String jpgUrl = page.locator(section).getByRole(AriaRole.LINK,
-                    new com.microsoft.playwright.Locator.GetByRoleOptions().setName("Open JPG")
-                        .setExact(true))
+                String jpgUrl = page.locator(section)
+                    .getByRole(AriaRole.LINK,
+                        new com.microsoft.playwright.Locator.GetByRoleOptions()
+                            .setName("Open JPG")
+                            .setExact(true))
                     .getAttribute("href");
                 try (var client = HttpClient.newHttpClient()) {
-                    var response = client.send(HttpRequest.newBuilder(URI.create(jpgUrl)).build(),
+                    var response = client.send(HttpRequest.newBuilder(URI.create(jpgUrl))
+                        .build(),
                         HttpResponse.BodyHandlers.ofByteArray());
                     assertEquals(200, response.statusCode());
-                    assertTrue(response.headers().firstValue("content-type").orElse("")
+                    assertTrue(response.headers()
+                        .firstValue("content-type")
+                        .orElse("")
                         .contains("image/jpeg"));
                     assertTrue(javax.imageio.ImageIO
                         .read(new java.io.ByteArrayInputStream(response.body())) != null);
@@ -145,7 +184,8 @@ class BuilderUiTests {
             page.bringToFront();
             page.evaluate("window.scrollTo({top:0,behavior:'instant'})");
             page.screenshot(new Page.ScreenshotOptions()
-                .setPath(Path.of("target/builder/builder.png")).setFullPage(true));
+                .setPath(Path.of("target/builder/builder.png"))
+                .setFullPage(true));
         }
     }
 }

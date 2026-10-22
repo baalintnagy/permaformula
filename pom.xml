@@ -30,6 +30,9 @@
         <playwright.version>1.59.0</playwright.version>
         <graaljs.version>25.0.2</graaljs.version>
         <lombok.version>1.18.48</lombok.version>
+        <spotless.version>3.10.4</spotless.version>
+        <checkstyle-plugin.version>3.6.0</checkstyle-plugin.version>
+        <checkstyle.version>14.0.0</checkstyle.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -80,6 +83,117 @@
     <build>
         <directory>${permaformula.build.directory}</directory>
         <plugins>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.version}</version>
+                <configuration>
+                    <java>
+                        <includes>
+                            <include>src/main/java/**/*.java</include>
+                            <include>src/test/java/**/*.java</include>
+                            <include>tools/antisamy-trial/src/main/java/**/*.java</include>
+                        </includes>
+                        <excludes>
+                            <exclude>**/target/**</exclude>
+                            <exclude>**/.apt_generated/**</exclude>
+                        </excludes>
+                        <replaceRegex>
+                            <name>Prefer simple quoted strings</name>
+                            <searchRegex>(?m)^([ ]*)&quot;&quot;&quot;\r?\n(?=[^\r\n]{0,92}\\\r?$)\1([^&quot;\\\r\n]*)\\\r?\n\1&quot;&quot;&quot;</searchRegex>
+                            <replacement>$1&quot;$2&quot;</replacement>
+                        </replaceRegex>
+                        <replaceRegex>
+                            <name>Keep initial method call with its receiver</name>
+                            <searchRegex>(?s)(&quot;&quot;&quot;(?:[^&quot;\\]++|\\.|(?!&quot;&quot;&quot;)&quot;)*+&quot;&quot;&quot;|&quot;(?:[^&quot;\\\r\n]++|\\.)*+&quot;|'(?:[^'\\\r\n]++|\\.)*+'|/\*.*?\*/|//[^\r\n]*)|(\b[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\r?\n[ ]+(\.[A-Za-z_$][\w$]*[ ]*\()</searchRegex>
+                            <replacement>$1$2$3</replacement>
+                        </replaceRegex>
+                        <replaceRegex>
+                            <name>Keep literal with its initial method call</name>
+                            <searchRegex>(?s)(&quot;&quot;&quot;(?:[^&quot;\\]++|\\.|(?!&quot;&quot;&quot;)&quot;)*+&quot;&quot;&quot;|'(?:[^'\\\r\n]++|\\.)*+'|/\*.*?\*/|//[^\r\n]*)|(&quot;(?:[^&quot;\\\r\n]++|\\.)*+&quot;)(?:\r?\n[ ]+(\.[A-Za-z_$][\w$]*[ ]*\())?</searchRegex>
+                            <replacement>$1$2$3</replacement>
+                        </replaceRegex>
+                        <eclipse>
+                            <version>4.41</version>
+                            <file>${maven.multiModuleProjectDirectory}/eclipse/java-style.properties</file>
+                        </eclipse>
+                        <jsr223>
+                            <name>Indent text blocks one continuation level</name>
+                            <dependency>org.apache.groovy:groovy-jsr223:4.0.32</dependency>
+                            <engine>groovy</engine>
+                            <script><![CDATA[
+source.replaceAll(/(?m)^([ ]*)([^\r\n]+\r?\n)([ ]*)"""\r?\n((?s:.*?))^([ ]*)"""/) {
+    whole, indent, precedingLine, openingIndent, body, closingIndent ->
+        def statement = precedingLine.trim()
+        def targetIndent = statement.endsWith('=') || statement in ['return', 'yield', 'throw']
+            ? '%s    '.formatted(indent) : openingIndent
+        def contentIndents = body.readLines().findAll { !it.isBlank() }
+            .collect { it.takeWhile { character -> character == ' ' }.size() }
+        def incidentalIndent = (contentIndents + [closingIndent.size()]).min()
+        def indentation = '(?m)^ {0,%d}'.formatted(incidentalIndent)
+        def content = body.replaceAll(indentation, targetIndent).replaceAll('(?m)^[ ]+$', '')
+        '%s%s%s"""\n%s%s"""'.formatted(indent, precedingLine, targetIndent,
+            content, targetIndent)
+}
+                            ]]></script>
+                        </jsr223>
+                        <replaceRegex>
+                            <name>Wrap long quoted string assignments</name>
+                            <searchRegex>(?m)^(?=[^\r\n]{101})([ ]*)((?:(?:public|protected|private|static|final)\s+)*String\s+\w+\s*=|(?:description|example)\s*=)[ ]+(&quot;(?:\\.|[^&quot;\\\r\n])*&quot;[^\r\n]*)$</searchRegex>
+                            <replacement>$1$2
+$1    $3</replacement>
+                        </replaceRegex>
+                        <removeUnusedImports />
+                        <forbidWildcardImports />
+                        <importOrder>
+                            <order>\#,java,</order>
+                        </importOrder>
+                    </java>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>check-formatting</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>${checkstyle-plugin.version}</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.puppycrawl.tools</groupId>
+                        <artifactId>checkstyle</artifactId>
+                        <version>${checkstyle.version}</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <configLocation>${maven.multiModuleProjectDirectory}/checkstyle/checkstyle.xml</configLocation>
+                    <sourceDirectories>
+                        <sourceDirectory>${project.basedir}/src/main/java</sourceDirectory>
+                        <sourceDirectory>${project.basedir}/tools/antisamy-trial/src/main/java</sourceDirectory>
+                    </sourceDirectories>
+                    <includeTestSourceDirectory>true</includeTestSourceDirectory>
+                    <excludeGeneratedSources>true</excludeGeneratedSources>
+                    <includeResources>false</includeResources>
+                    <includeTestResources>false</includeTestResources>
+                    <consoleOutput>true</consoleOutput>
+                    <failOnViolation>true</failOnViolation>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>check-source-style</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>

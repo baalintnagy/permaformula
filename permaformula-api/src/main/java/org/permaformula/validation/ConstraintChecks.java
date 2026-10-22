@@ -25,9 +25,10 @@ final class ConstraintChecks {
             return true;
         } catch (ConstraintViolationException invalid) {
             context.disableDefaultConstraintViolation();
-            invalid.getConstraintViolations().forEach(violation -> context
-                .buildConstraintViolationWithTemplate(violation.getMessage())
-                .addConstraintViolation());
+            invalid.getConstraintViolations()
+                .forEach(violation -> context
+                    .buildConstraintViolationWithTemplate(violation.getMessage())
+                    .addConstraintViolation());
             return false;
         } catch (ResponseStatusException failure) {
             throw new ValidationExecutionException(failure);

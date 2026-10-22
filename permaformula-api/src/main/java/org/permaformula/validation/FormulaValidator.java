@@ -1,5 +1,7 @@
 package org.permaformula.validation;
 
+import static org.permaformula.validation.QuickValidator.validate;
+
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 import org.apache.commons.lang3.StringUtils;
@@ -23,8 +25,8 @@ public class FormulaValidator implements ConstraintValidator<ValidFormula, Strin
     public boolean isValid(String value, ConstraintValidatorContext context) {
         return ConstraintChecks.check(work, context, () -> {
             ValidationText.text(value, InputLimits.MAX_FORMULA_BYTES, "Formula");
-            QuickValidator.validate(StringUtils.isNotBlank(value),
-                () -> QuickValidator.violation("Formula must not be blank"));
+            validate(StringUtils.isNotBlank(value),
+                "Formula must not be blank");
             ComplexityPolicy.CURRENT.checkMathInput(value);
         });
     }

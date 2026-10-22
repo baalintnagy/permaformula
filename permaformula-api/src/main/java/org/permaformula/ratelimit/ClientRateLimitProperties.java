@@ -1,5 +1,7 @@
 package org.permaformula.ratelimit;
 
+import static org.permaformula.validation.QuickValidator.validate;
+
 import java.math.BigInteger;
 import java.time.Duration;
 import java.util.List;
@@ -7,7 +9,6 @@ import java.util.List;
 import com.google.common.net.InetAddresses;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
-import org.permaformula.validation.QuickValidator;
 import org.permaformula.validation.RecordValidation;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -30,7 +31,7 @@ public record ClientRateLimitProperties(
             requestBurst, requestConcurrency, generationsPerMinute, generationBurst,
             generationConcurrency, maximumClients, expireAfterAccess, trustedProxies);
         long expiry = expireAfterAccess.toNanos();
-        QuickValidator.validate(
+        validate(
             !(expiry <= 0
                 || !fullyRefills(expiry, requestsPerMinute, requestBurst)
                 || !fullyRefills(expiry, generationsPerMinute, generationBurst)),
@@ -42,8 +43,10 @@ public record ClientRateLimitProperties(
     }
 
     private static boolean fullyRefills(long nanos, long rate, long burst) {
-        return BigInteger.valueOf(nanos).multiply(BigInteger.valueOf(rate))
-            .compareTo(BigInteger.valueOf(Duration.ofMinutes(1).toNanos())
+        return BigInteger.valueOf(nanos)
+            .multiply(BigInteger.valueOf(rate))
+            .compareTo(BigInteger.valueOf(Duration.ofMinutes(1)
+                .toNanos())
                 .multiply(BigInteger.valueOf(burst))) >= 0;
     }
 }

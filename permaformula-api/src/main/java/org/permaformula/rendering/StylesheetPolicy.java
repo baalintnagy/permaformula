@@ -1,12 +1,40 @@
 package org.permaformula.rendering;
 
-import static org.permaformula.contract.ComplexityPolicy.Limit.*;
+import static org.permaformula.contract.ComplexityPolicy.Limit.CSS_BLOCK_DEPTH;
+import static org.permaformula.contract.ComplexityPolicy.Limit.CSS_FUNCTION_DEPTH;
+import static org.permaformula.contract.ComplexityPolicy.Limit.CSS_GRID_REPEAT;
+import static org.permaformula.contract.ComplexityPolicy.Limit.CSS_SELECTOR_CHARS;
+import static org.permaformula.validation.QuickValidator.notNull;
+import static org.permaformula.validation.QuickValidator.validate;
+import static org.permaformula.validation.QuickValidator.violation;
 
 import java.util.Locale;
 import java.util.Set;
 
 import com.helger.collection.commons.ICommonsList;
-import com.helger.css.decl.*;
+import com.helger.css.decl.AbstractHasTopLevelRules;
+import com.helger.css.decl.CSSDeclaration;
+import com.helger.css.decl.CSSDeclarationList;
+import com.helger.css.decl.CSSExpression;
+import com.helger.css.decl.CSSExpressionMemberFunction;
+import com.helger.css.decl.CSSExpressionMemberLineNames;
+import com.helger.css.decl.CSSExpressionMemberMath;
+import com.helger.css.decl.CSSExpressionMemberMathProduct;
+import com.helger.css.decl.CSSExpressionMemberMathUnitProduct;
+import com.helger.css.decl.CSSExpressionMemberMathUnitSimple;
+import com.helger.css.decl.CSSExpressionMemberTermSimple;
+import com.helger.css.decl.CSSExpressionMemberTermURI;
+import com.helger.css.decl.CSSLayerRule;
+import com.helger.css.decl.CSSMediaRule;
+import com.helger.css.decl.CSSNestedDeclarations;
+import com.helger.css.decl.CSSSelector;
+import com.helger.css.decl.CSSStyleRule;
+import com.helger.css.decl.CSSSupportsRule;
+import com.helger.css.decl.CascadingStyleSheet;
+import com.helger.css.decl.ECSSExpressionOperator;
+import com.helger.css.decl.ECSSMathOperator;
+import com.helger.css.decl.ICSSExpressionMember;
+import com.helger.css.decl.IHasCSSDeclarations;
 import com.helger.css.decl.visit.CSSVisitor;
 import com.helger.css.decl.visit.DefaultCSSVisitor;
 import com.helger.css.handler.DoNothingCSSParseExceptionCallback;
@@ -22,7 +50,6 @@ import com.helger.css.writer.CSSWriterSettings;
 import org.apache.commons.lang3.StringUtils;
 import org.owasp.html.CssSchema;
 import org.permaformula.contract.ComplexityPolicy;
-import org.permaformula.validation.QuickValidator;
 
 /**
  * Parsed presentation CSS, including variables, responsive rules and modern layout.
@@ -36,11 +63,13 @@ final class StylesheetPolicy {
         "flex-shrink",
         "flex-direction", "flex-wrap", "align-items", "align-self", "align-content",
         "justify-content",
-        "justify-items", "justify-self", "order", "grid", "grid-template", "grid-template-columns",
+        "justify-items", "justify-self", "order", "grid", "grid-template",
+        "grid-template-columns",
         "grid-template-rows", "grid-template-areas", "grid-auto-columns", "grid-auto-rows",
         "grid-auto-flow",
         "grid-column", "grid-row", "grid-area", "object-fit", "object-position", "aspect-ratio",
-        "opacity", "transform", "transform-origin", "box-shadow", "text-shadow", "border-radius",
+        "opacity", "transform", "transform-origin", "box-shadow", "text-shadow",
+        "border-radius",
         "overflow", "overflow-x", "overflow-y", "text-overflow", "overflow-wrap", "word-break",
         "background", "background-image", "background-size", "background-position",
         "background-repeat",
@@ -48,7 +77,8 @@ final class StylesheetPolicy {
         "-moz-osx-font-smoothing");
 
     private static final Set<String> FUNCTIONS = Set.of("var", "calc", "min", "max", "clamp", "env",
-        "rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color", "color-mix",
+        "rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color",
+        "color-mix",
         "linear-gradient", "radial-gradient", "conic-gradient", "repeating-linear-gradient",
         "repeating-radial-gradient", "repeating-conic-gradient", "translate", "translatex",
         "translatey",
@@ -62,10 +92,12 @@ final class StylesheetPolicy {
 
     private static final Set<String> SVG_PROPERTIES = Set.of("fill", "fill-rule", "fill-opacity",
         "stroke",
-        "stroke-width", "stroke-opacity", "stroke-linecap", "stroke-linejoin", "stroke-miterlimit",
+        "stroke-width", "stroke-opacity", "stroke-linecap", "stroke-linejoin",
+        "stroke-miterlimit",
         "stroke-dasharray", "stroke-dashoffset", "clip-path", "clip-rule", "text-anchor",
         "dominant-baseline",
-        "alignment-baseline", "baseline-shift", "vector-effect", "paint-order", "shape-rendering",
+        "alignment-baseline", "baseline-shift", "vector-effect", "paint-order",
+        "shape-rendering",
         "clip");
 
     /** Preserve vector paint and local glyph/clip references in exported presentation styles. */
@@ -75,31 +107,33 @@ final class StylesheetPolicy {
         }
         // The stylesheet parser supports empty custom properties emitted by getComputedStyle;
         // the standalone declaration-list parser does not. Never emit the wrapper or extra rules.
-        CascadingStyleSheet sheet = parse(".output{" + source + "}", false);
-        QuickValidator.validate(
+        CascadingStyleSheet sheet = parse(".output{%s}".formatted(source), false);
+        validate(
             !(sheet.getRuleCount() != 1
                 || sheet.getImportRuleCount() != 0
                 || sheet.getNamespaceRuleCount() != 0),
-            () -> QuickValidator.violation("Invalid SVG presentation style"));
+            "Invalid SVG presentation style");
         if (!(sheet.getRuleAtIndex(0) instanceof CSSStyleRule declarations)
             || declarations.getRuleCount() != 0) {
-            throw QuickValidator.violation("Invalid SVG presentation style");
+            throw violation("Invalid SVG presentation style");
         }
         cleanDeclarations(declarations, true);
         CSSDeclarationList result = new CSSDeclarationList();
-        declarations.getAllDeclarations().forEach(result::addDeclaration);
+        declarations.getAllDeclarations()
+            .forEach(result::addDeclaration);
         return escapeBoundary(result.getAsCSSString(WRITER, 0));
     }
 
     /** Downloaded library CSS remains intact; CSP denies browser resource requests. */
     static String externalStylesheet(String source) {
         CascadingStyleSheet sheet = parse(source);
-        QuickValidator.validate(sheet.getImportRuleCount() == 0,
-            () -> QuickValidator.violation("Unexpanded external CSS imports"));
+        validate(sheet.getImportRuleCount() == 0,
+            "Unexpanded external CSS imports");
         CSSVisitor.visitCSS(sheet, new DefaultCSSVisitor() {
             @Override
             public void onStyleRuleSelector(CSSSelector selector) {
-                if (selector.getAsCSSString(WRITER, 0).length() > LIMITS.get(CSS_SELECTOR_CHARS)) {
+                if (selector.getAsCSSString(WRITER, 0)
+                    .length() > LIMITS.get(CSS_SELECTOR_CHARS)) {
                     PreparationComplexity.reject("CSS selector length");
                 }
             }
@@ -109,7 +143,8 @@ final class StylesheetPolicy {
                 externalExpression(declaration.getExpression(), 0);
             }
         });
-        return escapeBoundary(new CSSWriter(WRITER).getCSSAsString(sheet));
+        return escapeBoundary(new CSSWriter(WRITER)
+            .getCSSAsString(sheet));
     }
 
     static String stylesheet(String source) {
@@ -118,19 +153,19 @@ final class StylesheetPolicy {
         }
         CascadingStyleSheet sheet = parse(source);
         // Imports must be expanded by the controlled fetcher, never the browser.
-        QuickValidator.validate(sheet.getImportRuleCount() == 0
+        validate(sheet.getImportRuleCount() == 0
             && sheet.getNamespaceRuleCount() == 0,
-            () -> QuickValidator.violation("Unexpanded CSS imports or namespaces"));
+            "Unexpanded CSS imports or namespaces");
         cleanRules(sheet, 0);
-        return escapeBoundary(new CSSWriter(WRITER).getCSSAsString(sheet));
+        return escapeBoundary(new CSSWriter(WRITER)
+            .getCSSAsString(sheet));
     }
 
     static String declarations(String source) {
         PreparationComplexity.css(source);
-        CSSDeclarationList declarations = CSSReaderDeclarationList.readFromString(source,
-            readerSettings(true));
-        QuickValidator.validate(declarations != null,
-            () -> QuickValidator.violation("Invalid CSS declarations"));
+        CSSDeclarationList declarations = notNull(CSSReaderDeclarationList.readFromString(source,
+            readerSettings(true)),
+            "Invalid CSS declarations");
         cleanDeclarations(declarations);
         return escapeBoundary(declarations.getAsCSSString(WRITER, 0));
     }
@@ -142,26 +177,27 @@ final class StylesheetPolicy {
     private static CascadingStyleSheet parse(String source, boolean strict) {
         PreparationComplexity.css(source);
         CascadingStyleSheet sheet = CSSReader.readFromStringReader(source, readerSettings(strict));
-        QuickValidator.validate(
-            !(sheet == null), () -> QuickValidator.violation("Invalid CSS stylesheet"));
+        validate(
+            !(sheet == null), "Invalid CSS stylesheet");
         return sheet;
     }
 
     private static CSSReaderSettings readerSettings(boolean strict) {
         // Parser diagnostics can contain submitted content; do not log that content.
-        return new CSSReaderSettings().setCustomErrorHandler(strict
-            ? new ThrowingCSSParseErrorHandler()
-            : new DoNothingCSSParseErrorHandler())
+        return new CSSReaderSettings()
+            .setCustomErrorHandler(strict
+                ? new ThrowingCSSParseErrorHandler()
+                : new DoNothingCSSParseErrorHandler())
             .setCustomExceptionHandler(new DoNothingCSSParseExceptionCallback())
             .setInterpretErrorHandler(strict ? new ICSSInterpretErrorHandler() {
                 @Override
                 public void onCSSInterpretationWarning(String message) {
-                    throw QuickValidator.violation("Unsupported CSS syntax");
+                    throw violation("Unsupported CSS syntax");
                 }
 
                 @Override
                 public void onCSSInterpretationError(String message) {
-                    throw QuickValidator.violation("Invalid CSS syntax");
+                    throw violation("Invalid CSS syntax");
                 }
             } : new DoNothingCSSInterpretErrorHandler());
     }
@@ -173,7 +209,7 @@ final class StylesheetPolicy {
     private static void cleanRules(AbstractHasTopLevelRules container, int depth) {
         for (int i = container.getRuleCount() - 1; i >= 0; i--) {
             if (!cleanRule(container.getRuleAtIndex(i), depth)) {
-                throw QuickValidator.violation("Unsupported CSS rule");
+                throw violation("Unsupported CSS rule");
             }
         }
     }
@@ -183,9 +219,10 @@ final class StylesheetPolicy {
             PreparationComplexity.reject("CSS nesting");
         }
         if (rule instanceof CSSStyleRule style) {
-            if (style.getAllSelectors().stream()
-                .anyMatch(selector -> selector.getAsCSSString(WRITER, 0).length() > LIMITS
-                    .get(CSS_SELECTOR_CHARS))) {
+            if (style.getAllSelectors()
+                .stream()
+                .anyMatch(selector -> selector.getAsCSSString(WRITER, 0)
+                    .length() > LIMITS.get(CSS_SELECTOR_CHARS))) {
                 PreparationComplexity.reject("CSS selector length");
             }
             cleanDeclarations(style);
@@ -218,18 +255,20 @@ final class StylesheetPolicy {
     private static void cleanDeclarations(IHasCSSDeclarations<?> declarations, boolean output) {
         for (int i = declarations.getDeclarationCount() - 1; i >= 0; i--) {
             CSSDeclaration declaration = declarations.getDeclarationAtIndex(i);
-            String property = declaration.getProperty().toLowerCase(Locale.ROOT);
-            boolean permitted = CssSchema.DEFAULT.allowedProperties().contains(property)
+            String property = declaration.getProperty()
+                .toLowerCase(Locale.ROOT);
+            boolean permitted = CssSchema.DEFAULT.allowedProperties()
+                .contains(property)
                 || MODERN_PROPERTIES.contains(property)
                 || property.matches("--[a-zA-Z0-9_-]+")
-                || property
-                    .matches("(?:margin|padding|border|text|font)-(?:inline|block)(?:-[a-z-]+)?")
+                || property.matches(
+                    "(?:margin|padding|border|text|font)-(?:inline|block)(?:-[a-z-]+)?")
                 || (output
                     && SVG_PROPERTIES.contains(property));
             if (!permitted
                 || !safeExpression(declaration.getExpression(), 0, output)) {
-                QuickValidator.validate(output,
-                    () -> QuickValidator.violation("Unsupported CSS property or value"));
+                validate(output,
+                    "Unsupported CSS property or value");
                 declarations.removeDeclaration(i);
             }
         }
@@ -239,12 +278,14 @@ final class StylesheetPolicy {
         if (depth > LIMITS.get(CSS_FUNCTION_DEPTH)) {
             return false;
         }
-        return expression.getAllMembers().stream()
+        return expression.getAllMembers()
+            .stream()
             .allMatch(member -> safeMember(member, depth + 1, output));
     }
 
     private static void validateGridRepetition(CSSExpressionMemberFunction function) {
-        if ("repeat".equals(function.getFunctionName().toLowerCase(Locale.ROOT))
+        if ("repeat".equals(function.getFunctionName()
+            .toLowerCase(Locale.ROOT))
             && function.hasExpression()) {
             ICommonsList<ICSSExpressionMember> members = function.getExpression()
                 .getAllMembers();
@@ -272,16 +313,19 @@ final class StylesheetPolicy {
             PreparationComplexity.reject("CSS function nesting");
         }
         if (member instanceof CSSExpression expression) {
-            expression.getAllMembers().forEach(child -> externalExpression(child, depth + 1));
+            expression.getAllMembers()
+                .forEach(child -> externalExpression(child, depth + 1));
         } else if (member instanceof CSSExpressionMemberFunction function) {
             validateGridRepetition(function);
             if (function.hasExpression()) {
                 externalExpression(function.getExpression(), depth + 1);
             }
         } else if (member instanceof CSSExpressionMemberMath math) {
-            math.getAllMembers().forEach(child -> externalExpression(child, depth + 1));
+            math.getAllMembers()
+                .forEach(child -> externalExpression(child, depth + 1));
         } else if (member instanceof CSSExpressionMemberMathProduct product) {
-            product.getAllMembers().forEach(child -> externalExpression(child, depth + 1));
+            product.getAllMembers()
+                .forEach(child -> externalExpression(child, depth + 1));
         } else if (member instanceof CSSExpressionMemberMathUnitProduct unit) {
             externalExpression(unit.getProduct(), depth + 1);
         }
@@ -292,7 +336,8 @@ final class StylesheetPolicy {
             return false;
         }
         if (member instanceof CSSExpressionMemberFunction function) {
-            String name = function.getFunctionName().toLowerCase(Locale.ROOT);
+            String name = function.getFunctionName()
+                .toLowerCase(Locale.ROOT);
             validateGridRepetition(function);
             return (FUNCTIONS.contains(name)
                 || output
@@ -301,11 +346,13 @@ final class StylesheetPolicy {
                     || safeExpression(function.getExpression(), depth + 1, output));
         }
         if (member instanceof CSSExpressionMemberMath math) {
-            return math.getAllMembers().stream()
+            return math.getAllMembers()
+                .stream()
                 .allMatch(child -> safeMember(child, depth + 1, output));
         }
         if (member instanceof CSSExpressionMemberMathProduct product) {
-            return product.getAllMembers().stream()
+            return product.getAllMembers()
+                .stream()
                 .allMatch(child -> safeMember(child, depth + 1, output));
         }
         if (member instanceof CSSExpressionMemberMathUnitProduct unit) {

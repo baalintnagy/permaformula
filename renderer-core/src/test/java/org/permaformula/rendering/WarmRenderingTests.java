@@ -1,13 +1,18 @@
 package org.permaformula.rendering;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.time.Duration;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
-import org.permaformula.contract.v1.*;
+import org.permaformula.contract.v1.AsciiMathFormula;
+import org.permaformula.contract.v1.HtmlDocument;
+import org.permaformula.contract.v1.RenderRequest;
 
 /** Opt-in end-to-end measurements, including process startup; no cache can hide rendering. */
 @EnabledIfSystemProperty(named = "rendering.tests", matches = "true")
@@ -18,12 +23,15 @@ class WarmRenderingTests {
             java.util.Map.of("PERMAFORMULA_COMPLEXITY_RENDER_AREA", "2500"));
         try (var assets = new RenderAssets();
             var renderer = new ChromiumRenderer(new BrowserSettings(
-                Path.of("../.runtime/browsers"), Duration.ofSeconds(30), false), policy)) {
+                Path.of("../.runtime/browsers"),
+                Duration.ofSeconds(30),
+                false), policy)) {
             byte[] jpeg = renderer.jpeg(assets.add("<!doctype html><html><body></body></html>"),
                 """
-                    <svg xmlns='http://www.w3.org/2000/svg' width='40' height='20'><rect \
-                    width='40' height='20' fill='blue'/></svg>\
-                    """);
+                <svg xmlns='http://www.w3.org/2000/svg' width='40' height='20'><rect \
+                width='40' height='20' fill='blue'/></svg>\
+                """
+            );
             var image = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(jpeg));
             assertTrue(image.getWidth() > 40
                 && image.getWidth() < 80);
@@ -35,15 +43,21 @@ class WarmRenderingTests {
     void jpegUsesSourceSvgIncludingForeignObjectAndWhiteTransparency() throws Exception {
         try (var supervisor = new SupervisedRenderer(
             new BrowserSettings(Path.of("../.runtime/browsers"),
-                Duration.ofSeconds(30), false),
+                Duration.ofSeconds(30),
+                false),
             1)) {
-            String svg = """
+            String svg =
+                """
                 <svg xmlns='http://www.w3.org/2000/svg' width='100' height='50'><foreignObject \
-                width='50' height='50'><div xmlns='http://www.w3.org/1999/xhtml' \
-                style='background:rgb(255,0,0);width:50px;height:50px'>Text</div></foreignObject></svg>\
+                width='50' height='50'><div xmlns='http://www.w3.org/1999/xhtml' style='background:\
+                rgb(255,0,0);width:50px;height:50px'>Text</div></foreignObject></svg>\
                 """;
-            var request = RenderRequest.newBuilder().setRequestId("jpeg").setJpegSvg(svg).build();
-            byte[] jpeg = supervisor.execute(request, Duration.ofSeconds(30)).getSvg()
+            var request = RenderRequest.newBuilder()
+                .setRequestId("jpeg")
+                .setJpegSvg(svg)
+                .build();
+            byte[] jpeg = supervisor.execute(request, Duration.ofSeconds(30))
+                .getSvg()
                 .toByteArray();
             var image = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(jpeg));
             assertEquals(200, image.getWidth());
@@ -56,17 +70,22 @@ class WarmRenderingTests {
             assertTrue(white.getRed() > 240
                 && white.getGreen() > 240
                 && white.getBlue() > 240);
-            var formula = supervisor
-                .execute(SupervisedRendererTests.request(), Duration.ofSeconds(30)).getSvg()
+            var formula = supervisor.execute(SupervisedRendererTests.request(),
+                Duration.ofSeconds(30))
+                .getSvg()
                 .toStringUtf8();
-            var formulaJpeg = supervisor.execute(request.toBuilder().setJpegSvg(formula).build(),
+            var formulaJpeg = supervisor.execute(request.toBuilder()
+                .setJpegSvg(formula)
+                .build(),
                 Duration.ofSeconds(30));
-            assertNotNull(javax.imageio.ImageIO
-                .read(new java.io.ByteArrayInputStream(formulaJpeg.getSvg().toByteArray())));
+            assertNotNull(
+                javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(formulaJpeg.getSvg()
+                    .toByteArray())));
             java.nio.file.Files.createDirectories(Path.of("target/rendering"));
             java.nio.file.Files.write(Path.of("target/rendering/foreign-object.jpg"), jpeg);
             java.nio.file.Files.write(Path.of("target/rendering/formula.jpg"),
-                formulaJpeg.getSvg().toByteArray());
+                formulaJpeg.getSvg()
+                    .toByteArray());
         }
     }
 
@@ -74,28 +93,38 @@ class WarmRenderingTests {
     void productionSupervisorRendersBothKindsWithRestrictedWorkerEnvironment() throws Exception {
         try (var supervisor = new SupervisedRenderer(
             new BrowserSettings(Path.of("../.runtime/browsers"),
-                Duration.ofSeconds(30), false),
+                Duration.ofSeconds(30),
+                false),
             1)) {
-            assertTrue(supervisor.execute(SupervisedRendererTests.request(), Duration.ofSeconds(30))
-                .getSvg().toStringUtf8().contains("<svg"));
+            assertTrue(supervisor.execute(SupervisedRendererTests.request(),
+                Duration.ofSeconds(30))
+                .getSvg()
+                .toStringUtf8()
+                .contains("<svg"));
             assertTrue(
                 supervisor.execute(html("html", "<p>Production pool</p>"), Duration.ofSeconds(30))
-                    .getSvg().toStringUtf8().contains("Production pool"));
+                    .getSvg()
+                    .toStringUtf8()
+                    .contains("Production pool"));
         }
     }
 
     private static ProcessBuilder worker(String kind, String main) {
         var command = new java.util.ArrayList<String>(java.util.List.of(
-            Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+            Path.of(System.getProperty("java.home"), "bin", "java")
+                .toString(),
             "--enable-native-access=ALL-UNNAMED", "-cp",
-            System.getProperty("surefire.test.class.path", System.getProperty("java.class.path")),
+            System.getProperty("surefire.test.class.path",
+                System.getProperty("java.class.path")),
             main));
         if (main.equals(RenderWorkerMain.class.getName())) {
             command.add(kind);
         }
-        command.addAll(java.util.List
-            .of(Path.of("../.runtime/browsers").toAbsolutePath().toString(), "30000", "false"));
-        return new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.INHERIT);
+        command.addAll(java.util.List.of(Path.of("../.runtime/browsers")
+            .toAbsolutePath()
+            .toString(), "30000", "false"));
+        return new ProcessBuilder(command)
+            .redirectError(ProcessBuilder.Redirect.INHERIT);
     }
 
     @Test
@@ -104,66 +133,94 @@ class WarmRenderingTests {
         long started = System.nanoTime();
         var cold = SupervisedRenderer.run(worker("formula", RenderJobMain.class.getName()), request,
             Duration.ofSeconds(30));
-        long coldMs = Duration.ofNanos(System.nanoTime() - started).toMillis();
+        long coldMs = Duration.ofNanos(System.nanoTime() - started)
+            .toMillis();
         try (var pool = new RenderWorkerPool(1,
-            () -> worker("formula", RenderWorkerMain.class.getName()), Duration.ofSeconds(60),
+            () -> worker("formula", RenderWorkerMain.class.getName()),
+            Duration.ofSeconds(60),
             100)) {
             var first = pool.execute(request, Duration.ofSeconds(30));
-            assertTrue(first.getSvg().toStringUtf8().contains("<svg"));
+            assertTrue(first.getSvg()
+                .toStringUtf8()
+                .contains("<svg"));
             for (String formula : new String[] { "x", "sqrt(x)", "sum_(i=1)^n i" }) {
                 started = System.nanoTime();
                 var output = pool.execute(
                     request.toBuilder()
-                        .setFormula(AsciiMathFormula.newBuilder().setFormula(formula)).build(),
+                        .setFormula(AsciiMathFormula.newBuilder()
+                            .setFormula(formula))
+                        .build(),
                     Duration.ofSeconds(30));
-                assertTrue(output.getSvg().toStringUtf8().contains("<svg"));
-                System.err
-                    .println("""
-                        event=render_benchmark kind=formula coldMs=%s warmMs=%s\
-                        """.formatted(coldMs,
-                        Duration.ofNanos(System.nanoTime() - started).toMillis()));
+                assertTrue(output.getSvg()
+                    .toStringUtf8()
+                    .contains("<svg"));
+                System.err.println(
+                    "event=render_benchmark kind=formula coldMs=%s warmMs=%s".formatted(coldMs,
+                        Duration.ofNanos(System.nanoTime() - started)
+                            .toMillis()));
             }
-            assertFalse(cold.getSvg().isEmpty());
+            assertFalse(cold.getSvg()
+                .isEmpty());
         }
     }
 
     private static RenderRequest html(String id, String body) {
-        String document = """
+        String document =
+            """
             <!doctype html><html><head><script src='/export-svg.js'></script><script \
             id='mathjax-script' defer \
             src='/mathjax/startup.js'></script></head><body>%s</body></html>\
-            """.formatted(body);
-        return RenderRequest.newBuilder().setRequestId(id)
-            .setHtml(HtmlDocument.newBuilder().setWidth(320).setDocument(document)).build();
+            """
+            .formatted(body);
+        return RenderRequest.newBuilder()
+            .setRequestId(id)
+            .setHtml(HtmlDocument.newBuilder()
+                .setWidth(320)
+                .setDocument(document))
+            .build();
     }
 
     @Test
     void reusesChromiumWithoutBrowserStateOrDocumentsLeaking() throws Exception {
         var first = html("first",
             """
-                <script>localStorage.setItem('secret','leaked');globalThis.secret='leaked';</script><p>First image</p>\
-                """);
+            <script>localStorage.setItem('secret','leaked');globalThis.secret='leaked';</\
+            script><p>First image</p>\
+            """
+        );
         var second = html("second",
             """
-                <p>Second image</p><script>if(localStorage.getItem('secret')||globalThis.secret)document.body.append('LEAKED_STATE');</script>\
-                """);
+            <p>Second image</p><script>\
+            if(localStorage.getItem('secret')||globalThis.secret)document.body.append('LEAKED_S\
+            TATE');</script>\
+            """
+        );
         long started = System.nanoTime();
         assertFalse(SupervisedRenderer
             .run(worker("html", RenderJobMain.class.getName()), first, Duration.ofSeconds(30))
-            .getSvg().isEmpty());
-        long coldMs = Duration.ofNanos(System.nanoTime() - started).toMillis();
+            .getSvg()
+            .isEmpty());
+        long coldMs = Duration.ofNanos(System.nanoTime() - started)
+            .toMillis();
         try (var pool = new RenderWorkerPool(1,
-            () -> worker("html", RenderWorkerMain.class.getName()), Duration.ofSeconds(60), 100)) {
-            assertTrue(pool.execute(first, Duration.ofSeconds(30)).getSvg().toStringUtf8()
+            () -> worker("html", RenderWorkerMain.class.getName()),
+            Duration.ofSeconds(60),
+            100)) {
+            assertTrue(pool.execute(first, Duration.ofSeconds(30))
+                .getSvg()
+                .toStringUtf8()
                 .contains("First image"));
             started = System.nanoTime();
-            String svg = pool.execute(second, Duration.ofSeconds(30)).getSvg().toStringUtf8();
+            String svg = pool.execute(second, Duration.ofSeconds(30))
+                .getSvg()
+                .toStringUtf8();
             assertTrue(svg.contains("Second image"));
             assertFalse(svg.contains("First image"));
             assertFalse(svg.contains("LEAKED_STATE"));
-            System.err.println("""
-                event=render_benchmark kind=html coldMs=%s warmMs=%s\
-                """.formatted(coldMs, Duration.ofNanos(System.nanoTime() - started).toMillis()));
+            System.err.println(
+                "event=render_benchmark kind=html coldMs=%s warmMs=%s".formatted(coldMs,
+                    Duration.ofNanos(System.nanoTime() - started)
+                        .toMillis()));
         }
     }
 }

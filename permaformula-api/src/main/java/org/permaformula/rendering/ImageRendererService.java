@@ -1,5 +1,8 @@
 package org.permaformula.rendering;
 
+import static org.permaformula.validation.QuickValidator.coalesce;
+import static org.permaformula.validation.QuickValidator.notNull;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -12,7 +15,6 @@ import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.permaformula.PermaFormulaProperties;
 import org.permaformula.url.ImageDescriptor;
-import org.permaformula.validation.QuickValidator;
 import org.permaformula.validation.ValidDescriptor;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.stereotype.Service;
@@ -30,8 +32,9 @@ public class ImageRendererService implements AutoCloseable {
 
     private static String loadTemplate() {
         try (InputStream input = ImageRendererService.class.getResourceAsStream("/wrapper.html")) {
-            return new String(QuickValidator.notNull(input,
-                "Missing renderer template").readAllBytes(), StandardCharsets.UTF_8);
+            return new String(notNull(input,
+                "Missing renderer template")
+                .readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException failure) {
             throw new UncheckedIOException("Cannot load renderer template", failure);
         }
@@ -42,16 +45,18 @@ public class ImageRendererService implements AutoCloseable {
         List<String> externalCss;
         try (GenerationTiming _ = new GenerationTiming("stylesheet_fetch")) {
             externalCss = descriptor.styleRefs() == null
-                || descriptor.styleRefs().isEmpty()
-                    ? List.<String>of()
-                    : work.fetch(() -> stylesheetFetcher.fetchAll(descriptor.styleRefs()));
+                || descriptor.styleRefs()
+                    .isEmpty()
+                        ? List
+                            .<String>of()
+                        : work.fetch(() -> stylesheetFetcher.fetchAll(descriptor.styleRefs()));
         }
         String document;
         try (GenerationTiming _ = new GenerationTiming("html_prepare")) {
             document = RenderContentPolicy.document(template, descriptor, externalCss);
         }
-        int width = QuickValidator.orElse(descriptor.imageWidth(),
-            properties.defaultImageWidth());
+        int width = coalesce(descriptor.imageWidth(),
+            properties::defaultImageWidth);
         try (GenerationTiming _ = new GenerationTiming("html_rpc")) {
             return new InputStreamResource(
                 new ByteArrayInputStream(gateway.renderHtml(document, width)));

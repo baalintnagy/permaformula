@@ -1,6 +1,7 @@
 package org.permaformula.compression;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.permaformula.validation.QuickValidator.validate;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -10,7 +11,6 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 import org.permaformula.validation.InputLimits;
-import org.permaformula.validation.QuickValidator;
 import org.permaformula.validation.ValidEncoded;
 import org.permaformula.validation.ValidJson;
 import org.springframework.stereotype.Service;
@@ -25,27 +25,28 @@ public class StringCompressionService {
         try (GZIPOutputStream gzip = new GZIPOutputStream(out)) {
             gzip.write(str.getBytes(UTF_8));
         }
-        QuickValidator.validate(
+        validate(
             !(out.size() > InputLimits.MAX_COMPRESSED_BYTES),
-            () -> QuickValidator.violation("Compressed payload is too large"));
+            "Compressed payload is too large");
         return Base64.getEncoder()
             .encodeToString(out.toByteArray());
     }
 
     public String decompress(@ValidEncoded String str) throws IOException {
-        byte[] compressed = Base64.getDecoder().decode(str);
-        QuickValidator.validate(
+        byte[] compressed = Base64.getDecoder()
+            .decode(str);
+        validate(
             !(compressed.length > InputLimits.MAX_COMPRESSED_BYTES),
-            () -> QuickValidator.violation("Compressed payload is too large"));
+            "Compressed payload is too large");
         try (ByteArrayInputStream input = new ByteArrayInputStream(compressed);
             GZIPInputStream gzip = new GZIPInputStream(input)) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             byte[] buffer = new byte[8192];
             int count;
             while ((count = gzip.read(buffer)) != -1) {
-                QuickValidator.validate(
+                validate(
                     !(count > InputLimits.MAX_JSON_BYTES - out.size()),
-                    () -> QuickValidator.violation("Decompressed payload is too large"));
+                    "Decompressed payload is too large");
                 out.write(buffer, 0, count);
             }
             return out.toString(UTF_8);

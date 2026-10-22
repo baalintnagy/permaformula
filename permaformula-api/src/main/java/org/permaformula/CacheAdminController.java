@@ -10,7 +10,9 @@ import lombok.RequiredArgsConstructor;
 import org.permaformula.rendering.cache.CaffeineImageStore;
 import org.permaformula.validation.CacheId;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @SecurityScheme(name = "adminJwt", type = SecuritySchemeType.HTTP, scheme = "bearer",
@@ -21,13 +23,17 @@ public class CacheAdminController {
     private final CaffeineImageStore store;
 
     @Operation(summary = "Delete a cached image",
-        description = """
+        description =
+            """
             Requires an admin JWT obtained from /admin/login. Idempotent; later rendering can \
             recreate the entry.\
-            """)
+            """
+    )
     @DeleteMapping("/admin/cache-item")
     public ResponseEntity<Void> delete(@CacheId @RequestParam String id) throws SQLException {
         store.delete(id);
-        return ResponseEntity.noContent().header("Cache-Control", "no-store").build();
+        return ResponseEntity.noContent()
+            .header("Cache-Control", "no-store")
+            .build();
     }
 }

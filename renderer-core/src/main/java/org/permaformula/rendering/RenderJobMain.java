@@ -29,30 +29,35 @@ public final class RenderJobMain {
                     svg = request.hasJpegSvg()
                         ? chromium.jpeg(assets.add("<!doctype html><html><body></body></html>"),
                             request.getJpegSvg())
-                        : chromium.render(assets.add(request.getHtml().getDocument()),
-                            request.getHtml().getWidth());
+                        : chromium.render(assets.add(request.getHtml()
+                            .getDocument()),
+                            request.getHtml()
+                                .getWidth());
                 }
             } else {
                 try (AsciiMathRenderer renderer = new AsciiMathRenderer()) {
-                    svg = renderer.render(request.getFormula().getFormula())
+                    svg = renderer.render(request.getFormula()
+                        .getFormula())
                         .getBytes(StandardCharsets.UTF_8);
                 }
             }
             if (svg.length == 0
-                || svg.length > ComplexityPolicy.CURRENT
-                    .get(ComplexityPolicy.Limit.SVG_BYTES)) {
+                || svg.length > ComplexityPolicy.CURRENT.get(ComplexityPolicy.Limit.SVG_BYTES)) {
                 throw new IOException("Render output exceeds size limit");
             }
-            RenderResponse.newBuilder().setRequestId(request.getRequestId())
+            RenderResponse.newBuilder()
+                .setRequestId(request.getRequestId())
                 .setSvg(ByteString.copyFrom(svg))
-                .build().writeTo(System.out);
+                .build()
+                .writeTo(System.out);
             System.out.flush();
         } catch (IllegalArgumentException _) {
             System.err.println("event=render_job_invalid");
             System.exit(2);
         } catch (Exception failure) {
-            System.err
-                .println("event=render_job_failed type=" + failure.getClass().getSimpleName());
+            System.err.println("event=render_job_failed type=%s".formatted(
+                failure.getClass()
+                    .getSimpleName()));
             System.exit(1);
         }
     }

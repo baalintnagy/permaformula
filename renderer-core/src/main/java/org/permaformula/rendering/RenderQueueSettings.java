@@ -1,14 +1,14 @@
 package org.permaformula.rendering;
 
+import static org.permaformula.validation.QuickValidator.validate;
+
 import java.time.Duration;
 import java.util.Map;
-
-import org.permaformula.validation.QuickValidator;
 
 /** Deployment bounds, independent of the rendering content limits. */
 public record RenderQueueSettings(int capacity, long maxRetainedBytes, Duration maxWait) {
     public RenderQueueSettings {
-        QuickValidator.validate(
+        validate(
             !(capacity < 0
                 || capacity > 1024
                 || maxRetainedBytes < 1
@@ -17,7 +17,11 @@ public record RenderQueueSettings(int capacity, long maxRetainedBytes, Duration 
                 || maxWait.isZero()
                 || maxWait.compareTo(Duration.ofMinutes(1)) > 0),
             () -> new IllegalArgumentException(
-                "Queue capacity must be 0..1024, bytes positive, and wait 0..60 seconds exclusive of zero"));
+                """
+                Queue capacity must be 0..1024, bytes positive, and wait 0..60 seconds \
+                exclusive of zero\
+                """
+            ));
     }
 
     public static RenderQueueSettings fromEnvironment(Map<String, String> env) {
@@ -29,6 +33,7 @@ public record RenderQueueSettings(int capacity, long maxRetainedBytes, Duration 
     }
 
     public long effectiveRetainedBytes() {
-        return Math.min(maxRetainedBytes, Runtime.getRuntime().maxMemory() / 4);
+        return Math.min(maxRetainedBytes, Runtime.getRuntime()
+            .maxMemory() / 4);
     }
 }

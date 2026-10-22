@@ -18,7 +18,8 @@ final class GenerationTiming implements AutoCloseable {
     @Override
     public void close() {
         log.info("event=render_timing stage={} pid={} durationMs={}", stage,
-            ProcessHandle.current().pid(),
+            ProcessHandle.current()
+                .pid(),
             TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
     }
 }

@@ -1,9 +1,22 @@
 package org.permaformula.rendering.cache;
 
 import static org.awaitility.Awaitility.await;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -29,7 +42,9 @@ class PersistenceAvailabilityTests {
 
     private CaffeineImageStore store(JdbcImageCache backing, AtomicLong ticker) {
         return new CaffeineImageStore(
-            new ImageCacheProperties(DataSize.ofMegabytes(1), Duration.ofHours(1)), ticker::get,
+            new ImageCacheProperties(DataSize.ofMegabytes(1),
+                Duration.ofHours(1)),
+            ticker::get,
             backing);
     }
 
@@ -45,11 +60,15 @@ class PersistenceAvailabilityTests {
                 serialized.incrementAndGet();
                 return "{}";
             }, "x");
-            await().atMost(Duration.ofSeconds(3)).until(() -> serialized.get() == 1);
+            await()
+                .atMost(Duration.ofSeconds(3))
+                .until(() -> serialized.get() == 1);
             // Wait for the completion flag, not just entry into the serializer.
-            await().atMost(Duration.ofSeconds(3))
-                .untilAsserted(() -> verify(backing).describe("warm", "formula", "{}", "x",
-                    org.permaformula.rendering.UbcqIdentity.context("formula", 500)));
+            await()
+                .atMost(Duration.ofSeconds(3))
+                .untilAsserted(() -> verify(backing)
+                    .describe("warm", "formula", "{}", "x",
+                        org.permaformula.rendering.UbcqIdentity.context("formula", 500)));
             clearInvocations(backing);
             try (var callers = Executors.newVirtualThreadPerTaskExecutor()) {
                 callers.submit(() -> {
@@ -60,9 +79,11 @@ class PersistenceAvailabilityTests {
                             "x");
                     }
                     return true;
-                }).get(1, TimeUnit.SECONDS);
+                })
+                    .get(1, TimeUnit.SECONDS);
             }
-            verify(backing, times(100)).accessed("warm");
+            verify(backing, times(100))
+                .accessed("warm");
             verifyNoMoreInteractions(backing);
             assertEquals(1, serialized.get());
         }
@@ -73,13 +94,15 @@ class PersistenceAvailabilityTests {
         var backing = mock(JdbcImageCache.class);
         var entered = new CountDownLatch(1);
         var finish = new CountDownLatch(1);
-        when(backing.sourcePublished(anyString())).thenAnswer(call -> {
-            if (call.getArgument(0).equals("a")) {
-                entered.countDown();
-                assertTrue(finish.await(5, TimeUnit.SECONDS));
-            }
-            return false;
-        });
+        when(backing.sourcePublished(anyString()))
+            .thenAnswer(call -> {
+                if (call.getArgument(0)
+                    .equals("a")) {
+                    entered.countDown();
+                    assertTrue(finish.await(5, TimeUnit.SECONDS));
+                }
+                return false;
+            });
         when(backing.describe(anyString(), anyString(), anyString(), anyString(), anyString()))
             .thenReturn(true);
         var ticker = new AtomicLong();
@@ -104,22 +127,28 @@ class PersistenceAvailabilityTests {
                     serializedC.incrementAndGet();
                     return "{}";
                 }, "c");
-                assertEquals(0, serializedA.get() + serializedB.get() + serializedC.get());
+                assertEquals(0, serializedA.get()
+                    + serializedB.get()
+                    + serializedC.get());
                 assertEquals(SVG,
                     store.getOrGenerate("a", () -> fail("Blocked publication cannot block a hit")));
             } finally {
                 finish.countDown();
             }
-            await().atMost(Duration.ofSeconds(3)).until(() -> serializedB.get() == 1);
+            await()
+                .atMost(Duration.ofSeconds(3))
+                .until(() -> serializedB.get() == 1);
             assertEquals(0, serializedC.get(), "Only one queued publication is allowed");
             ticker.set(TimeUnit.SECONDS.toNanos(2));
-            await().atMost(Duration.ofSeconds(3)).until(() -> {
-                store.describe("c", "formula", () -> {
-                    serializedC.incrementAndGet();
-                    return "{}";
-                }, "c");
-                return serializedC.get() == 1;
-            });
+            await()
+                .atMost(Duration.ofSeconds(3))
+                .until(() -> {
+                    store.describe("c", "formula", () -> {
+                        serializedC.incrementAndGet();
+                        return "{}";
+                    }, "c");
+                    return serializedC.get() == 1;
+                });
         }
     }
 
@@ -127,12 +156,13 @@ class PersistenceAvailabilityTests {
     void transientPublicationFailureIsNotRememberedForever() throws Exception {
         var backing = mock(JdbcImageCache.class);
         var calls = new AtomicInteger();
-        when(backing.sourcePublished("retry")).thenAnswer(_ -> {
-            if (calls.incrementAndGet() == 1) {
-                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
-            }
-            return false;
-        });
+        when(backing.sourcePublished("retry"))
+            .thenAnswer(_ -> {
+                if (calls.incrementAndGet() == 1) {
+                    throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
+                }
+                return false;
+            });
         when(backing.describe(anyString(), anyString(), anyString(), anyString(), anyString()))
             .thenReturn(true);
         var ticker = new AtomicLong();
@@ -143,33 +173,39 @@ class PersistenceAvailabilityTests {
                 serialized.incrementAndGet();
                 return "{}";
             }, "x");
-            await().atMost(Duration.ofSeconds(3)).until(() -> calls.get() == 1);
+            await()
+                .atMost(Duration.ofSeconds(3))
+                .until(() -> calls.get() == 1);
             for (int i = 0; i < 100; i++) {
                 store.describe("retry", "formula", () -> fail("Failure must back off"), "x");
             }
             assertEquals(0, serialized.get());
             ticker.set(TimeUnit.SECONDS.toNanos(31));
-            await().atMost(Duration.ofSeconds(3)).until(() -> {
-                store.describe("retry", "formula", () -> {
-                    serialized.incrementAndGet();
-                    return "{}";
-                }, "x");
-                return serialized.get() == 1;
-            });
+            await()
+                .atMost(Duration.ofSeconds(3))
+                .until(() -> {
+                    store.describe("retry", "formula", () -> {
+                        serialized.incrementAndGet();
+                        return "{}";
+                    }, "x");
+                    return serialized.get() == 1;
+                });
         }
     }
 
     @Test
     void coldPublishedRowsSkipSerializationAndQueuedDeletionCannotResurrect() throws Exception {
         var backing = mock(JdbcImageCache.class);
-        when(backing.findStored("stored")).thenReturn(new JdbcImageCache.Stored(SVG, true));
+        when(backing.findStored("stored"))
+            .thenReturn(new JdbcImageCache.Stored(SVG, true));
         var entered = new CountDownLatch(1);
         var finish = new CountDownLatch(1);
-        when(backing.sourcePublished("a")).thenAnswer(_ -> {
-            entered.countDown();
-            assertTrue(finish.await(5, TimeUnit.SECONDS));
-            return false;
-        });
+        when(backing.sourcePublished("a"))
+            .thenAnswer(_ -> {
+                entered.countDown();
+                assertTrue(finish.await(5, TimeUnit.SECONDS));
+                return false;
+            });
         when(backing.describe(anyString(), anyString(), anyString(), anyString(), anyString()))
             .thenReturn(true);
         var ticker = new AtomicLong();
@@ -189,17 +225,22 @@ class PersistenceAvailabilityTests {
                 finish.countDown();
             }
             var finished = new AtomicBoolean();
-            await().atMost(Duration.ofSeconds(3)).until(() -> {
-                ticker.addAndGet(TimeUnit.SECONDS.toNanos(2));
-                store.describe("c", "formula", () -> {
-                    finished.set(true);
-                    return "{}";
-                }, "c");
-                return finished.get();
-            });
-            verify(backing, never()).sourcePublished("b");
-            verify(backing, never()).sourcePublished("stored");
-            verify(backing).delete("b");
+            await()
+                .atMost(Duration.ofSeconds(3))
+                .until(() -> {
+                    ticker.addAndGet(TimeUnit.SECONDS.toNanos(2));
+                    store.describe("c", "formula", () -> {
+                        finished.set(true);
+                        return "{}";
+                    }, "c");
+                    return finished.get();
+                });
+            verify(backing, never())
+                .sourcePublished("b");
+            verify(backing, never())
+                .sourcePublished("stored");
+            verify(backing)
+                .delete("b");
         }
     }
 
@@ -209,23 +250,28 @@ class PersistenceAvailabilityTests {
         var connection = mock(Connection.class);
         var query = mock(PreparedStatement.class);
         var rows = mock(ResultSet.class);
-        when(source.getConnection()).thenReturn(connection);
-        when(connection.prepareStatement(anyString())).thenReturn(query);
+        when(source.getConnection())
+            .thenReturn(connection);
+        when(connection.prepareStatement(anyString()))
+            .thenReturn(query);
         var blocking = new AtomicBoolean();
-        when(connection.createStatement()).thenReturn(mock(java.sql.Statement.class));
+        when(connection.createStatement())
+            .thenReturn(mock(java.sql.Statement.class));
         var entered = new CountDownLatch(2);
         var finish = new CountDownLatch(1);
-        when(query.executeQuery()).thenAnswer(_ -> {
-            if (blocking.get()
-                && entered.getCount() > 0) {
-                entered.countDown();
-                assertTrue(finish.await(5, TimeUnit.SECONDS));
-            }
-            return rows;
-        });
+        when(query.executeQuery())
+            .thenAnswer(_ -> {
+                if (blocking.get()
+                    && entered.getCount() > 0) {
+                    entered.countDown();
+                    assertTrue(finish.await(5, TimeUnit.SECONDS));
+                }
+                return rows;
+            });
         try (
             var backing = new JdbcImageCache(source, false, Duration.ofHours(1), 4096,
-                Duration.ofDays(1), null);
+                Duration.ofDays(1),
+                null);
             var store = store(backing, new AtomicLong());
             var callers = Executors.newVirtualThreadPerTaskExecutor()) {
             store.getOrGenerate("warm", () -> SVG);
@@ -237,14 +283,18 @@ class PersistenceAvailabilityTests {
                 assertTrue(entered.await(3, TimeUnit.SECONDS));
                 var denied = assertThrows(ResponseStatusException.class,
                     () -> backing.find("cold-c"));
-                assertEquals(503, denied.getStatusCode().value());
-                assertEquals("1", denied.getHeaders().getFirst("Retry-After"));
+                assertEquals(503, denied.getStatusCode()
+                    .value());
+                assertEquals("1", denied.getHeaders()
+                    .getFirst("Retry-After"));
                 assertNull(backing.keyForToken("cold-c"));
-                assertTrue(backing.library(null, 12).isEmpty());
+                assertTrue(backing.library(null, 12)
+                    .isEmpty());
                 assertNull(backing.sourcePublished("cold-c"));
                 assertEquals(SVG, store.getOrGenerate("warm",
                     () -> fail("Read capacity must not affect memory hits")));
-                verify(source, times(5)).getConnection();
+                verify(source, times(5))
+                    .getConnection();
             } finally {
                 finish.countDown();
             }
@@ -260,20 +310,24 @@ class PersistenceAvailabilityTests {
         var connection = mock(Connection.class);
         var query = mock(PreparedStatement.class);
         var rows = mock(ResultSet.class);
-        when(source.getConnection()).thenReturn(connection);
-        when(connection.prepareStatement(anyString())).thenReturn(query);
+        when(source.getConnection())
+            .thenReturn(connection);
+        when(connection.prepareStatement(anyString()))
+            .thenReturn(query);
         var entered = new CountDownLatch(2);
         var finish = new CountDownLatch(1);
-        when(query.executeQuery()).thenAnswer(_ -> {
-            if (entered.getCount() > 0) {
-                entered.countDown();
-                assertTrue(finish.await(5, TimeUnit.SECONDS));
-            }
-            return rows;
-        });
+        when(query.executeQuery())
+            .thenAnswer(_ -> {
+                if (entered.getCount() > 0) {
+                    entered.countDown();
+                    assertTrue(finish.await(5, TimeUnit.SECONDS));
+                }
+                return rows;
+            });
         try (
             var backing = new JdbcImageCache(source, false, Duration.ofHours(1), 4096,
-                Duration.ofDays(1), null);
+                Duration.ofDays(1),
+                null);
             var callers = Executors.newVirtualThreadPerTaskExecutor()) {
             var first = callers.submit(() -> backing.keyForToken("a"));
             var second = callers.submit(() -> backing.library(null, 12));
@@ -281,13 +335,15 @@ class PersistenceAvailabilityTests {
                 assertTrue(entered.await(3, TimeUnit.SECONDS));
                 var denied = assertThrows(ResponseStatusException.class,
                     () -> backing.keyForToken("c"));
-                assertEquals(503, denied.getStatusCode().value());
+                assertEquals(503, denied.getStatusCode()
+                    .value());
                 assertNull(backing.find("image"));
             } finally {
                 finish.countDown();
             }
             assertNull(first.get(3, TimeUnit.SECONDS));
-            assertTrue(second.get(3, TimeUnit.SECONDS).isEmpty());
+            assertTrue(second.get(3, TimeUnit.SECONDS)
+                .isEmpty());
             assertNull(backing.keyForToken("after"));
         }
     }
@@ -296,9 +352,11 @@ class PersistenceAvailabilityTests {
     void databaseFailuresKeepImageFallbackAndCheckedLibraryContracts() throws Exception {
         var source = mock(DataSource.class);
         var unavailable = new SQLException("unavailable", "08001");
-        when(source.getConnection()).thenThrow(unavailable);
+        when(source.getConnection())
+            .thenThrow(unavailable);
         try (var backing = new JdbcImageCache(source, false, Duration.ofHours(1), 4096,
-            Duration.ofDays(1), null)) {
+            Duration.ofDays(1),
+            null)) {
             assertNull(backing.find("image"));
             assertNull(backing.keyForToken("token"));
             assertSame(unavailable, assertThrows(SQLException.class,
@@ -309,7 +367,8 @@ class PersistenceAvailabilityTests {
                 () -> backing.delete("item")));
             var failure = assertThrows(ResponseStatusException.class,
                 () -> backing.sourcePublished("item"));
-            assertEquals(503, failure.getStatusCode().value());
+            assertEquals(503, failure.getStatusCode()
+                .value());
         }
     }
 
@@ -318,17 +377,22 @@ class PersistenceAvailabilityTests {
         var source = mock(DataSource.class);
         var connection = mock(Connection.class);
         var query = mock(PreparedStatement.class);
-        when(source.getConnection()).thenAnswer(_ -> {
-            Thread.sleep(75);
-            return connection;
-        });
-        when(connection.prepareStatement(anyString())).thenReturn(query);
-        when(query.executeQuery()).thenReturn(mock(ResultSet.class));
+        when(source.getConnection())
+            .thenAnswer(_ -> {
+                Thread.sleep(75);
+                return connection;
+            });
+        when(connection.prepareStatement(anyString()))
+            .thenReturn(query);
+        when(query.executeQuery())
+            .thenReturn(mock(ResultSet.class));
         try (var backing = new JdbcImageCache(source, false, Duration.ofMillis(20), 4096,
-            Duration.ofDays(1), null, () -> false)) {
+            Duration.ofDays(1),
+            null, () -> false)) {
             backing.accessed("expired-visit");
             assertNull(backing.find("expired-visit"));
-            verify(query).setBoolean(2, false);
+            verify(query)
+                .setBoolean(2, false);
         }
     }
 
@@ -337,44 +401,52 @@ class PersistenceAvailabilityTests {
         var source = mock(DataSource.class);
         var connection = mock(Connection.class);
         var query = mock(PreparedStatement.class);
-        when(source.getConnection()).thenReturn(connection);
-        when(connection.prepareStatement(anyString())).thenReturn(query);
-        when(query.executeBatch()).thenThrow(new SQLException("unavailable"))
+        when(source.getConnection())
+            .thenReturn(connection);
+        when(connection.prepareStatement(anyString()))
+            .thenReturn(query);
+        when(query.executeBatch())
+            .thenThrow(new SQLException("unavailable"))
             .thenReturn(new int[1024], new int[1]);
         try (var backing = new JdbcImageCache(source, false, Duration.ofHours(1), 4096,
-            Duration.ofDays(1), null)) {
+            Duration.ofDays(1),
+            null)) {
             for (int i = 0; i < 2000; i++) {
-                backing.accessed("key-" + i);
+                backing.accessed("key-%s".formatted(i));
             }
             for (int i = 0; i < 10_000; i++) {
                 backing.accessed("key-0");
             }
             verifyNoInteractions(source);
             assertFalse(backing.flushTouches());
-            verify(query, times(1024)).addBatch();
+            verify(query, times(1024))
+                .addBatch();
             clearInvocations(query);
             backing.accessed("overflow");
             assertTrue(backing.flushTouches());
-            verify(query, times(1024)).addBatch();
+            verify(query, times(1024))
+                .addBatch();
             clearInvocations(query);
             backing.accessed("new-slot");
             assertTrue(backing.flushTouches());
-            verify(query, times(1)).addBatch();
+            verify(query, times(1))
+                .addBatch();
         }
     }
 
     @Test
     // The deadline resource installs and restores request-local state.
-    @SuppressWarnings("try")
     void expiredRequestDeadlineDoesNotAcquireADatabaseConnection() throws Exception {
         var source = mock(DataSource.class);
         try (
             var backing = new JdbcImageCache(source, false, Duration.ofHours(1), 4096,
-                Duration.ofDays(1), null);
-            var deadline = WorkDeadline.open(Duration.ZERO)) {
+                Duration.ofDays(1),
+                null);
+            var _ = WorkDeadline.open(Duration.ZERO)) {
             var failure = assertThrows(ResponseStatusException.class,
                 () -> backing.find("expired"));
-            assertEquals(504, failure.getStatusCode().value());
+            assertEquals(504, failure.getStatusCode()
+                .value());
             verifyNoInteractions(source);
         }
     }

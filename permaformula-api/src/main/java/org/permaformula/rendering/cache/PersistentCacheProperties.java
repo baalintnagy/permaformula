@@ -1,5 +1,7 @@
 package org.permaformula.rendering.cache;
 
+import static org.permaformula.validation.QuickValidator.validate;
+
 import java.nio.file.Path;
 import java.time.Duration;
 
@@ -7,7 +9,6 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import org.apache.commons.lang3.StringUtils;
-import org.permaformula.validation.QuickValidator;
 import org.permaformula.validation.RecordValidation;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -34,12 +35,12 @@ public record PersistentCacheProperties(
         RecordValidation.requireValid(PersistentCacheProperties.class, backend, sqlitePath,
             postgresUrl, username, password, maximumPoolSize, maximumSize, cleanupInterval,
             maximumEntries);
-        QuickValidator.validate(
+        validate(
             !(maximumSize.toBytes() < 1
                 || cleanupInterval.toMillis() < 1),
             () -> new IllegalArgumentException(
                 "Invalid persistent cache backend, pool, size or cleanup interval"));
-        QuickValidator.validate(
+        validate(
             !(backend == Backend.POSTGRES
                 && (postgresUrl == null
                     || !postgresUrl.startsWith("jdbc:postgresql:")
@@ -51,6 +52,6 @@ public record PersistentCacheProperties(
 
     @Override
     public String toString() {
-        return "PersistentCacheProperties[backend=" + backend + ", credentials=redacted]";
+        return "PersistentCacheProperties[backend=%s, credentials=redacted]".formatted(backend);
     }
 }

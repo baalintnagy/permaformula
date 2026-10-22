@@ -1,5 +1,7 @@
 package org.permaformula.rendering;
 
+import static org.permaformula.validation.QuickValidator.coalesce;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -16,7 +18,6 @@ import org.permaformula.ratelimit.ClientRateLimits;
 import org.permaformula.rendering.cache.GeneratedImageStore;
 import org.permaformula.url.ImageDescriptor;
 import org.permaformula.url.UrlService;
-import org.permaformula.validation.QuickValidator;
 import org.permaformula.validation.ValidDescriptor;
 import org.permaformula.validation.ValidEncoded;
 import org.permaformula.validation.ValidFormula;
@@ -49,15 +50,16 @@ public class GeneratedImageService {
     public String getHtmlUbcq(@ValidEncoded String ubcq) throws IOException {
         String token = tokenKey("html", ubcq);
         String hit = store.findByToken(token);
-        return hit != null ? hit : html(urls.decodeUbcq(ubcq), token);
+        return hit != null ? hit
+            : html(urls.decodeUbcq(ubcq), token);
     }
 
     private String html(ImageDescriptor descriptor, String token) throws IOException {
         Prepared prepared = work.prepare(() -> {
             ImageDescriptor effective = new ImageDescriptor(descriptor.forumla(),
-                QuickValidator.orElse(descriptor.imageWidth(), defaults.defaultImageWidth()),
-                QuickValidator.orElse(descriptor.styleRefs(), List.of()),
-                QuickValidator.orElse(descriptor.style(), ""));
+                coalesce(descriptor.imageWidth(), defaults::defaultImageWidth),
+                coalesce(descriptor.styleRefs(), List::of),
+                coalesce(descriptor.style(), ""));
             return new Prepared(effective, key(UbcqIdentity.HTML, effective));
         });
         String output = store.getOrGenerate(prepared.key(),
@@ -69,7 +71,9 @@ public class GeneratedImageService {
                 }
             })));
         store.describe(prepared.key(), "html",
-            () -> mapper.writeValueAsString(prepared.descriptor()), prepared.descriptor().forumla(),
+            () -> mapper.writeValueAsString(prepared.descriptor()),
+            prepared.descriptor()
+                .forumla(),
             UbcqIdentity.context("html", defaults.defaultImageWidth()));
         store.rememberToken(token, prepared.key());
         return output;
@@ -111,17 +115,21 @@ public class GeneratedImageService {
 
     private String tokenKey(String kind, String ubcq) throws IOException {
         return work.prepare(() -> {
-            return UbcqIdentity.key(UbcqIdentity.context(kind, defaults.defaultImageWidth()), ubcq);
+            return UbcqIdentity.key(UbcqIdentity.context(kind, defaults.defaultImageWidth()),
+                ubcq);
         });
     }
 
     private byte[] jpeg(String svg) throws IOException {
-        String cacheKey = work.prepare(() -> Hashing.sha256().hashString(
-            """
+        String cacheKey = work.prepare(() -> Hashing.sha256()
+            .hashString(
+                """
                 jpeg-v1:chromium-1.59.0:scale-2:quality-95:white:%s
                 %s\
-                """.formatted(ComplexityPolicy.CURRENT.fingerprint(), svg),
-            StandardCharsets.UTF_8).toString());
+                """
+                    .formatted(ComplexityPolicy.CURRENT.fingerprint(), svg),
+                StandardCharsets.UTF_8)
+            .toString());
         String encoded = store.getOrGenerate(cacheKey,
             () -> work.generate(ClientRateLimits.generation(
                 () -> JpegOutputPolicy.encode(gateway.renderJpeg(svg)))));
@@ -130,8 +138,15 @@ public class GeneratedImageService {
 
     private String key(String format, ImageDescriptor descriptor) {
         // Stable versioned content identity, also suitable for filenames or database keys.
-        String identity = format + ":" + ComplexityPolicy.CURRENT.fingerprint()
-            + "\n" + mapper.writeValueAsString(descriptor);
+        String identity =
+            """
+            %s:%s
+            %s\
+            """
+            .formatted(
+                format,
+                ComplexityPolicy.CURRENT.fingerprint(),
+                mapper.writeValueAsString(descriptor));
         return Hashing.sha256()
             .hashString(identity, StandardCharsets.UTF_8)
             .toString();

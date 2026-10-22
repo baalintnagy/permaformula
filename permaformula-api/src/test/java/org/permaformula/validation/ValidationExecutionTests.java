@@ -2,6 +2,7 @@ package org.permaformula.validation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.permaformula.validation.QuickValidator.violation;
 
 import java.time.Duration;
 
@@ -29,33 +30,38 @@ class ValidationExecutionTests {
         var handler = new ValidationExecutionExceptionHandler(new LocalExceptionHandler());
         var request = new ServletWebRequest(new MockHttpServletRequest(),
             new MockHttpServletResponse());
-        assertEquals(400, handler.handle(QuickValidator.violation("Invalid input"), request)
-            .getStatusCode().value());
+        assertEquals(400, handler.handle(violation("Invalid input"), request)
+            .getStatusCode()
+            .value());
         assertEquals(500, handler.handle(new ValidationException("Validator bug"), request)
-            .getStatusCode().value());
+            .getStatusCode()
+            .value());
     }
 
     @Test
     // The deadline resource installs and restores request-local state.
-    @SuppressWarnings("try")
     void methodValidationPreservesOperationalDeadlineStatus() throws Exception {
         try (var context = new AnnotationConfigApplicationContext()) {
             context.registerBean(ApiWorkService.class,
                 () -> new ApiWorkService(ApiWorkProperties.defaults()));
             context.refresh();
-            try (var factory = Validation.byDefaultProvider().configure()
+            try (var factory = Validation.byDefaultProvider()
+                .configure()
                 .constraintValidatorFactory(new SpringConstraintValidatorFactory(
                     context.getAutowireCapableBeanFactory()))
                 .buildValidatorFactory();
-                var deadline = WorkDeadline.open(Duration.ZERO)) {
+                var _ = WorkDeadline.open(Duration.ZERO)) {
                 var failure = assertThrows(ValidationException.class,
-                    () -> factory.getValidator().forExecutables().validateParameters(
-                        new Boundary(), Boundary.class.getMethod("accept", String.class),
-                        new Object[] { "x" }));
+                    () -> factory.getValidator()
+                        .forExecutables()
+                        .validateParameters(
+                            new Boundary(), Boundary.class.getMethod("accept", String.class),
+                            new Object[] { "x" }));
                 var handler = new ValidationExecutionExceptionHandler(new LocalExceptionHandler());
                 var response = handler.handle(failure, new ServletWebRequest(
                     new MockHttpServletRequest(), new MockHttpServletResponse()));
-                assertEquals(504, response.getStatusCode().value());
+                assertEquals(504, response.getStatusCode()
+                    .value());
             }
         }
     }

@@ -1,5 +1,7 @@
 package org.permaformula.validation;
 
+import static org.permaformula.validation.QuickValidator.notNull;
+
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 import org.permaformula.rendering.ApiWorkService;
@@ -20,8 +22,7 @@ public class JsonValidator implements ConstraintValidator<ValidJson, String> {
     @Override
     public boolean isValid(String value, ConstraintValidatorContext context) {
         return ConstraintChecks.check(work, context, () -> {
-            QuickValidator.notNull(value,
-                () -> QuickValidator.violation("Missing uncompressed payload"));
+            notNull(value, "Missing uncompressed payload");
             ValidationText.text(value, InputLimits.MAX_JSON_BYTES, "Uncompressed payload");
         });
     }

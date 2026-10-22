@@ -1,6 +1,9 @@
 package org.permaformula.ratelimit;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
@@ -27,13 +30,14 @@ class ClientRateLimitPropertiesTests {
             var properties = result.getBean(ClientRateLimitProperties.class);
             assertEquals(600, properties.requestsPerMinute());
             assertEquals(32, properties.requestConcurrency());
-            assertTrue(properties.trustedProxies().isEmpty());
+            assertTrue(properties.trustedProxies()
+                .isEmpty());
         });
-        context
-            .withPropertyValues(
-                "permaformula.rate-limit.trusted-proxies=::ffff:172.30.86.2,2001:db8::1")
+        context.withPropertyValues(
+            "permaformula.rate-limit.trusted-proxies=::ffff:172.30.86.2,2001:db8::1")
             .run(result -> assertEquals(List.of("172.30.86.2", "2001:db8::1"),
-                result.getBean(ClientRateLimitProperties.class).trustedProxies()));
+                result.getBean(ClientRateLimitProperties.class)
+                    .trustedProxies()));
     }
 
     @ParameterizedTest
@@ -41,7 +45,7 @@ class ClientRateLimitPropertiesTests {
             "generation-concurrency=0", "maximum-clients=0", "expire-after-access=1s",
             "trusted-proxies=ingress", "trusted-proxies=0.0.0.0/0" })
     void rejectsInvalidLimitsOrProxyTrustAtStartup(String property) {
-        context.withPropertyValues("permaformula.rate-limit." + property)
+        context.withPropertyValues("permaformula.rate-limit.%s".formatted(property))
             .run(result -> assertNotNull(result.getStartupFailure()));
     }
 }

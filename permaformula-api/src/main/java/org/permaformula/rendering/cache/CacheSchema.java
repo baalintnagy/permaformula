@@ -18,6 +18,8 @@ public final class CacheSchema {
     private CacheSchema() {
     }
 
+    // Liquibase resources declare close() with broad checked exceptions, including interruption.
+    // The catch clauses below preserve interruption and translate other close failures.
     @SuppressWarnings("try")
     public static void migrate(DataSource source) throws SQLException, LiquibaseException {
         try (Connection connection = source.getConnection();
@@ -28,7 +30,8 @@ public final class CacheSchema {
         } catch (SQLException | LiquibaseException failure) {
             throw failure;
         } catch (InterruptedException failure) {
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                .interrupt();
             throw new LiquibaseException("Interrupted while closing cache schema resources",
                 failure);
         } catch (Exception failure) {

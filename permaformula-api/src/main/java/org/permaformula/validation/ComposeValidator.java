@@ -25,8 +25,7 @@ public class ComposeValidator implements ConstraintValidator<ValidCompose, Objec
     @Override
     public boolean isValid(Object[] value, ConstraintValidatorContext context) {
         return ConstraintChecks.check(work, context, () -> {
-            @SuppressWarnings("unchecked")
-            List<String> refs = (List<String>) value[2];
+            List<?> refs = (List<?>) value[2];
             DescriptorValidator.bounds((String) value[0], (Integer) value[1], refs,
                 (String) value[3]);
         });

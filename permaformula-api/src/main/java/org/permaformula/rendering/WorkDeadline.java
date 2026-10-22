@@ -12,11 +12,13 @@ public final class WorkDeadline implements AutoCloseable {
 
     private WorkDeadline(long deadline) {
         previous = CURRENT.get();
-        CURRENT.set(previous == null ? deadline : Math.min(previous, deadline));
+        CURRENT.set(previous == null ? deadline
+            : Math.min(previous, deadline));
     }
 
     public static WorkDeadline open(Duration timeout) {
-        return at(System.nanoTime() + timeout.toNanos());
+        return at(System.nanoTime()
+            + timeout.toNanos());
     }
 
     static WorkDeadline at(long deadline) {
@@ -25,14 +27,18 @@ public final class WorkDeadline implements AutoCloseable {
 
     static long deadline(Duration fallback) {
         Long value = CURRENT.get();
-        long limit = System.nanoTime() + fallback.toNanos();
-        return value == null ? limit : Math.min(value, limit);
+        long limit = System.nanoTime()
+            + fallback.toNanos();
+        return value == null ? limit
+            : Math.min(value, limit);
     }
 
     public static long remainingNanos(Duration maximum) {
-        long remaining = Math.min(maximum.toNanos(), deadline(maximum) - System.nanoTime());
+        long remaining = Math.min(maximum.toNanos(),
+            deadline(maximum) - System.nanoTime());
         if (remaining <= 0
-            || Thread.currentThread().isInterrupted()) {
+            || Thread.currentThread()
+                .isInterrupted()) {
             throw timedOut();
         }
         return remaining;

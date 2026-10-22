@@ -18,21 +18,45 @@ public final class QuickValidator {
         }
     }
 
+    public static void validate(boolean condition, String message) {
+        validate(condition,
+            () -> violation(message));
+    }
+
     public static <T> T notNull(T value, Supplier<? extends RuntimeException> failure) {
-        validate(value != null, failure);
+        validate(value != null,
+            failure);
         return value;
     }
 
     public static <T> T notNull(T value) {
-        return notNull(value, () -> violation("A required value is missing"));
+        return notNull(value, "A required value is missing");
     }
 
     public static <T> T notNull(T value, String message) {
-        return notNull(value, () -> violation(message));
+        return notNull(value,
+            () -> violation(message));
     }
 
-    public static <T> T orElse(T value, T fallback) {
-        return value != null ? value : notNull(fallback);
+    /** Returns the first non-null value, or throws if none is available. */
+    @SafeVarargs
+    public static <T> T coalesce(T value, T... fallbacks) {
+        if (value != null) {
+            return value;
+        }
+        for (T fallback : notNull(fallbacks)) {
+            if (fallback != null) {
+                return fallback;
+            }
+        }
+        return notNull(value);
+    }
+
+    /** Obtains and validates the fallback only when the value is null. */
+    public static <T> T coalesce(T value, Supplier<? extends T> fallback) {
+        return value != null ? value
+            : notNull(notNull(fallback)
+                .get());
     }
 
     /** Contains application-authored rules, never rejected input or parser diagnostics. */

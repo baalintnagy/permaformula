@@ -1,8 +1,9 @@
 package org.permaformula.rendering.cache;
 
+import static org.permaformula.validation.QuickValidator.validate;
+
 import java.time.Duration;
 
-import org.permaformula.validation.QuickValidator;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.util.unit.DataSize;
@@ -12,7 +13,7 @@ public record ImageCacheProperties(
     @DefaultValue("256MB") DataSize maximumSize,
     @DefaultValue("60d") Duration expireAfterAccess) {
     public ImageCacheProperties {
-        QuickValidator.validate(
+        validate(
             !(maximumSize.toBytes() <= 0
                 || expireAfterAccess.isNegative()
                 || expireAfterAccess.isZero()),
@@ -21,9 +22,10 @@ public record ImageCacheProperties(
 
     /** Limit estimated cache weight to one quarter of the heap to leave processing headroom. */
     public long effectiveMaximumBytes(long maximumHeapBytes) {
-        QuickValidator.validate(
+        validate(
             !(maximumHeapBytes <= 0),
             () -> new IllegalArgumentException("Maximum heap must be positive"));
-        return Math.min(maximumSize.toBytes(), Math.max(1, maximumHeapBytes / 4));
+        return Math.min(maximumSize.toBytes(),
+            Math.max(1, maximumHeapBytes / 4));
     }
 }

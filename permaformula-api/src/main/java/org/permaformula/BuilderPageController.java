@@ -25,7 +25,8 @@ public class BuilderPageController {
     public ResponseEntity<String> builder() throws IOException {
         ClassPathResource page = new ClassPathResource("static/index.html");
         if (!page.exists()) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.notFound()
+                .build();
         }
         return ResponseEntity.ok()
             .contentType(new MediaType("text", "html", StandardCharsets.UTF_8))
@@ -36,35 +37,41 @@ public class BuilderPageController {
     @GetMapping(value = "/robots.txt", produces = MediaType.TEXT_PLAIN_VALUE)
     @ResponseBody
     public String robots() {
-        return """
+        return
+            """
             User-agent: *
             Allow: /
             Disallow: /admin
 
             Sitemap: %s/sitemap.xml
-            """.formatted(origins.host());
+            """
+            .formatted(origins.host());
     }
 
     @GetMapping(value = "/sitemap.xml", produces = MediaType.APPLICATION_XML_VALUE)
     @ResponseBody
     public String sitemap() {
-        return """
+        return
+            """
             <?xml version="1.0" encoding="UTF-8"?>
             <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
                 <url><loc>%s/</loc></url>
             </urlset>
-            """.formatted(HtmlUtils.htmlEscape(origins.host()));
+            """
+            .formatted(HtmlUtils.htmlEscape(origins.host()));
     }
 
     static String withPublicMetadata(String html, String origin) {
-        String url = HtmlUtils.htmlEscape(origin + "/");
-        String image = HtmlUtils.htmlEscape(origin + "/assets/og.jpg");
-        String metadata = """
+        String url = HtmlUtils.htmlEscape("%s/".formatted(origin));
+        String image = HtmlUtils.htmlEscape("%s/assets/og.jpg".formatted(origin));
+        String metadata =
+            """
             <link rel="canonical" href="%s" />
             <meta property="og:url" content="%s" />
             <meta property="og:image" content="%s" />
             <meta name="twitter:image" content="%s" />
-            """.formatted(url, url, image, image);
+            """
+            .formatted(url, url, image, image);
         return html.replace("<!-- PERMAFORMULA_PUBLIC_METADATA -->", metadata);
     }
 }

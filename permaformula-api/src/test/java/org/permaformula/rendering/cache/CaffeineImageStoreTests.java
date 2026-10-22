@@ -1,7 +1,11 @@
 package org.permaformula.rendering.cache;
 
 import static org.awaitility.Awaitility.await;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -45,14 +49,18 @@ class CaffeineImageStoreTests {
                 }));
                 await()
                     .atMost(Duration.ofSeconds(2))
-                    .until(() -> store.stats().hitCount() == 1);
+                    .until(() -> store.stats()
+                        .hitCount() == 1);
                 release.countDown();
                 assertSame(failure, assertThrows(ExecutionException.class,
-                    () -> owner.get(2, TimeUnit.SECONDS)).getCause());
+                    () -> owner.get(2, TimeUnit.SECONDS))
+                    .getCause());
                 assertSame(failure, assertThrows(ExecutionException.class,
-                    () -> waiter.get(2, TimeUnit.SECONDS)).getCause());
+                    () -> waiter.get(2, TimeUnit.SECONDS))
+                    .getCause());
                 assertEquals("recovered", store.getOrGenerate("failed", () -> "recovered"));
-                assertEquals(1, store.stats().loadFailureCount());
+                assertEquals(1, store.stats()
+                    .loadFailureCount());
             } finally {
                 release.countDown();
             }
@@ -61,11 +69,16 @@ class CaffeineImageStoreTests {
 
     @Test
     void cacheBudgetLeavesHeapHeadroomAndHonorsSmallerConfiguration() {
-        var properties = new ImageCacheProperties(DataSize.ofMegabytes(128), Duration.ofHours(1));
-        assertEquals(DataSize.ofMegabytes(64).toBytes(),
-            properties.effectiveMaximumBytes(DataSize.ofMegabytes(256).toBytes()));
-        assertEquals(DataSize.ofMegabytes(128).toBytes(),
-            properties.effectiveMaximumBytes(DataSize.ofMegabytes(1024).toBytes()));
+        var properties = new ImageCacheProperties(DataSize.ofMegabytes(128),
+            Duration.ofHours(1));
+        assertEquals(DataSize.ofMegabytes(64)
+            .toBytes(),
+            properties.effectiveMaximumBytes(DataSize.ofMegabytes(256)
+                .toBytes()));
+        assertEquals(DataSize.ofMegabytes(128)
+            .toBytes(),
+            properties.effectiveMaximumBytes(DataSize.ofMegabytes(1024)
+                .toBytes()));
         assertThrows(IllegalArgumentException.class, () -> properties.effectiveMaximumBytes(0));
     }
 
@@ -93,7 +106,8 @@ class CaffeineImageStoreTests {
                     result -> () -> assertEquals("<svg/>", result.get(5, TimeUnit.SECONDS))));
         }
         assertEquals(1, calls.get());
-        assertEquals(1, store.stats().loadSuccessCount());
+        assertEquals(1, store.stats()
+            .loadSuccessCount());
     }
 
     @Test
@@ -114,7 +128,8 @@ class CaffeineImageStoreTests {
         var time = new AtomicLong();
         var store = store(65536, time);
         assertEquals("old", store.getOrGenerate("key", () -> "old"));
-        time.set(Duration.ofHours(1).toNanos());
+        time.set(Duration.ofHours(1)
+            .toNanos());
         assertEquals("new", store.getOrGenerate("key", () -> "new"));
     }
 
@@ -123,38 +138,46 @@ class CaffeineImageStoreTests {
         var time = new AtomicLong();
         var store = store(65536, time);
         assertEquals("original", store.getOrGenerate("key", () -> "original"));
-        time.set(Duration.ofMinutes(45).toNanos());
+        time.set(Duration.ofMinutes(45)
+            .toNanos());
         assertEquals("original", store.getOrGenerate("key", () -> {
             throw new AssertionError("Entry should still be cached");
         }));
         // Beyond the original TTL, but within one TTL of the previous hit.
-        time.set(Duration.ofMinutes(90).toNanos());
+        time.set(Duration.ofMinutes(90)
+            .toNanos());
         assertEquals("original", store.getOrGenerate("key", () -> {
             throw new AssertionError("Hit must extend expiry");
         }));
-        time.set(Duration.ofMinutes(151).toNanos());
+        time.set(Duration.ofMinutes(151)
+            .toNanos());
         assertEquals("regenerated", store.getOrGenerate("key", () -> "regenerated"));
-        assertEquals(2, store.stats().loadSuccessCount());
+        assertEquals(2, store.stats()
+            .loadSuccessCount());
     }
 
     @Test
     void oversizedImagesAreReturnedButNotRetained() throws Exception {
         var store = store(256, new AtomicLong());
         var calls = new AtomicInteger();
-        assertAll(IntStream.range(0, 2).mapToObj(_ -> (Executable) () -> {
-            assertEquals("svg".repeat(1000), store.getOrGenerate("key", () -> {
-                calls.incrementAndGet();
-                return "svg".repeat(1000);
+        assertAll(IntStream.range(0, 2)
+            .mapToObj(_ -> (Executable) () -> {
+                assertEquals("svg".repeat(1000),
+                    store.getOrGenerate("key", () -> {
+                        calls.incrementAndGet();
+                        return "svg".repeat(1000);
+                    }));
+                // Caffeine eviction maintenance is asynchronous; force it for this assertion.
+                store.cleanUp();
             }));
-            // Caffeine eviction maintenance is asynchronous; force it for this assertion.
-            store.cleanUp();
-        }));
         assertEquals(2, calls.get());
     }
 
     private static CaffeineImageStore store(long bytes, AtomicLong time) {
         return new CaffeineImageStore(
-            new ImageCacheProperties(DataSize.ofBytes(bytes), Duration.ofHours(1)), time::get);
+            new ImageCacheProperties(DataSize.ofBytes(bytes),
+                Duration.ofHours(1)),
+            time::get);
     }
 
     @Test
@@ -179,7 +202,8 @@ class CaffeineImageStoreTests {
                         () -> store.getOrGenerate("same", () -> {
                             throw new AssertionError("duplicate generation");
                         }))
-                        .getStatusCode().value());
+                        .getStatusCode()
+                        .value());
                 }
             } finally {
                 release.countDown();

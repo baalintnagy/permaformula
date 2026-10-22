@@ -1,14 +1,24 @@
-import java.io.*;
-import java.nio.file.*;
-import java.util.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.ResourceBundle;
 import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.transform.*;
+import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
-import com.microsoft.playwright.*;
+import com.microsoft.playwright.Browser;
+import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Playwright;
 import org.owasp.validator.css.CssScanner;
-import org.owasp.validator.html.*;
+import org.owasp.validator.html.CleanResults;
+import org.owasp.validator.html.InternalPolicy;
+import org.owasp.validator.html.Policy;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -28,7 +38,8 @@ public class AntiSamyTrial {
         new Case("Supports", "@supports (display:grid) {p {display:grid}}", "@supports"),
         new Case("Cascade layer", "@layer theme {p {color:red}}", "@layer"),
         new Case("Nested selector", ".parent {color:red; & .child {color:blue}}", "&"),
-        new Case("Gradient", "p {background-image:linear-gradient(red,blue)}", "linear-gradient"),
+        new Case("Gradient", "p {background-image:linear-gradient(red,blue)}",
+            "linear-gradient"),
         new Case("SVG fragment paint", "p {fill:url(#glyph)}", "url(#glyph)"),
         new Case("Assistive MathML clip", "p {clip:rect(1px,1px,1px,1px)}", "rect("));
 
@@ -38,7 +49,8 @@ public class AntiSamyTrial {
         builder.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
         Document doc = builder.newDocumentBuilder()
             .parse(Policy.class.getResourceAsStream("/antisamy.xml"));
-        Node rules = doc.getElementsByTagName("css-rules").item(0);
+        Node rules = doc.getElementsByTagName("css-rules")
+            .item(0);
         // Diagnostic only: permissive values separate parser limitations from default-policy
         // exclusions.
         // This policy is deliberately unsuitable for production or security claims.
@@ -46,7 +58,8 @@ public class AntiSamyTrial {
             rules.removeChild(rules.getFirstChild());
         }
         List.of("--accent", "color", "width", "display", "gap", "grid-template-columns",
-            "background-image", "fill", "clip").forEach(name -> {
+            "background-image", "fill", "clip")
+            .forEach(name -> {
                 Element property = doc.createElement("property");
                 property.setAttribute("name", name);
                 Element list = doc.createElement("regexp-list");
@@ -57,49 +70,72 @@ public class AntiSamyTrial {
                 rules.appendChild(property);
             });
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        TransformerFactory.newDefaultInstance().newTransformer().transform(new DOMSource(doc),
-            new StreamResult(output));
-        Files.write(Path.of("target/diagnostic-policy.xml"), output.toByteArray());
+        TransformerFactory.newDefaultInstance()
+            .newTransformer()
+            .transform(new DOMSource(doc),
+                new StreamResult(output));
+        Files.write(Path.of("target/diagnostic-policy.xml"),
+            output.toByteArray());
         InternalPolicy permissive = (InternalPolicy) Policy
             .getInstance(new ByteArrayInputStream(output.toByteArray()));
         ResourceBundle messages = ResourceBundle.getBundle("AntiSamy", Locale.US);
         CASES.forEach(item -> {
-            List.of(defaults, permissive).forEach(policy -> {
-                String mode = policy == defaults ? "default" : "diagnostic";
-                try {
-                    CleanResults result = new CssScanner(policy, messages).scanStyleSheet(item.css,
-                        1_048_576);
-                    String cleaned = result.getCleanHTML().replaceAll("\\s+", "");
-                    System.out.println(item.name + " | " + mode + " | "
-                        + (cleaned.contains(item.required) ? "TOKEN_PRESENT" : "LOST") + " | "
-                        + cleaned);
-                } catch (Exception error) {
-                    System.out.println(item.name + " | " + mode + " | ERROR | "
-                        + error.getClass().getSimpleName() + ": " + error.getMessage());
-                }
-            });
+            List.of(defaults, permissive)
+                .forEach(policy -> {
+                    String mode = policy == defaults ? "default" : "diagnostic";
+                    try {
+                        CleanResults result = new CssScanner(policy, messages)
+                            .scanStyleSheet(item.css,
+                                1_048_576);
+                        String cleaned = result.getCleanHTML()
+                            .replaceAll("\\s+", "");
+                        System.out.println("%s | %s | %s | %s".formatted(
+                            item.name,
+                            mode,
+                            (cleaned.contains(item.required) ? "TOKEN_PRESENT" : "LOST"),
+                            cleaned));
+                    } catch (Exception error) {
+                        System.out.println("%s | %s | ERROR | %s: %s".formatted(
+                            item.name,
+                            mode,
+                            error.getClass()
+                                .getSimpleName(),
+                            error.getMessage()));
+                    }
+                });
         });
-        try (Playwright playwright = Playwright.create(new Playwright.CreateOptions().setEnv(Map.of(
-            "PLAYWRIGHT_BROWSERS_PATH",
-            Path.of("../../.runtime/browsers").toAbsolutePath().normalize().toString(),
-            "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1")));
-            Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions()
-                .setExecutablePath(Path.of(playwright.chromium().executablePath()))
-                .setHeadless(true))) {
+        try (Playwright playwright = Playwright.create(new Playwright.CreateOptions()
+            .setEnv(Map.of(
+                "PLAYWRIGHT_BROWSERS_PATH",
+                Path.of("../../.runtime/browsers")
+                    .toAbsolutePath()
+                    .normalize()
+                    .toString(),
+                "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1")));
+            Browser browser = playwright.chromium()
+                .launch(new BrowserType.LaunchOptions()
+                    .setExecutablePath(Path.of(playwright.chromium()
+                        .executablePath()))
+                    .setHeadless(true))) {
             Page page = browser.newPage();
             for (String css : List.of("p {display:grid;grid-template-columns:repeat(2,1fr)}",
                 "p {background-image:linear-gradient(red,blue)}")) {
                 String sanitized = new CssScanner(permissive, messages)
-                    .scanStyleSheet(css, 1_048_576).getCleanHTML();
-                List.of(css, sanitized).forEach(candidate -> {
-                    page.setContent("<style>" + candidate + "</style><p>x</p>");
-                    System.out.println("Browser | "
-                        + (candidate.equals(css) ? "original" : "AntiSamy") + " | "
-                        + page.evaluate(
+                    .scanStyleSheet(css, 1_048_576)
+                    .getCleanHTML();
+                List.of(css, sanitized)
+                    .forEach(candidate -> {
+                        page.setContent("<style>%s</style><p>x</p>".formatted(candidate));
+                        String browserStyleScript =
                             """
-                                ({grid:getComputedStyle(document.querySelector('p')).gridTemplateColumns, background:getComputedStyle(document.querySelector('p')).backgroundImage})\
-                                """));
-                });
+                            ({grid:getComputedStyle(document.querySelector('p')).gridTemplateCo\
+                            lumns, background:getComputedStyle(document.querySelector('p')).bac\
+                            kgroundImage})\
+                            """;
+                        System.out.println("Browser | %s | %s".formatted(
+                            (candidate.equals(css) ? "original" : "AntiSamy"),
+                            page.evaluate(browserStyleScript)));
+                    });
             }
         }
     }

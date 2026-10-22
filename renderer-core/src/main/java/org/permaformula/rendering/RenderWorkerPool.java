@@ -1,17 +1,28 @@
 package org.permaformula.rendering;
 
-import java.io.*;
+import static org.permaformula.validation.QuickValidator.validate;
+
+import java.io.IOException;
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.*;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
 import org.permaformula.contract.ComplexityPolicy;
-import org.permaformula.contract.v1.*;
-import org.permaformula.validation.QuickValidator;
+import org.permaformula.contract.v1.RenderRequest;
+import org.permaformula.contract.v1.RenderResponse;
 
 /** Each slot owns one sequential process. Initialization runs before requests arrive. */
 final class RenderWorkerPool implements AutoCloseable {
@@ -28,7 +39,7 @@ final class RenderWorkerPool implements AutoCloseable {
 
     RenderWorkerPool(int capacity, Supplier<ProcessBuilder> factory, Duration startupTimeout,
         int maxJobs) {
-        QuickValidator.validate(
+        validate(
             !(capacity < 1
                 || maxJobs < 1),
             () -> new IllegalArgumentException("Invalid worker pool size or lifetime"));
@@ -58,13 +69,15 @@ final class RenderWorkerPool implements AutoCloseable {
                 if (slot.aborted) {
                     throw new IOException("Worker initialization cancelled");
                 }
-                process = factory.get().start();
+                process = factory.get()
+                    .start();
                 slot.process = process;
                 processes.put(process, ConcurrentHashMap.newKeySet());
             }
         }
         boolean ready = false;
-        Future<Integer> handshake = io.submit(() -> process.getInputStream().read());
+        Future<Integer> handshake = io.submit(() -> process.getInputStream()
+            .read());
         try {
             if (handshake.get(startupTimeout.toNanos(), TimeUnit.NANOSECONDS) != READY
                 || !process.isAlive()) {
@@ -76,7 +89,9 @@ final class RenderWorkerPool implements AutoCloseable {
             return new Worker(process);
         } catch (Exception failure) {
             System.err.println(
-                "event=render_worker_startup_failed type=" + failure.getClass().getSimpleName());
+                "event=render_worker_startup_failed type=%s".formatted(
+                    failure.getClass()
+                        .getSimpleName()));
             throw failure;
         } finally {
             if (!ready) {
@@ -87,7 +102,8 @@ final class RenderWorkerPool implements AutoCloseable {
     }
 
     RenderResponse execute(RenderRequest request, Duration budget) throws RenderException {
-        long deadline = System.nanoTime() + budget.toNanos();
+        long deadline = System.nanoTime()
+            + budget.toNanos();
         long started = System.nanoTime();
         Slot slot = null;
         Worker worker = null;
@@ -110,7 +126,8 @@ final class RenderWorkerPool implements AutoCloseable {
                 && worker.process.isAlive();
             return response;
         } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                .interrupt();
             throw new RenderException(RenderException.Kind.CANCELLED, "Rendering cancelled",
                 interrupted);
         } catch (TimeoutException expired) {
@@ -176,7 +193,8 @@ final class RenderWorkerPool implements AutoCloseable {
         RenderResponse exchange(RenderRequest request) throws IOException, RenderException {
             rememberDescendants(process);
             WorkerMessages.write(process.getOutputStream(), request);
-            int status = process.getInputStream().read();
+            int status = process.getInputStream()
+                .read();
             if (status == INVALID) {
                 throw new RenderException(RenderException.Kind.INVALID,
                     "Invalid rendering content");
@@ -186,10 +204,12 @@ final class RenderWorkerPool implements AutoCloseable {
             }
             RenderResponse response = WorkerMessages.read(process.getInputStream(),
                 RenderResponse.parser());
-            if (!request.getRequestId().equals(response.getRequestId())
-                || response.getSvg().isEmpty()
-                || response.getSvg().size() > ComplexityPolicy.CURRENT
-                    .get(ComplexityPolicy.Limit.SVG_BYTES)) {
+            if (!request.getRequestId()
+                .equals(response.getRequestId())
+                || response.getSvg()
+                    .isEmpty()
+                || response.getSvg()
+                    .size() > ComplexityPolicy.CURRENT.get(ComplexityPolicy.Limit.SVG_BYTES)) {
                 throw new IOException("Invalid worker response");
             }
             return response;
@@ -199,7 +219,8 @@ final class RenderWorkerPool implements AutoCloseable {
     private void rememberDescendants(Process process) {
         Set<ProcessHandle> known = processes.get(process);
         if (known != null) {
-            process.descendants().forEach(known::add);
+            process.descendants()
+                .forEach(known::add);
         }
     }
 
@@ -217,32 +238,39 @@ final class RenderWorkerPool implements AutoCloseable {
                     // crashed.
                     known.stream()
                         .filter(ProcessHandle::isAlive)
-                        .forEach(child -> child.descendants().forEach(children::add));
+                        .forEach(child -> child.descendants()
+                            .forEach(children::add));
                 }
-                process.descendants().forEach(children::add);
+                process.descendants()
+                    .forEach(children::add);
                 children.forEach(ProcessHandle::destroyForcibly);
                 process.destroyForcibly();
-                QuickValidator.validate(
+                validate(
                     process.waitFor(5, TimeUnit.SECONDS),
                     () -> new IllegalStateException("Worker did not exit"));
                 for (var child : children) {
                     try {
-                        child.onExit().get(5, TimeUnit.SECONDS);
+                        child.onExit()
+                            .get(5, TimeUnit.SECONDS);
                     } catch (ExecutionException | TimeoutException failure) {
                         throw new IllegalStateException("Worker descendant did not exit", failure);
                     }
                 }
-                process.getInputStream().close();
-                process.getOutputStream().close();
+                process.getInputStream()
+                    .close();
+                process.getOutputStream()
+                    .close();
                 processes.remove(process);
             } catch (IOException failure) {
                 throw new IllegalStateException("Worker pipes did not close", failure);
             } catch (InterruptedException failure) {
-                Thread.currentThread().interrupt();
+                Thread.currentThread()
+                    .interrupt();
                 throw new IllegalStateException("Worker cleanup interrupted", failure);
             } finally {
                 if (interrupted) {
-                    Thread.currentThread().interrupt();
+                    Thread.currentThread()
+                        .interrupt();
                 }
             }
         }

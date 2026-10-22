@@ -1,6 +1,8 @@
 package org.permaformula.rendering;
 
-import static org.permaformula.contract.ComplexityPolicy.Limit.*;
+import static org.permaformula.contract.ComplexityPolicy.Limit.CSS_HTML_WORK;
+import static org.permaformula.contract.ComplexityPolicy.Limit.CSS_RULES;
+import static org.permaformula.validation.QuickValidator.validate;
 
 import java.io.IOException;
 import java.util.List;
@@ -16,7 +18,6 @@ import org.jsoup.nodes.TextNode;
 import org.jsoup.parser.Parser;
 import org.permaformula.contract.ComplexityPolicy;
 import org.permaformula.url.ImageDescriptor;
-import org.permaformula.validation.QuickValidator;
 
 /**
  * Presentation-only input: no submitted URLs, scripts or embedded documents.
@@ -31,45 +32,55 @@ final class RenderContentPolicy {
 
     static void validateHtml(String source) {
         PreparationComplexity.html(source);
-        Parser parser = Parser.htmlParser().setTrackErrors(1);
+        Parser parser = Parser.htmlParser()
+            .setTrackErrors(1);
         Document fragment = Document.createShell("");
-        fragment.body().appendChildren(parser.parseFragmentInput(source, new Element("body"), ""));
-        QuickValidator.validate(parser.getErrors().isEmpty(),
-            () -> QuickValidator.violation("Invalid HTML structure"));
-        fragment.body().forEachNode(node -> {
-            if (node == fragment.body()) {
-                return;
-            }
-            QuickValidator.validate(node instanceof Element
-                || node instanceof TextNode
-                || node instanceof Comment, () -> QuickValidator.violation("Invalid HTML node"));
-            if (node instanceof Element element) {
-                QuickValidator.validate(ELEMENTS.contains(element.normalName()),
-                    () -> QuickValidator.violation("Unsupported HTML element"));
-                element.attributes().forEach(attribute -> {
-                    String name = attribute.getKey();
-                    boolean span = Set.of("td", "th").contains(element.normalName())
-                        && Set.of("colspan", "rowspan").contains(name)
-                        && attribute.getValue().matches("[0-9]{1,3}");
-                    QuickValidator.validate(ATTRIBUTES.contains(name)
-                        || span,
-                        () -> QuickValidator.violation("Unsupported HTML attribute"));
-                    if ("style".equals(name)) {
-                        StylesheetPolicy.declarations(attribute.getValue());
-                    }
-                });
-            }
-        });
+        fragment.body()
+            .appendChildren(parser.parseFragmentInput(source, new Element("body"), ""));
+        validate(parser.getErrors()
+            .isEmpty(),
+            "Invalid HTML structure");
+        fragment.body()
+            .forEachNode(node -> {
+                if (node == fragment.body()) {
+                    return;
+                }
+                validate(node instanceof Element
+                    || node instanceof TextNode
+                    || node instanceof Comment, "Invalid HTML node");
+                if (node instanceof Element element) {
+                    validate(ELEMENTS.contains(element.normalName()),
+                        "Unsupported HTML element");
+                    element.attributes()
+                        .forEach(attribute -> {
+                            String name = attribute.getKey();
+                            boolean span = Set.of("td", "th")
+                                .contains(element.normalName())
+                                && Set.of("colspan", "rowspan")
+                                    .contains(name)
+                                && attribute.getValue()
+                                    .matches("[0-9]{1,3}");
+                            validate(ATTRIBUTES.contains(name)
+                                || span,
+                                "Unsupported HTML attribute");
+                            if ("style".equals(name)) {
+                                StylesheetPolicy.declarations(attribute.getValue());
+                            }
+                        });
+                }
+            });
     }
 
     static String document(String template, ImageDescriptor descriptor) throws IOException {
         return document(template, descriptor,
-            new StylesheetFetcher().fetchAll(descriptor.styleRefs()));
+            new StylesheetFetcher()
+                .fetchAll(descriptor.styleRefs()));
     }
 
     static String document(String template, ImageDescriptor descriptor, List<String> externalCss) {
         PreparationComplexity.html(descriptor.forumla());
-        int rules = PreparationComplexity.css(descriptor.style() == null ? "" : descriptor.style())
+        int rules = PreparationComplexity.css(descriptor.style() == null ? ""
+            : descriptor.style())
             + externalCss.stream()
                 .mapToInt(PreparationComplexity::css)
                 .sum();
@@ -77,26 +88,39 @@ final class RenderContentPolicy {
             PreparationComplexity.reject("Combined CSS rules/selectors");
         }
         Document document = Jsoup.parse(template);
-        document.outputSettings().prettyPrint(false);
-        String nonce = UUID.randomUUID().toString();
-        document.select("script").forEach(script -> script.attr("nonce", nonce));
-        document.head().prependElement("meta").attr("http-equiv", "Content-Security-Policy")
-            .attr("content", """
+        document.outputSettings()
+            .prettyPrint(false);
+        String nonce = UUID.randomUUID()
+            .toString();
+        document.select("script")
+            .forEach(script -> script.attr("nonce", nonce));
+        document.head()
+            .prependElement("meta")
+            .attr("http-equiv", "Content-Security-Policy")
+            .attr("content",
+                """
                 default-src 'none'; script-src 'nonce-%s' 'strict-dynamic'; style-src \
-                'unsafe-inline'; img-src 'none'; connect-src 'none'; frame-src 'none'; worker-src \
+                'unsafe-inline'; img-src 'none'; connect-src 'none'; frame-src 'none'; \
+                worker-src \
                 'none'; object-src 'none'; base-uri 'none'; form-action 'none'\
-                """.formatted(nonce));
+                """
+                    .formatted(nonce));
         // DataNode preserves the stylesheet's text boundary; never substitute user text into a
         // template.
         externalCss.forEach(
-            sheet -> document.head().appendElement("style")
+            sheet -> document.head()
+                .appendElement("style")
                 .appendChild(new DataNode(StylesheetPolicy.externalStylesheet(sheet))));
-        document.head().appendElement("style").appendChild(new DataNode(css(descriptor.style())));
+        document.head()
+            .appendElement("style")
+            .appendChild(new DataNode(css(descriptor.style())));
         validateHtml(descriptor.forumla());
-        document.body().html(descriptor.forumla());
+        document.body()
+            .html(descriptor.forumla());
         PreparationComplexity.dom(document.body());
-        if ((long) rules * document.body().getAllElements().size() > ComplexityPolicy.CURRENT
-            .get(CSS_HTML_WORK)) {
+        if ((long) rules * document.body()
+            .getAllElements()
+            .size() > ComplexityPolicy.CURRENT.get(CSS_HTML_WORK)) {
             PreparationComplexity.reject("Combined CSS/HTML work");
         }
         return document.outerHtml();

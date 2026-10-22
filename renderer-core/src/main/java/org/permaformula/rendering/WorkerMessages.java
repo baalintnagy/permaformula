@@ -1,6 +1,9 @@
 package org.permaformula.rendering;
 
-import java.io.*;
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.MessageLite;

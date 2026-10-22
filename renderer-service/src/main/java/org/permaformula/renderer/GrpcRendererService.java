@@ -7,10 +7,13 @@ import java.util.function.Consumer;
 import io.grpc.Context;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
-import org.permaformula.contract.v1.*;
-import org.permaformula.rendering.*;
+import org.permaformula.contract.v1.RenderRequest;
+import org.permaformula.contract.v1.RenderResponse;
+import org.permaformula.contract.v1.RendererServiceGrpc;
+import org.permaformula.rendering.RenderException;
+import org.permaformula.rendering.RenderJobExecutor;
 
-public final class GrpcRendererService extends RendererGrpc.RendererImplBase {
+public final class GrpcRendererService extends RendererServiceGrpc.RendererServiceImplBase {
 
     private final RenderJobExecutor jobs;
 
@@ -35,7 +38,8 @@ public final class GrpcRendererService extends RendererGrpc.RendererImplBase {
             long budget = maxDuration.toNanos();
             if (context.getDeadline() != null) {
                 budget = Math.min(budget,
-                    context.getDeadline().timeRemaining(TimeUnit.NANOSECONDS));
+                    context.getDeadline()
+                        .timeRemaining(TimeUnit.NANOSECONDS));
             }
             if (context.isCancelled()
                 || budget <= 0) {
@@ -58,15 +62,16 @@ public final class GrpcRendererService extends RendererGrpc.RendererImplBase {
             case FAILED ->
                 Status.INTERNAL;
             };
-            observer.onError(status.withDescription(failure.getMessage()).asRuntimeException());
+            observer.onError(status.withDescription(failure.getMessage())
+                .asRuntimeException());
             if (failure.kind() == RenderException.Kind.DEADLINE
                 || failure.kind() == RenderException.Kind.CANCELLED
                 || failure.kind() == RenderException.Kind.FAILED) {
                 failedJob.accept(failure);
             }
         } catch (RuntimeException failure) {
-            observer
-                .onError(Status.INTERNAL.withDescription("Renderer failed").asRuntimeException());
+            observer.onError(Status.INTERNAL.withDescription("Renderer failed")
+                .asRuntimeException());
             failedJob.accept(
                 new RenderException(RenderException.Kind.FAILED, "Renderer failed", failure));
         } finally {

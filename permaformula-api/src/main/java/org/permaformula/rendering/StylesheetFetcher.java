@@ -1,5 +1,10 @@
 package org.permaformula.rendering;
 
+import static org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder.create;
+import static org.permaformula.validation.QuickValidator.notNull;
+import static org.permaformula.validation.QuickValidator.validate;
+import static org.permaformula.validation.QuickValidator.violation;
+
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetAddress;
@@ -30,7 +35,6 @@ import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
-import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
 import org.apache.hc.client5.http.impl.routing.DefaultProxyRoutePlanner;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.ContentType;
@@ -39,7 +43,6 @@ import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.io.CloseMode;
 import org.apache.hc.core5.util.Timeout;
-import org.permaformula.validation.QuickValidator;
 import org.permaformula.validation.ValidationText;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -101,9 +104,9 @@ public final class StylesheetFetcher {
         if (refs == null) {
             return List.of();
         }
-        QuickValidator.validate(
+        validate(
             !(refs.size() > MAX_REFS),
-            () -> QuickValidator.violation("Too many stylesheet references (maximum 8)"));
+            "Too many stylesheet references (maximum 8)");
         Budget budget = new Budget();
         try {
             return refs.stream()
@@ -127,30 +130,35 @@ public final class StylesheetFetcher {
     private String expand(URI uri, Budget budget, Set<URI> ancestors, int depth)
         throws IOException {
         checkDeadline(budget.deadline);
-        QuickValidator.validate(
+        validate(
             !(depth > MAX_IMPORT_DEPTH
                 || ++budget.resources > MAX_RESOURCES),
-            () -> QuickValidator.violation("Stylesheet import limit exceeded"));
-        QuickValidator.validate(
-            ancestors.add(uri), () -> QuickValidator.violation("Cyclic stylesheet imports"));
+            "Stylesheet import limit exceeded");
+        validate(
+            ancestors.add(uri),
+            "Cyclic stylesheet imports");
         try {
             Download downloaded = downloader.get(uri, budget.deadline);
             checkDeadline(budget.deadline);
             budget.bytes += ValidationText.utf8Length(downloaded.css());
-            QuickValidator.validate(
+            validate(
                 !(budget.bytes > 4 * MAX_BYTES),
-                () -> QuickValidator.violation("Combined stylesheets exceed 4 MiB"));
+                "Combined stylesheets exceed 4 MiB");
             CascadingStyleSheet sheet = StylesheetPolicy.parse(downloaded.css());
             StringBuilder output = new StringBuilder();
             CSSWriterSettings writer = new CSSWriterSettings(true);
             for (var imported : sheet.getAllImportRules()) {
                 URI location = destination(
-                    downloaded.uri().resolve(imported.getLocationString()).toString());
+                    downloaded.uri()
+                        .resolve(imported.getLocationString())
+                        .toString());
                 String css = expand(location, budget, ancestors, depth + 1);
                 if (imported.hasMediaQueries()) {
-                    output.append("@media ").append(imported.getAllMediaQueries().stream()
-                        .map(query -> query.getAsCSSString(writer, 0))
-                        .collect(Collectors.joining(",")))
+                    output.append("@media ")
+                        .append(imported.getAllMediaQueries()
+                            .stream()
+                            .map(query -> query.getAsCSSString(writer, 0))
+                            .collect(Collectors.joining(",")))
                         .append('{')
                         .append(css)
                         .append('}');
@@ -159,7 +167,8 @@ public final class StylesheetFetcher {
                 }
             }
             sheet.removeAllImportRules();
-            output.append(new CSSWriter(writer).getCSSAsString(sheet));
+            output.append(new CSSWriter(writer)
+                .getCSSAsString(sheet));
             String result = StylesheetPolicy.externalStylesheet(output.toString());
             checkDeadline(budget.deadline);
             return result;
@@ -170,14 +179,18 @@ public final class StylesheetFetcher {
 
     private static void checkDeadline(long deadline) {
         if (System.nanoTime() >= deadline
-            || Thread.currentThread().isInterrupted()) {
+            || Thread.currentThread()
+                .isInterrupted()) {
             throw WorkDeadline.timedOut();
         }
     }
 
     private Download download(URI uri, long deadline) throws IOException {
         try (ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor(
-            Thread.ofPlatform().daemon(true).name("stylesheet-deadline").factory())) {
+            Thread.ofPlatform()
+                .daemon(true)
+                .name("stylesheet-deadline")
+                .factory())) {
             for (int redirects = 0;; redirects++) {
                 // Proxied targets are resolved/validated by Squid at the actual connection
                 // boundary.
@@ -186,18 +199,24 @@ public final class StylesheetFetcher {
                 if (remaining <= 0) {
                     throw WorkDeadline.timedOut();
                 }
-                PoolingHttpClientConnectionManager manager = PoolingHttpClientConnectionManagerBuilder
-                    .create()
+                PoolingHttpClientConnectionManager manager = create()
                     .setDnsResolver(properties.proxy() == null ? new PublicDnsResolver()
                         : SystemDefaultDnsResolver.INSTANCE)
                     .setDefaultConnectionConfig(
-                        ConnectionConfig.custom().setConnectTimeout(Timeout.ofSeconds(5))
-                            .setSocketTimeout(Timeout.ofSeconds(5)).build())
+                        ConnectionConfig.custom()
+                            .setConnectTimeout(Timeout.ofSeconds(5))
+                            .setSocketTimeout(Timeout.ofSeconds(5))
+                            .build())
                     .build();
-                HttpClientBuilder clientBuilder = HttpClients.custom().setConnectionManager(manager)
-                    .disableRedirectHandling().disableAutomaticRetries().disableCookieManagement()
-                    .disableContentCompression().setDefaultRequestConfig(RequestConfig.custom()
-                        .setResponseTimeout(Timeout.ofSeconds(5)).build());
+                HttpClientBuilder clientBuilder = HttpClients.custom()
+                    .setConnectionManager(manager)
+                    .disableRedirectHandling()
+                    .disableAutomaticRetries()
+                    .disableCookieManagement()
+                    .disableContentCompression()
+                    .setDefaultRequestConfig(RequestConfig.custom()
+                        .setResponseTimeout(Timeout.ofSeconds(5))
+                        .build());
                 if (properties.proxy() != null) {
                     clientBuilder.setRoutePlanner(
                         new DefaultProxyRoutePlanner(
@@ -215,7 +234,8 @@ public final class StylesheetFetcher {
                     try (ClassicHttpResponse response = client.executeOpen(null, request, null)) {
                         try {
                             int status = response.getCode();
-                            if (List.of(301, 302, 303, 307, 308).contains(status)) {
+                            if (List.of(301, 302, 303, 307, 308)
+                                .contains(status)) {
                                 uri = redirect(uri, response, redirects);
                                 continue;
                             }
@@ -241,7 +261,7 @@ public final class StylesheetFetcher {
     static URI destination(String ref) {
         try {
             URI uri = URI.create(ref);
-            QuickValidator.validate(
+            validate(
                 !(!"https".equalsIgnoreCase(uri.getScheme())
                     || uri.getHost() == null
                     || uri.getRawUserInfo() != null
@@ -249,66 +269,67 @@ public final class StylesheetFetcher {
                     || (uri.getPort() != -1
                         && uri.getPort() != 443)
                     || ref.length() > 4096),
-                () -> QuickValidator.violation(
-                    "Stylesheets must use HTTPS on port 443 without credentials or fragments"));
-            String host = uri.getHost().toLowerCase(Locale.ROOT);
-            QuickValidator.validate(
+                "Stylesheets must use HTTPS on port 443 without credentials or fragments");
+            String host = uri.getHost()
+                .toLowerCase(Locale.ROOT);
+            validate(
                 !(host.equals("localhost")
                     || host.endsWith(".localhost")),
-                () -> QuickValidator.violation("Stylesheet destination must be public"));
+                "Stylesheet destination must be public");
             if (host.contains(":")
                 || host.matches("[0-9.]+")) {
                 try {
-                    QuickValidator.validate(
+                    validate(
                         !(!publicAddress(InetAddress.getByName(host))),
-                        () -> QuickValidator.violation("Stylesheet destination must be public"));
+                        "Stylesheet destination must be public");
                 } catch (UnknownHostException invalid) {
                     throw new IllegalArgumentException("Invalid stylesheet address", invalid);
                 }
             }
             return uri;
         } catch (IllegalArgumentException _) {
-            throw QuickValidator.violation("Invalid stylesheet URL");
+            throw violation("Invalid stylesheet URL");
         } catch (NullPointerException e) {
             throw new IllegalArgumentException("Missing stylesheet URL", e);
         }
     }
 
     static URI redirect(URI current, ClassicHttpResponse response, int redirects) {
-        Header location = response.getFirstHeader("Location");
-        QuickValidator.validate(
-            !(redirects >= MAX_REDIRECTS
-                || location == null),
-            () -> QuickValidator.violation("Invalid stylesheet redirect chain"));
-        return destination(current.resolve(location.getValue()).toString());
+        Header location = notNull(response.getFirstHeader("Location"),
+            "Invalid stylesheet redirect chain");
+        validate(
+            redirects < MAX_REDIRECTS,
+            "Invalid stylesheet redirect chain");
+        return destination(current.resolve(location.getValue())
+            .toString());
     }
 
     static String readCss(ClassicHttpResponse response) throws IOException {
-        QuickValidator.validate(
+        validate(
             !(response.getCode() != 200
                 || response.getEntity() == null),
-            () -> QuickValidator.violation(
-                "Stylesheet request did not return CSS (HTTP " + response.getCode() + ")"));
-        QuickValidator.validate(
+            "Stylesheet request did not return CSS (HTTP %s)".formatted(response.getCode()));
+        validate(
             !(response.containsHeader("Content-Encoding")
-                && !"identity"
-                    .equalsIgnoreCase(response.getFirstHeader("Content-Encoding").getValue())),
-            () -> QuickValidator.violation("Compressed stylesheet responses are not supported"));
+                && !"identity".equalsIgnoreCase(response.getFirstHeader("Content-Encoding")
+                    .getValue())),
+            "Compressed stylesheet responses are not supported");
         HttpEntity entity = response.getEntity();
-        ContentType type = ContentType.parse(entity.getContentType());
-        QuickValidator.validate(
-            !(type == null
-                || !"text/css".equalsIgnoreCase(type.getMimeType())),
-            () -> QuickValidator.violation("Stylesheet response must have Content-Type text/css"));
-        QuickValidator.validate(
+        ContentType type = notNull(ContentType.parse(entity.getContentType()),
+            "Stylesheet response must have Content-Type text/css");
+        validate(
+            "text/css".equalsIgnoreCase(type.getMimeType()),
+            "Stylesheet response must have Content-Type text/css");
+        validate(
             !(entity.getContentLength() > MAX_BYTES),
-            () -> QuickValidator.violation("Stylesheet exceeds 1 MiB"));
+            "Stylesheet exceeds 1 MiB");
         // Caller closes the connection and response; closing an HTTP stream here may drain its
         // remainder.
-        byte[] bytes = entity.getContent().readNBytes(MAX_BYTES + 1);
-        QuickValidator.validate(
+        byte[] bytes = entity.getContent()
+            .readNBytes(MAX_BYTES + 1);
+        validate(
             !(bytes.length > MAX_BYTES),
-            () -> QuickValidator.violation("Stylesheet exceeds 1 MiB"));
+            "Stylesheet exceeds 1 MiB");
         return new String(bytes, type.getCharset(StandardCharsets.UTF_8));
     }
 
@@ -339,7 +360,9 @@ public final class StylesheetFetcher {
     static boolean publicAddress(InetAddress address) {
         byte[] b = address.getAddress();
         if (b.length == 4) {
-            int a = b[0] & 255, c = b[1] & 255, d = b[2] & 255;
+            int a = b[0] & 255,
+                c = b[1] & 255,
+                d = b[2] & 255;
             return !(a == 0
                 || a == 10
                 || a == 127

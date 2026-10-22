@@ -1,9 +1,11 @@
 package org.permaformula;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.io.IOException;
 import java.util.List;
@@ -13,12 +15,15 @@ import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 import org.permaformula.rendering.cache.JdbcImageCache;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.http.*;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
+import org.springframework.http.HttpInputMessage;
+import org.springframework.http.HttpOutputMessage;
+import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.ObjectMapper;
 
 class LibraryAdmissionTests {
@@ -31,9 +36,9 @@ class LibraryAdmissionTests {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void holdsPermitsThroughResponseWritingAndReleasesOnFailure() throws Exception {
-        var provider = (ObjectProvider<JdbcImageCache>) mock(ObjectProvider.class);
+        var provider = new StaticListableBeanFactory()
+            .getBeanProvider(JdbcImageCache.class);
         var writing = new CountDownLatch(2);
         var finish = new CountDownLatch(1);
         var writes = new java.util.concurrent.atomic.AtomicInteger();
@@ -65,25 +70,36 @@ class LibraryAdmissionTests {
                     }
                     throw new IOException("Simulated client disconnect during serialization");
                 }
-                message.getBody().write("{}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                message.getBody()
+                    .write("{}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
             }
         };
         var mvc = MockMvcBuilders
             .standaloneSetup(new LibraryController(provider, new ObjectMapper()), new Ping())
             .addInterceptors(new LibraryAdmissionConfiguration.Admission())
-            .setMessageConverters(converter, new StringHttpMessageConverter()).build();
+            .setMessageConverters(converter, new StringHttpMessageConverter())
+            .build();
         try (var workers = Executors.newVirtualThreadPerTaskExecutor()) {
             var first = workers.submit(() -> mvc.perform(get("/library-items")));
             var second = workers.submit(() -> mvc.perform(get("/library-items")));
             try {
                 assertTrue(writing.await(5, TimeUnit.SECONDS));
-                mvc.perform(get("/library-items")).andExpect(status().isTooManyRequests())
-                    .andExpect(header().string("Retry-After", "1"))
-                    .andExpect(header().string("Cache-Control", "no-store"));
-                mvc.perform(get("/library-item").param("id", "a".repeat(64)))
-                    .andExpect(status().isTooManyRequests());
-                mvc.perform(get("/ping")).andExpect(status().isOk())
-                    .andExpect(content().string("ok"));
+                mvc.perform(get("/library-items"))
+                    .andExpect(status()
+                        .isTooManyRequests())
+                    .andExpect(header()
+                        .string("Retry-After", "1"))
+                    .andExpect(header()
+                        .string("Cache-Control", "no-store"));
+                mvc.perform(get("/library-item")
+                    .param("id", "a".repeat(64)))
+                    .andExpect(status()
+                        .isTooManyRequests());
+                mvc.perform(get("/ping"))
+                    .andExpect(status()
+                        .isOk())
+                    .andExpect(content()
+                        .string("ok"));
             } finally {
                 finish.countDown();
             }
@@ -92,9 +108,15 @@ class LibraryAdmissionTests {
             assertThrows(java.util.concurrent.ExecutionException.class,
                 () -> second.get(5, TimeUnit.SECONDS));
         }
-        mvc.perform(get("/library-items")).andExpect(status().isOk());
-        mvc.perform(get("/library-items").param("cursor", "bad"))
-            .andExpect(status().isBadRequest());
-        mvc.perform(get("/library-items")).andExpect(status().isOk());
+        mvc.perform(get("/library-items"))
+            .andExpect(status()
+                .isOk());
+        mvc.perform(get("/library-items")
+            .param("cursor", "bad"))
+            .andExpect(status()
+                .isBadRequest());
+        mvc.perform(get("/library-items"))
+            .andExpect(status()
+                .isOk());
     }
 }

@@ -1,6 +1,10 @@
 package org.permaformula.rendering;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.StringReader;
 import java.nio.file.Files;
@@ -26,7 +30,8 @@ class AsciiMathRendererTests {
         try (var renderer = new AsciiMathRenderer()) {
             String svg = renderer.render("↝");
             assertTrue(svg.contains("data-c=\"219D\""));
-            assertTrue(parse(svg).getElementsByTagNameNS("http://www.w3.org/2000/svg", "path")
+            assertTrue(parse(svg)
+                .getElementsByTagNameNS("http://www.w3.org/2000/svg", "path")
                 .getLength() > 0);
         }
     }
@@ -36,8 +41,11 @@ class AsciiMathRendererTests {
         var policy = ComplexityPolicy.load(new Properties(),
             Map.of("PERMAFORMULA_COMPLEXITY_MATH_NODES", "20"));
         try (var renderer = new AsciiMathRenderer(policy)) {
-            assertThrows(RuntimeException.class, () -> renderer.render("x+".repeat(30) + "x"));
-            assertEquals("svg", parse(renderer.render("x")).getDocumentElement().getLocalName());
+            assertThrows(RuntimeException.class, () -> renderer.render("%sx".formatted(
+                "x+".repeat(30))));
+            assertEquals("svg", parse(renderer.render("x"))
+                .getDocumentElement()
+                .getLocalName());
         }
     }
 
@@ -48,19 +56,25 @@ class AsciiMathRendererTests {
             var rendered = renderer.render("sum_(i=1)^n i^3=((n(n+1))/2)^2");
             var sum = parse(rendered);
             Files.writeString(Path.of("target/formula.svg"), rendered);
-            assertEquals("svg", sum.getDocumentElement().getLocalName());
-            assertEquals("http://www.w3.org/2000/svg", sum.getDocumentElement().getNamespaceURI());
+            assertEquals("svg", sum.getDocumentElement()
+                .getLocalName());
+            assertEquals("http://www.w3.org/2000/svg", sum.getDocumentElement()
+                .getNamespaceURI());
             assertTrue(
-                sum.getElementsByTagNameNS("http://www.w3.org/2000/svg", "path").getLength() > 0);
+                sum.getElementsByTagNameNS("http://www.w3.org/2000/svg", "path")
+                    .getLength() > 0);
             var uses = sum.getElementsByTagNameNS("http://www.w3.org/2000/svg", "use");
             assertTrue(uses.getLength() > 0);
             assertAll(IntStream.range(0, uses.getLength())
                 .mapToObj(i -> (Element) uses.item(i))
                 .<Executable>map(element -> () -> assertTrue(
-                    element.getAttributeNS("http://www.w3.org/1999/xlink", "href").startsWith("#"),
+                    element.getAttributeNS("http://www.w3.org/1999/xlink", "href")
+                        .startsWith("#"),
                     "Glyph references must be local to the returned SVG")));
-            assertNotEquals(simple.getDocumentElement().getAttribute("viewBox"),
-                sum.getDocumentElement().getAttribute("viewBox"));
+            assertNotEquals(simple.getDocumentElement()
+                .getAttribute("viewBox"),
+                sum.getDocumentElement()
+                    .getAttribute("viewBox"));
         }
     }
 
@@ -68,9 +82,12 @@ class AsciiMathRendererTests {
     void formulaIsPassedAsDataRatherThanExecutableJavaScript() throws Exception {
         try (var renderer = new AsciiMathRenderer()) {
             assertEquals("svg", parse(renderer.render("\"; throw new Error('injected'); //"))
-                .getDocumentElement().getLocalName());
+                .getDocumentElement()
+                .getLocalName());
             assertEquals("svg",
-                parse(renderer.render("a + b")).getDocumentElement().getLocalName());
+                parse(renderer.render("a + b"))
+                    .getDocumentElement()
+                    .getLocalName());
         }
     }
 
@@ -78,13 +95,15 @@ class AsciiMathRendererTests {
     void sharedRendererHandlesConcurrentRequests() throws Exception {
         try (var renderer = new AsciiMathRenderer();
             var requests = Executors.newVirtualThreadPerTaskExecutor()) {
-            var results = List.of("x^2", "sqrt(x)", "a+b", "sum_(i=1)^n i").stream()
+            var results = List.of("x^2", "sqrt(x)", "a+b", "sum_(i=1)^n i")
+                .stream()
                 .map(formula -> requests.submit(() -> renderer.render(formula)))
                 .toList();
             assertAll(results.stream()
                 .<Executable>map(
                     result -> () -> assertEquals("svg", parse(result.get(20, TimeUnit.SECONDS))
-                        .getDocumentElement().getLocalName())));
+                        .getDocumentElement()
+                        .getLocalName())));
         }
     }
 
@@ -92,6 +111,7 @@ class AsciiMathRendererTests {
         var factory = DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
         factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-        return factory.newDocumentBuilder().parse(new InputSource(new StringReader(svg)));
+        return factory.newDocumentBuilder()
+            .parse(new InputSource(new StringReader(svg)));
     }
 }

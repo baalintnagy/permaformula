@@ -29,8 +29,8 @@ public final class ClientRateLimitFilter extends OncePerRequestFilter {
             response.setStatus(denied.getStatusCode()
                 .value());
             denied.getHeaders()
-                .forEach((name, values) -> values
-                    .forEach(value -> response.addHeader(name, value)));
+                .forEach(
+                    (name, values) -> values.forEach(value -> response.addHeader(name, value)));
             response.setHeader("Cache-Control", "no-store");
             return;
         }

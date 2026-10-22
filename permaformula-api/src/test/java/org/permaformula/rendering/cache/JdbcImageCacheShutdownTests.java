@@ -1,7 +1,16 @@
 package org.permaformula.rendering.cache;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.sql.SQLException;
@@ -24,10 +33,13 @@ class JdbcImageCacheShutdownTests {
         try {
             var failure = assertThrows(IOException.class, cache::close);
             assertInstanceOf(InterruptedException.class, failure.getCause());
-            assertTrue(Thread.currentThread().isInterrupted());
+            assertTrue(Thread.currentThread()
+                .isInterrupted());
             var order = inOrder(cache, owner);
-            order.verify(cache).flushTouches();
-            order.verify(owner).close();
+            order.verify(cache)
+                .flushTouches();
+            order.verify(owner)
+                .close();
         } finally {
             Thread.interrupted();
         }
@@ -37,12 +49,16 @@ class JdbcImageCacheShutdownTests {
     void interruptedOwnerRestoresInterruptFlag() throws Exception {
         var owner = mock(AutoCloseable.class);
         var cache = cache(owner, mock(ScheduledExecutorService.class));
-        doThrow(new InterruptedException("owner")).when(owner).close();
+        doThrow(new InterruptedException("owner"))
+            .when(owner)
+            .close();
         try {
             var failure = assertThrows(IOException.class, cache::close);
             assertInstanceOf(InterruptedException.class, failure.getCause());
-            assertTrue(Thread.currentThread().isInterrupted());
-            verify(cache).flushTouches();
+            assertTrue(Thread.currentThread()
+                .isInterrupted());
+            verify(cache)
+                .flushTouches();
         } finally {
             Thread.interrupted();
         }
@@ -56,14 +72,19 @@ class JdbcImageCacheShutdownTests {
         when(maintenance.awaitTermination(5, TimeUnit.SECONDS))
             .thenThrow(new InterruptedException("stopping"));
         var ownerFailure = new SQLException("owner");
-        doThrow(ownerFailure).when(owner).close();
+        doThrow(ownerFailure)
+            .when(owner)
+            .close();
         try {
             var failure = assertThrows(IOException.class, cache::close);
             assertInstanceOf(InterruptedException.class, failure.getCause());
             assertEquals(1, failure.getSuppressed().length);
-            assertSame(ownerFailure, failure.getSuppressed()[0].getCause());
-            assertTrue(Thread.currentThread().isInterrupted());
-            verify(cache).flushTouches();
+            assertSame(ownerFailure, failure.getSuppressed()[0]
+                .getCause());
+            assertTrue(Thread.currentThread()
+                .isInterrupted());
+            verify(cache)
+                .flushTouches();
         } finally {
             Thread.interrupted();
         }
@@ -71,7 +92,8 @@ class JdbcImageCacheShutdownTests {
 
     private JdbcImageCache cache(AutoCloseable owner, ScheduledExecutorService maintenance) {
         var cache = spy(new JdbcImageCache(mock(DataSource.class), false, Duration.ofHours(1),
-            4096, Duration.ofDays(1), owner));
+            4096, Duration.ofDays(1),
+            owner));
         var original = assertInstanceOf(ScheduledExecutorService.class,
             ReflectionTestUtils.getField(cache, "maintenance"));
         original.shutdownNow();

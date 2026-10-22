@@ -23,10 +23,12 @@ public class EndpointLoggingAspect {
 
     private static final Logger log = LoggerFactory.getLogger(EndpointLoggingAspect.class);
 
-    @Around("""
-        @within(org.springframework.web.bind.annotation.RestController) && execution(public * \
-        org.permaformula..*(..))\
-        """)
+    @Around(
+    """
+    @within(org.springframework.web.bind.annotation.RestController) && execution(public * \
+    org.permaformula..*(..))\
+    """
+    )
     public Object logEndpoint(ProceedingJoinPoint invocation) throws Throwable {
         RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
         if (!(attributes instanceof ServletRequestAttributes servlet)) {
@@ -35,14 +37,18 @@ public class EndpointLoggingAspect {
         HttpServletRequest request = servlet.getRequest();
         String method = request.getMethod();
         String path = request.getRequestURI();
-        String handler = invocation.getSignature().toShortString();
+        String handler = invocation.getSignature()
+            .toShortString();
         long started = System.nanoTime();
         log.debug("event=endpoint_started method={} path={} handler={}", method, path, handler);
         try {
             Object result = invocation.proceed();
             int status = result instanceof ResponseEntity<?> response
-                ? response.getStatusCode().value()
-                : servlet.getResponse() == null ? 200 : servlet.getResponse().getStatus();
+                ? response.getStatusCode()
+                    .value()
+                : servlet.getResponse() == null ? 200
+                    : servlet.getResponse()
+                        .getStatus();
             log.info(
                 "event=endpoint_completed method={} path={} handler={} status={} durationMs={}",
                 method, path, handler, status, elapsed(started));
@@ -51,7 +57,9 @@ public class EndpointLoggingAspect {
             // Exception handling determines the HTTP status after the controller invocation fails.
             log.warn(
                 "event=endpoint_failed method={} path={} handler={} errorType={} durationMs={}",
-                method, path, handler, failure.getClass().getSimpleName(), elapsed(started));
+                method, path, handler, failure.getClass()
+                    .getSimpleName(),
+                elapsed(started));
             throw failure;
         }
     }

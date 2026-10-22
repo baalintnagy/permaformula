@@ -18,7 +18,7 @@ class SqliteImageCacheTests extends JdbcImageCacheContract {
     @Override
     HikariDataSource openDatabase() {
         var config = new HikariConfig();
-        config.setJdbcUrl("jdbc:sqlite:" + directory.resolve("cache.sqlite"));
+        config.setJdbcUrl("jdbc:sqlite:%s".formatted(directory.resolve("cache.sqlite")));
         config.setMaximumPoolSize(1);
         config.addDataSourceProperty("journal_mode", "WAL");
         config.addDataSourceProperty("busy_timeout", "1000");

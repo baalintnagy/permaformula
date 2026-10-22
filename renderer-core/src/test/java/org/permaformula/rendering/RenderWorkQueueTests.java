@@ -1,26 +1,38 @@
 package org.permaformula.rendering;
 
 import static org.awaitility.Awaitility.await;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.*;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.google.protobuf.ByteString;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.permaformula.contract.v1.*;
+import org.permaformula.contract.v1.AsciiMathFormula;
+import org.permaformula.contract.v1.RenderRequest;
+import org.permaformula.contract.v1.RenderResponse;
 
 @Timeout(15)
 class RenderWorkQueueTests {
     static RenderRequest request(String id) {
         return RenderRequest.newBuilder()
             .setRequestId(id)
-            .setFormula(AsciiMathFormula.newBuilder().setFormula("x"))
+            .setFormula(AsciiMathFormula.newBuilder()
+                .setFormula("x"))
             .build();
     }
 
@@ -39,14 +51,16 @@ class RenderWorkQueueTests {
         try {
             assertTrue(latch.await(5, TimeUnit.SECONDS));
         } catch (InterruptedException failure) {
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                .interrupt();
             throw new RenderException(RenderException.Kind.CANCELLED, "cancelled", failure);
         }
     }
 
     static RenderException.Kind failureKind(Future<?> future) throws Exception {
         var failure = assertThrows(ExecutionException.class, () -> future.get(3, TimeUnit.SECONDS));
-        return assertInstanceOf(RenderException.class, failure.getCause()).kind();
+        return assertInstanceOf(RenderException.class, failure.getCause())
+            .kind();
     }
 
     @Test
@@ -58,9 +72,12 @@ class RenderWorkQueueTests {
         try (var callers = Executors.newVirtualThreadPerTaskExecutor();
             var queue = new RenderWorkQueue(1, settings(2, Duration.ofSeconds(5)),
                 (request, budget) -> {
-                    assertTrue(Thread.currentThread().getName().startsWith("renderer-work-"));
+                    assertTrue(Thread.currentThread()
+                        .getName()
+                        .startsWith("renderer-work-"));
                     order.add(request.getRequestId());
-                    if (request.getRequestId().equals("first")) {
+                    if (request.getRequestId()
+                        .equals("first")) {
                         entered.countDown();
                         awaitLatch(release);
                     } else {
@@ -87,15 +104,20 @@ class RenderWorkQueueTests {
                     .atMost(Duration.ofSeconds(3))
                     .until(() -> queue.waitingJobs() == 2);
                 assertEquals(RenderException.Kind.OVERLOADED, assertThrows(RenderException.class,
-                    () -> queue.execute(request("full"), Duration.ofSeconds(1))).kind());
+                    () -> queue.execute(request("full"), Duration.ofSeconds(1)))
+                    .kind());
                 assertEquals(List.of("first"), order);
                 Thread.sleep(50);
                 release.countDown();
-                assertEquals("first", first.get(3, TimeUnit.SECONDS).getRequestId());
-                assertEquals("second", second.get(3, TimeUnit.SECONDS).getRequestId());
-                assertEquals("third", third.get(3, TimeUnit.SECONDS).getRequestId());
+                assertEquals("first", first.get(3, TimeUnit.SECONDS)
+                    .getRequestId());
+                assertEquals("second", second.get(3, TimeUnit.SECONDS)
+                    .getRequestId());
+                assertEquals("third", third.get(3, TimeUnit.SECONDS)
+                    .getRequestId());
                 assertEquals(List.of("first", "second", "third"), order);
-                assertTrue(secondBudget.get().compareTo(Duration.ofMillis(9950)) < 0);
+                assertTrue(secondBudget.get()
+                    .compareTo(Duration.ofMillis(9950)) < 0);
                 await()
                     .pollDelay(Duration.ZERO)
                     .pollInterval(Duration.ofMillis(5))
@@ -248,7 +270,8 @@ class RenderWorkQueueTests {
                 awaitLatch(interrupted);
                 assertEquals(retained, queue.retainedBytes());
                 assertEquals(RenderException.Kind.OVERLOADED, assertThrows(RenderException.class,
-                    () -> queue.execute(request("not-yet"), Duration.ofSeconds(1))).kind());
+                    () -> queue.execute(request("not-yet"), Duration.ofSeconds(1)))
+                    .kind());
                 release.countDown();
                 await()
                     .pollDelay(Duration.ZERO)
@@ -256,7 +279,8 @@ class RenderWorkQueueTests {
                     .atMost(Duration.ofSeconds(3))
                     .until(() -> queue.retainedBytes() == 0);
                 assertEquals("recovered",
-                    queue.execute(request("recovered"), Duration.ofSeconds(1)).getRequestId());
+                    queue.execute(request("recovered"), Duration.ofSeconds(1))
+                        .getRequestId());
             } finally {
                 release.countDown();
             }
@@ -267,7 +291,8 @@ class RenderWorkQueueTests {
     void byteBudgetIncludesRunningRequestsAndRejectsBeforeExecution() throws Exception {
         var entered = new CountDownLatch(1);
         var release = new CountDownLatch(1);
-        long weight = 1024L + 3L * request("same").getSerializedSize();
+        long weight = 1024L + 3L * request("same")
+            .getSerializedSize();
         try (var callers = Executors.newVirtualThreadPerTaskExecutor();
             var queue = new RenderWorkQueue(1,
                 new RenderQueueSettings(10, weight * 2 - 1, Duration.ofSeconds(5)),
@@ -280,7 +305,8 @@ class RenderWorkQueueTests {
             try {
                 awaitLatch(entered);
                 assertEquals(RenderException.Kind.OVERLOADED, assertThrows(RenderException.class,
-                    () -> queue.execute(request("same"), Duration.ofSeconds(5))).kind());
+                    () -> queue.execute(request("same"), Duration.ofSeconds(5)))
+                    .kind());
                 assertEquals(0, queue.waitingJobs());
                 assertEquals(weight, queue.retainedBytes());
             } finally {
@@ -299,19 +325,22 @@ class RenderWorkQueueTests {
     void workerFailureReleasesAdmission() throws Exception {
         try (
             var queue = new RenderWorkQueue(1, settings(1, Duration.ofSeconds(5)), (request, _) -> {
-                if (request.getRequestId().equals("fail")) {
+                if (request.getRequestId()
+                    .equals("fail")) {
                     throw new RenderException(RenderException.Kind.FAILED, "failure");
                 }
                 return response(request);
             })) {
             assertEquals(RenderException.Kind.FAILED, assertThrows(RenderException.class,
-                () -> queue.execute(request("fail"), Duration.ofSeconds(5))).kind());
+                () -> queue.execute(request("fail"), Duration.ofSeconds(5)))
+                .kind());
             await()
                 .pollDelay(Duration.ZERO)
                 .pollInterval(Duration.ofMillis(5))
                 .atMost(Duration.ofSeconds(3))
                 .until(() -> queue.retainedBytes() == 0);
-            assertEquals("ok", queue.execute(request("ok"), Duration.ofSeconds(5)).getRequestId());
+            assertEquals("ok", queue.execute(request("ok"), Duration.ofSeconds(5))
+                .getRequestId());
         }
     }
 
@@ -344,7 +373,8 @@ class RenderWorkQueueTests {
                     .atMost(Duration.ofSeconds(3))
                     .until(() -> queue.retainedBytes() == 0);
                 assertEquals(RenderException.Kind.OVERLOADED, assertThrows(RenderException.class,
-                    () -> queue.execute(request("closed"), Duration.ofSeconds(5))).kind());
+                    () -> queue.execute(request("closed"), Duration.ofSeconds(5)))
+                    .kind());
                 assertEquals(0, queue.retainedBytes());
             } finally {
                 queue.close();
@@ -356,10 +386,13 @@ class RenderWorkQueueTests {
     void configurationIsValidatedAndPayloadBudgetTracksHeapHeadroom() {
         var defaults = RenderQueueSettings.fromEnvironment(Map.of());
         assertEquals(16, defaults.capacity());
-        assertEquals(Duration.ofSeconds(15), defaults.maxWait());
-        assertEquals(Math.min(64L * 1024 * 1024, Runtime.getRuntime().maxMemory() / 4),
+        assertEquals(Duration.ofSeconds(15),
+            defaults.maxWait());
+        assertEquals(Math.min(64L * 1024 * 1024, Runtime.getRuntime()
+            .maxMemory() / 4),
             defaults.effectiveRetainedBytes());
-        assertEquals(Runtime.getRuntime().maxMemory() / 4,
+        assertEquals(Runtime.getRuntime()
+            .maxMemory() / 4,
             new RenderQueueSettings(16, Long.MAX_VALUE, Duration.ofSeconds(15))
                 .effectiveRetainedBytes());
         assertThrows(IllegalArgumentException.class,

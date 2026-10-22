@@ -1,7 +1,34 @@
 package org.permaformula.rendering;
 
-import static com.helger.css.parser.ParserCSS30Constants.*;
-import static org.permaformula.contract.ComplexityPolicy.Limit.*;
+import static com.helger.css.parser.ParserCSS30Constants.COMMA;
+import static com.helger.css.parser.ParserCSS30Constants.EOF;
+import static com.helger.css.parser.ParserCSS30Constants.FUNCTION;
+import static com.helger.css.parser.ParserCSS30Constants.FUNCTION_CALC;
+import static com.helger.css.parser.ParserCSS30Constants.LBRACE;
+import static com.helger.css.parser.ParserCSS30Constants.LROUND;
+import static com.helger.css.parser.ParserCSS30Constants.LSQUARE;
+import static com.helger.css.parser.ParserCSS30Constants.RBRACE;
+import static com.helger.css.parser.ParserCSS30Constants.RROUND;
+import static com.helger.css.parser.ParserCSS30Constants.RSQUARE;
+import static com.helger.css.parser.ParserCSS30Constants.S;
+import static com.helger.css.parser.ParserCSS30Constants.SEMICOLON;
+import static com.helger.css.parser.ParserCSS30Constants.SINGLE_LINE_COMMENT;
+import static com.helger.css.parser.ParserCSS30Constants.STRING1;
+import static com.helger.css.parser.ParserCSS30Constants.STRING2;
+import static org.permaformula.contract.ComplexityPolicy.Limit.ATTRIBUTES;
+import static org.permaformula.contract.ComplexityPolicy.Limit.CSS_BLOCK_DEPTH;
+import static org.permaformula.contract.ComplexityPolicy.Limit.CSS_BRACKET_DEPTH;
+import static org.permaformula.contract.ComplexityPolicy.Limit.CSS_DECLARATIONS;
+import static org.permaformula.contract.ComplexityPolicy.Limit.CSS_FUNCTION_DEPTH;
+import static org.permaformula.contract.ComplexityPolicy.Limit.CSS_RULES;
+import static org.permaformula.contract.ComplexityPolicy.Limit.CSS_TOKENS;
+import static org.permaformula.contract.ComplexityPolicy.Limit.CSS_TOKEN_CHARS;
+import static org.permaformula.contract.ComplexityPolicy.Limit.HTML_DEPTH;
+import static org.permaformula.contract.ComplexityPolicy.Limit.HTML_ELEMENTS;
+import static org.permaformula.contract.ComplexityPolicy.Limit.HTML_NODES;
+import static org.permaformula.contract.ComplexityPolicy.Limit.INLINE_STYLE_CHARS;
+import static org.permaformula.validation.QuickValidator.validate;
+import static org.permaformula.validation.QuickValidator.violation;
 
 import java.io.StringReader;
 
@@ -16,7 +43,6 @@ import org.jsoup.parser.Parser;
 import org.jsoup.parser.StreamParser;
 import org.jsoup.select.NodeVisitor;
 import org.permaformula.contract.ComplexityPolicy;
-import org.permaformula.validation.QuickValidator;
 
 /** Resource checks around library parsing; no application HTML/CSS/math lexer. */
 final class PreparationComplexity {
@@ -28,9 +54,11 @@ final class PreparationComplexity {
     static void html(String source) {
         // jsoup bounds its stack while streaming; abort before retaining excess elements.
         try (StreamParser stream = new StreamParser(
-            Parser.htmlParser().setMaxDepth(LIMITS.get(HTML_DEPTH) + 4))) {
+            Parser.htmlParser()
+                .setMaxDepth(LIMITS.get(HTML_DEPTH) + 4))) {
             stream.parse(source, "");
-            int elements = 0, nodes = 0;
+            int elements = 0,
+                nodes = 0;
             for (var iterator = stream.iterator(); iterator.hasNext();) {
                 Element element = iterator.next();
                 if (++elements > LIMITS.get(HTML_ELEMENTS) + 3) {
@@ -73,10 +101,12 @@ final class PreparationComplexity {
     }
 
     private static void checkElement(Element element) {
-        if (element.attributes().size() > LIMITS.get(ATTRIBUTES)) {
+        if (element.attributes()
+            .size() > LIMITS.get(ATTRIBUTES)) {
             reject("HTML attributes");
         }
-        if (element.attr("style").length() > LIMITS.get(INLINE_STYLE_CHARS)) {
+        if (element.attr("style")
+            .length() > LIMITS.get(INLINE_STYLE_CHARS)) {
             reject("Inline style size");
         }
     }
@@ -91,8 +121,14 @@ final class PreparationComplexity {
         CSSCharStream characters = new CSSCharStream(new StringReader(source));
         ParserCSS30TokenManager lexer = new ParserCSS30TokenManager(characters);
         lexer.setCustomErrorHandler(new DoNothingCSSParseErrorHandler());
-        int tokens = 0, blocks = 0, functions = 0, brackets = 0, rules = 0, declarations = 0;
-        int selectors = 0, commas = 0;
+        int tokens = 0,
+            blocks = 0,
+            functions = 0,
+            brackets = 0,
+            rules = 0,
+            declarations = 0;
+        int selectors = 0,
+            commas = 0;
         try {
             for (var token = lexer.getNextToken(); token.kind != EOF; token = lexer
                 .getNextToken()) {
@@ -158,14 +194,14 @@ final class PreparationComplexity {
             }
             return selectors;
         } catch (TokenMgrException _) {
-            throw QuickValidator.violation("Invalid CSS stylesheet");
+            throw violation("Invalid CSS stylesheet");
         } finally {
             characters.done();
         }
     }
 
     static void reject(String category) {
-        QuickValidator.validate(false,
-            () -> QuickValidator.violation(category + " exceeds complexity limits"));
+        validate(false,
+            "%s exceeds complexity limits".formatted(category));
     }
 }

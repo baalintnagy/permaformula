@@ -1,32 +1,51 @@
 package org.permaformula;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.*;
+import java.io.FilterInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.management.ManagementFactory;
-import java.net.*;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.time.Duration;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.net.SocketFactory;
 
 import com.sun.management.ThreadMXBean;
-import com.zaxxer.hikari.*;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
-import org.permaformula.TestServices;
-import org.permaformula.rendering.*;
 import org.permaformula.rendering.ApiWorkProperties;
 import org.permaformula.rendering.ApiWorkService;
+import org.permaformula.rendering.ImageRendererService;
+import org.permaformula.rendering.RenderGateway;
 import org.permaformula.rendering.StylesheetFetcher;
-import org.permaformula.rendering.cache.*;
+import org.permaformula.rendering.cache.CacheSchema;
+import org.permaformula.rendering.cache.JdbcImageCache;
 import org.permaformula.url.ImageDescriptor;
 import org.permaformula.validation.InputLimits;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
-import org.springframework.mock.web.*;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.json.JsonMapper;
@@ -36,9 +55,9 @@ import tools.jackson.databind.json.JsonMapper;
 class UbcqLibraryMeasurementTests {
     static final AtomicLong received = new AtomicLong();
     static final String SVG = "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>ok</text></svg>";
-    final JsonMapper mapper = JsonMapper.builder().build();
-    final ThreadMXBean allocations = (ThreadMXBean) ManagementFactory
-        .getThreadMXBean();
+    final JsonMapper mapper = JsonMapper.builder()
+        .build();
+    final ThreadMXBean allocations = (ThreadMXBean) ManagementFactory.getThreadMXBean();
 
     /** Count actual PostgreSQL protocol bytes received by this measurement JVM. */
     public static class CountingFactory extends SocketFactory {
@@ -119,11 +138,15 @@ class UbcqLibraryMeasurementTests {
         config.setMaximumPoolSize(2);
         config.setMinimumIdle(2);
         System.out.printf("MEASURE environment java=%s maxHeap=%d processors=%d%n",
-            System.getProperty("java.version"), Runtime.getRuntime().maxMemory(),
-            Runtime.getRuntime().availableProcessors());
+            System.getProperty("java.version"),
+            Runtime.getRuntime()
+                .maxMemory(),
+            Runtime.getRuntime()
+                .availableProcessors());
         try (var source = new HikariDataSource(config);
             var cache = new JdbcImageCache(source, false, Duration.ofHours(1), 2L << 30,
-                Duration.ofDays(1), null)) {
+                Duration.ofDays(1),
+                null)) {
             CacheSchema.migrate(source);
             var factory = new DefaultListableBeanFactory();
             factory.registerSingleton("cache", cache);
@@ -139,44 +162,61 @@ class UbcqLibraryMeasurementTests {
                     var q = c.createStatement();
                     var r = q.executeQuery(
                         """
-                            SELECT octet_length(descriptor),octet_length(ubcq),pg_column_size(ubcq) FROM permaformula_image_cache LIMIT 1\
-                            """)) {
+                        SELECT octet_length(descriptor),octet_length(ubcq),\
+                        pg_column_size(ubcq) FROM permaformula_image_cache LIMIT 1\
+                        """
+                    )) {
                     assertTrue(r.next());
                     System.out.printf(
-                        "MEASURE fixture=%s descriptorBytes=%d tokenBytes=%d pgStoredTokenBytes=%d%n",
-                        scenario, r.getLong(1), r.getLong(2), r.getLong(3));
+                        """
+                        MEASURE fixture=%s descriptorBytes=%d tokenBytes=%d pgStoredTokenBytes=\
+                        %d%n\
+                        """
+                        ,
+                        scenario, r.getLong(1),
+                        r.getLong(2),
+                        r.getLong(3));
                 }
                 for (int limit : List.of(12, 24)) {
                     System.gc();
                     Thread.sleep(100);
-                    long baseline = heap(), wire = received.get(), allocated = allocated(),
+                    long baseline = heap(),
+                        wire = received.get(),
+                        allocated = allocated(),
                         start = System.nanoTime();
                     var peak = new AtomicLong(baseline);
                     var running = new AtomicBoolean(true);
-                    var sampler = Thread.ofPlatform().daemon().start(() -> {
-                        while (running.get()) {
-                            peak.accumulateAndGet(heap(), Math::max);
-                            try {
-                                Thread.sleep(2);
-                            } catch (InterruptedException _) {
-                                return;
+                    var sampler = Thread.ofPlatform()
+                        .daemon()
+                        .start(() -> {
+                            while (running.get()) {
+                                peak.accumulateAndGet(heap(), Math::max);
+                                try {
+                                    Thread.sleep(2);
+                                } catch (InterruptedException _) {
+                                    return;
+                                }
                             }
-                        }
-                    });
+                        });
                     long bytes;
                     long tokenBytes;
                     int fullSources;
                     int returnedRows;
                     try {
-                        var page = controller.list(null, 0, limit).getBody();
+                        var page = controller.list(null, 0, limit)
+                            .getBody();
                         assertNotNull(page);
-                        tokenBytes = page.items().stream()
-                            .mapToLong(i -> i.ubcq().length())
+                        tokenBytes = page.items()
+                            .stream()
+                            .mapToLong(i -> i.ubcq()
+                                .length())
                             .sum();
-                        returnedRows = page.items().size();
+                        returnedRows = page.items()
+                            .size();
                         assertTrue(tokenBytes <= JdbcImageCache.LIBRARY_UBCQ_BUDGET
                             || returnedRows == 1);
-                        fullSources = (int) page.items().stream()
+                        fullSources = (int) page.items()
+                            .stream()
                             .filter(i -> i.descriptor() != null)
                             .count();
                         var output = new Counter();
@@ -189,13 +229,15 @@ class UbcqLibraryMeasurementTests {
                     }
                     System.out.printf(
                         """
-                            MEASURE list=%s requested=%d rows=%d tokenBytes=%d responseBytes=%d \
-                            dbWireBytes=%d allocatedBytes=%d sampledHeapDelta=%d elapsedMs=%.1f \
-                            fullSources=%d%n\
-                            """,
+                        MEASURE list=%s requested=%d rows=%d tokenBytes=%d responseBytes=%d \
+                        dbWireBytes=%d allocatedBytes=%d sampledHeapDelta=%d elapsedMs=%.1f \
+                        fullSources=%d%n\
+                        """
+                        ,
                         scenario, limit, returnedRows, tokenBytes, bytes, received.get() - wire,
                         allocated() - allocated, peak.get() - baseline,
-                        (System.nanoTime() - start) / 1e6, fullSources);
+                        (System.nanoTime() - start) / 1e6,
+                        fullSources);
                 }
                 if (scenario.equals("random-max")) {
                     blocked(controller, 12);
@@ -206,22 +248,26 @@ class UbcqLibraryMeasurementTests {
     }
 
     void populate(HikariDataSource source, JdbcImageCache cache, String scenario) throws Exception {
-        try (var c = source.getConnection(); var q = c.createStatement()) {
+        try (var c = source.getConnection();
+            var q = c.createStatement()) {
             q.execute("TRUNCATE permaformula_image_cache");
         }
         int htmlBytes = scenario.equals("ordinary") ? 4096 : InputLimits.MAX_CONTENT_BYTES;
         int cssBytes = scenario.equals("ordinary") ? 0 : InputLimits.MAX_STYLE_BYTES;
         boolean random = scenario.equals("random-max");
-        String html = "<!--" + content(htmlBytes - 16, random, 123) + "--><p>ok</p>";
-        String css = cssBytes == 0 ? "" : "/*" + content(cssBytes - 4, random, 456) + "*/";
+        String html = "<!--%s--><p>ok</p>".formatted(content(htmlBytes - 16, random, 123));
+        String css = cssBytes == 0 ? ""
+            : "/*%s*/".formatted(content(cssBytes - 4, random, 456));
         if (scenario.equals("ordinary")) {
-            html = """
+            html =
+                """
                 <!--sample--><div class="math-card"><span class="eyebrow">MATHEMATICAL \
                 IDENTITY</span><h1>The sum of cubes</h1><p>The sum has a closed form:</p><div \
                 class="equation">`sum_(i=1)^n i^3 = ((n(n+1))/2)^2`</div><p class="caption">The \
                 sum of the first n cubes equals the square of the n-th triangular number.</p></div>\
                 """;
-            css = """
+            css =
+                """
                 body { margin:0; padding:0; } .math-card { padding:48px; background:#edf3fb; \
                 color:#263b54; font-family:Georgia,serif; } .eyebrow { font:11px Arial,sans-serif; \
                 letter-spacing:2px; color:#496f9f; } h1 { font-size:36px; margin:18px 0; } p { \
@@ -245,21 +291,31 @@ class UbcqLibraryMeasurementTests {
         };
         try (var renderer = TestServices.validated(new ImageRendererService(
             new PermaFormulaProperties("http://localhost", 500, 2000), gateway,
-            new ApiWorkService(ApiWorkProperties.defaults()), new StylesheetFetcher()))) {
-            renderer.getImage(descriptor).getInputStream().close();
+            new ApiWorkService(ApiWorkProperties.defaults()),
+            new StylesheetFetcher()))) {
+            renderer.getImage(descriptor)
+                .getInputStream()
+                .close();
         }
         assertTrue(preparedBytes.get() < 65536,
             "Large comments must leave a small prepared document");
         System.out.printf("MEASURE accepted=%s htmlBytes=%d cssBytes=%d preparedDocumentBytes=%d%n",
-            scenario, html.length(), css.length(), preparedBytes.get());
+            scenario, html.length(),
+            css.length(),
+            preparedBytes.get());
         for (int i = 0; i < 24; i++) {
             String key = String.format("%064x", i + 1);
             // Distinct descriptors avoid an unrealistic identical-token page.
             var unique = new ImageDescriptor(
-                html.substring(0, 4) + String.format("%02d", i) + html.substring(6), 500, List.of(),
+                "%s%s%s".formatted(
+                    html.substring(0, 4),
+                    String.format("%02d", i),
+                    html.substring(6)),
+                500, List.of(),
                 css);
             // Keep the exact maximum-size fixture within the accepted input ceiling.
-            if (unique.forumla().length() > InputLimits.MAX_CONTENT_BYTES) {
+            if (unique.forumla()
+                .length() > InputLimits.MAX_CONTENT_BYTES) {
                 throw new AssertionError("Fixture too large");
             }
             String json = mapper.writeValueAsString(unique);
@@ -283,7 +339,8 @@ class UbcqLibraryMeasurementTests {
         var rng = new Random(seed);
         String alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         for (int i = 0; i < length; i++) {
-            chars[i] = random ? alphabet.charAt(rng.nextInt(alphabet.length())) : 'a';
+            chars[i] = random ? alphabet.charAt(rng.nextInt(alphabet.length()))
+                : 'a';
         }
         return new String(chars);
     }
@@ -306,8 +363,10 @@ class UbcqLibraryMeasurementTests {
                     var res = new MockHttpServletResponse();
                     assertTrue(interceptor.preHandle(req, res, handler));
                     try {
-                        var page = controller.list(null, 0, limit).getBody();
-                        actualRows.addAndGet(page.items().size());
+                        var page = controller.list(null, 0, limit)
+                            .getBody();
+                        actualRows.addAndGet(page.items()
+                            .size());
                         var output = new Counter() {
                             boolean held;
 
@@ -347,7 +406,8 @@ class UbcqLibraryMeasurementTests {
                             System.out.printf(
                                 "MEASURE concurrentReadFailure rowsEach=%d type=%s sqlState=%s%n",
                                 limit,
-                                cause.getClass().getSimpleName(),
+                                cause.getClass()
+                                    .getSimpleName(),
                                 cause instanceof SQLException sql ? sql.getSQLState()
                                     : "none");
                         }
@@ -355,7 +415,11 @@ class UbcqLibraryMeasurementTests {
                     assertTrue(failures > 0,
                         "Missing writers must be explained by a failed operation");
                     System.out.printf(
-                        "MEASURE heldNotReached rowsEach=%d failedReads=%d (production deadlines unchanged)%n",
+                        """
+                        MEASURE heldNotReached rowsEach=%d failedReads=%d (production \
+                        deadlines unchanged)%n\
+                        """
+                        ,
                         limit, failures);
                     return;
                 }
@@ -365,14 +429,17 @@ class UbcqLibraryMeasurementTests {
                 var denial = assertThrows(ResponseStatusException.class,
                     () -> interceptor.preHandle(new MockHttpServletRequest(),
                         new MockHttpServletResponse(), handler));
-                assertEquals(429, denial.getStatusCode().value());
+                assertEquals(429, denial.getStatusCode()
+                    .value());
                 Thread.sleep(1000);
                 System.out.printf(
                     """
-                        MEASURE heldResponses=2 requestedRowsEach=%d actualRowsTotal=%d \
-                        retainedHeapDelta=%d thirdStatus=429 holdMs=1000%n\
-                        """,
-                    limit, actualRows.get(), retained);
+                    MEASURE heldResponses=2 requestedRowsEach=%d actualRowsTotal=%d \
+                    retainedHeapDelta=%d thirdStatus=429 holdMs=1000%n\
+                    """
+                    ,
+                    limit, actualRows.get(),
+                    retained);
             } finally {
                 release.countDown();
             }
@@ -387,11 +454,14 @@ class UbcqLibraryMeasurementTests {
     }
 
     long allocated() {
-        return allocations.getThreadAllocatedBytes(Thread.currentThread().threadId());
+        return allocations.getThreadAllocatedBytes(Thread.currentThread()
+            .threadId());
     }
 
     static long heap() {
-        return ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getUsed();
+        return ManagementFactory.getMemoryMXBean()
+            .getHeapMemoryUsage()
+            .getUsed();
     }
 
     static class Counter extends OutputStream {

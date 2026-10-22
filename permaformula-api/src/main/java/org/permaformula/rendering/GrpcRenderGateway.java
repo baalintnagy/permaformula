@@ -1,21 +1,31 @@
 package org.permaformula.rendering;
 
+import static org.permaformula.validation.QuickValidator.validate;
+import static org.permaformula.validation.QuickValidator.violation;
+
 import java.io.IOException;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-import io.grpc.*;
-import io.grpc.netty.shaded.io.grpc.netty.*;
+import io.grpc.ManagedChannel;
+import io.grpc.StatusRuntimeException;
+import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts;
+import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.shaded.io.netty.channel.EventLoopGroup;
 import io.grpc.netty.shaded.io.netty.channel.MultiThreadIoEventLoopGroup;
-import io.grpc.netty.shaded.io.netty.channel.epoll.*;
+import io.grpc.netty.shaded.io.netty.channel.epoll.Epoll;
+import io.grpc.netty.shaded.io.netty.channel.epoll.EpollDomainSocketChannel;
+import io.grpc.netty.shaded.io.netty.channel.epoll.EpollIoHandler;
 import io.grpc.netty.shaded.io.netty.channel.unix.DomainSocketAddress;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslContextBuilder;
 import jakarta.annotation.PreDestroy;
 import org.permaformula.contract.RenderProtocol;
-import org.permaformula.contract.v1.*;
-import org.permaformula.validation.QuickValidator;
+import org.permaformula.contract.v1.AsciiMathFormula;
+import org.permaformula.contract.v1.HtmlDocument;
+import org.permaformula.contract.v1.RenderRequest;
+import org.permaformula.contract.v1.RenderResponse;
+import org.permaformula.contract.v1.RendererServiceGrpc;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -33,19 +43,21 @@ public final class GrpcRenderGateway implements RenderGateway, AutoCloseable {
     @Autowired
     public GrpcRenderGateway(RenderingProperties properties) throws IOException {
         timeout = properties.timeout();
-        QuickValidator.validate(
+        validate(
             !(timeout.isNegative()
                 || timeout.isZero()),
-            () -> QuickValidator.violation("Render timeout must be positive"));
+            "Render timeout must be positive");
         NettyChannelBuilder builder;
         if (properties.socket() != null) {
             if (!Epoll.isAvailable()) {
                 throw new IOException("Unix gRPC transport requires Linux epoll");
             }
             events = new MultiThreadIoEventLoopGroup(1, EpollIoHandler.newFactory());
-            builder = NettyChannelBuilder
-                .forAddress(new DomainSocketAddress(properties.socket().toString()))
-                .channelType(EpollDomainSocketChannel.class).eventLoopGroup(events).usePlaintext();
+            builder = NettyChannelBuilder.forAddress(new DomainSocketAddress(properties.socket()
+                .toString()))
+                .channelType(EpollDomainSocketChannel.class)
+                .eventLoopGroup(events)
+                .usePlaintext();
         } else {
             events = null;
             builder = NettyChannelBuilder.forTarget(properties.target());
@@ -54,20 +66,23 @@ public final class GrpcRenderGateway implements RenderGateway, AutoCloseable {
             } else {
                 SslContextBuilder tls = GrpcSslContexts.forClient();
                 if (properties.tlsCa() != null) {
-                    tls.trustManager(properties.tlsCa().toFile());
+                    tls.trustManager(properties.tlsCa()
+                        .toFile());
                 }
-                QuickValidator.validate(
+                validate(
                     !((properties.tlsCertificate() == null) != (properties.tlsKey() == null)),
-                    () -> QuickValidator
-                        .violation("Both renderer TLS certificate and key are required"));
+                    "Both renderer TLS certificate and key are required");
                 if (properties.tlsCertificate() != null) {
-                    tls.keyManager(properties.tlsCertificate().toFile(),
-                        properties.tlsKey().toFile());
+                    tls.keyManager(properties.tlsCertificate()
+                        .toFile(),
+                        properties.tlsKey()
+                            .toFile());
                 }
                 builder.sslContext(tls.build());
             }
         }
-        channel = builder.maxInboundMessageSize(RenderProtocol.MAX_MESSAGE_BYTES).build();
+        channel = builder.maxInboundMessageSize(RenderProtocol.MAX_MESSAGE_BYTES)
+            .build();
     }
 
     GrpcRenderGateway(ManagedChannel channel, Duration timeout) {
@@ -79,42 +94,60 @@ public final class GrpcRenderGateway implements RenderGateway, AutoCloseable {
     @Override
     public byte[] renderHtml(String document, int width) throws IOException {
         return render(RenderRequest.newBuilder()
-            .setHtml(HtmlDocument.newBuilder().setDocument(document).setWidth(width)));
+            .setHtml(HtmlDocument.newBuilder()
+                .setDocument(document)
+                .setWidth(width)));
     }
 
     @Override
     public byte[] renderFormula(String formula) throws IOException {
         return render(RenderRequest.newBuilder()
-            .setFormula(AsciiMathFormula.newBuilder().setFormula(formula)));
+            .setFormula(AsciiMathFormula.newBuilder()
+                .setFormula(formula)));
     }
 
     @Override
     public byte[] renderJpeg(String svg) throws IOException {
-        return render(RenderRequest.newBuilder().setJpegSvg(svg));
+        return render(RenderRequest.newBuilder()
+            .setJpegSvg(svg));
     }
 
     private byte[] render(RenderRequest.Builder builder) throws IOException {
-        RenderRequest request = builder.setRequestId(UUID.randomUUID().toString()).build();
-        int contentSize = request.hasHtml() ? request.getHtml().getDocumentBytes().size()
-            : request.hasJpegSvg() ? request.getJpegSvgBytes().size()
-                : request.getFormula().getFormulaBytes().size();
-        QuickValidator.validate(
+        RenderRequest request = builder.setRequestId(UUID.randomUUID()
+            .toString())
+            .build();
+        int contentSize = request.hasHtml()
+            ? request.getHtml()
+                .getDocumentBytes()
+                .size()
+            : request.hasJpegSvg()
+                ? request.getJpegSvgBytes()
+                    .size()
+                : request.getFormula()
+                    .getFormulaBytes()
+                    .size();
+        validate(
             !(contentSize > RenderProtocol.MAX_CONTENT_BYTES),
-            () -> QuickValidator.violation("Rendering content is too large"));
+            "Rendering content is too large");
         try {
-            RenderResponse response = RendererGrpc.newBlockingStub(channel)
+            RenderResponse response = RendererServiceGrpc.newBlockingStub(channel)
                 .withDeadlineAfter(WorkDeadline.remainingNanos(timeout), TimeUnit.NANOSECONDS)
                 .render(request);
-            if (!request.getRequestId().equals(response.getRequestId())
-                || response.getSvg().isEmpty()
-                || response.getSvg().size() > RenderProtocol.MAX_CONTENT_BYTES) {
+            if (!request.getRequestId()
+                .equals(response.getRequestId())
+                || response.getSvg()
+                    .isEmpty()
+                || response.getSvg()
+                    .size() > RenderProtocol.MAX_CONTENT_BYTES) {
                 throw new IOException("Invalid renderer response");
             }
-            return response.getSvg().toByteArray();
+            return response.getSvg()
+                .toByteArray();
         } catch (StatusRuntimeException failure) {
-            switch (failure.getStatus().getCode()) {
+            switch (failure.getStatus()
+                .getCode()) {
             case INVALID_ARGUMENT ->
-                throw QuickValidator.violation("Invalid rendering content");
+                throw violation("Invalid rendering content");
             case DEADLINE_EXCEEDED ->
                 throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT,
                     "Renderer deadline exceeded", failure);
@@ -133,7 +166,8 @@ public final class GrpcRenderGateway implements RenderGateway, AutoCloseable {
         try {
             channel.awaitTermination(5, TimeUnit.SECONDS);
         } catch (InterruptedException _) {
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                .interrupt();
         } finally {
             if (events != null) {
                 events.shutdownGracefully();

@@ -1,6 +1,8 @@
 package org.permaformula.rendering;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.time.Duration;
 
@@ -18,12 +20,16 @@ class RenderingPropertiesBindingTests {
         runner.run(context -> {
             var settings = context.getBean(RenderingProperties.class);
             assertFalse(settings.plaintext());
-            assertEquals(Duration.ofSeconds(45), settings.timeout());
+            assertEquals(Duration.ofSeconds(45),
+                settings.timeout());
             assertNull(settings.socket());
         });
         runner.withPropertyValues("permaformula.rendering.socket=/run/permaformula/render.sock")
             .run(context -> assertEquals("/run/permaformula/render.sock",
-                context.getBean(RenderingProperties.class).socket().toString().replace('\\', '/')));
+                context.getBean(RenderingProperties.class)
+                    .socket()
+                    .toString()
+                    .replace('\\', '/')));
     }
 
     @Configuration(proxyBeanMethods = false)

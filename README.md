@@ -136,6 +136,12 @@ Maven uses checked-in renderer bundles. Rebuild them after changing `tools/svg`;
 Node.js is needed for development/builds, not the deployed runtime.
 Browser and PostgreSQL tests require explicit opt-in and their prerequisites.
 
+Java formatting and source-style checks run during `mvn verify`. Run
+`mvn spotless:apply` to apply the checked-in Eclipse formatting profile, order imports,
+and remove unused imports. Run `mvn spotless:check checkstyle:check` to check style
+without compiling or running tests. See [source-style tooling](docs/source-style.md)
+for coverage and limitations.
+
 Local persistence defaults to SQLite; Docker uses PostgreSQL. Both support bounded
 caching and Liquibase migrations. Add schema changes as new changesets and preserve
 applied history; startup does not automatically reset existing databases.

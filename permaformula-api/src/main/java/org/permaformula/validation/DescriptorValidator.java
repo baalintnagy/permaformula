@@ -1,5 +1,8 @@
 package org.permaformula.validation;
 
+import static org.permaformula.validation.QuickValidator.notNull;
+import static org.permaformula.validation.QuickValidator.validate;
+
 import java.util.List;
 
 import jakarta.validation.ConstraintValidator;
@@ -32,35 +35,38 @@ public class DescriptorValidator implements ConstraintValidator<ValidDescriptor,
     @Override
     public boolean isValid(ImageDescriptor value, ConstraintValidatorContext context) {
         return ConstraintChecks.check(work, context, () -> {
-            QuickValidator.notNull(value,
-                () -> QuickValidator.violation("Missing image descriptor"));
-            bounds(value.forumla(), value.imageWidth(), value.styleRefs(), value.style());
+            notNull(value, "Missing image descriptor");
+            bounds(value.forumla(),
+                value.imageWidth(),
+                value.styleRefs(),
+                value.style());
             if (presentation) {
                 PresentationValidation.validate(value);
             }
         });
     }
 
-    static void bounds(String content, Integer width, List<String> refs, String style) {
+    static void bounds(String content, Integer width, List<?> refs, String style) {
         ValidationText.text(content, InputLimits.MAX_CONTENT_BYTES, "Content");
-        QuickValidator.validate(
+        validate(
             StringUtils.isNotBlank(content),
-            () -> QuickValidator.violation("Content must not be blank"));
-        QuickValidator.validate(
+            "Content must not be blank");
+        validate(
             width == null
                 || width >= 220
                     && width <= 4000,
-            () -> QuickValidator.violation("Image width must be between 220 and 4000"));
+            "Image width must be between 220 and 4000");
         ValidationText.text(style, InputLimits.MAX_STYLE_BYTES, "Style");
         if (refs != null) {
-            QuickValidator.validate(
+            validate(
                 refs.size() <= InputLimits.MAX_STYLE_REFS,
-                () -> QuickValidator.violation("At most eight stylesheet references are allowed"));
-            refs.forEach(ref -> {
+                "At most eight stylesheet references are allowed");
+            refs.forEach(value -> {
+                String ref = (String) value;
                 ValidationText.text(ref, InputLimits.MAX_REF_BYTES, "Stylesheet reference");
-                QuickValidator.validate(
+                validate(
                     StringUtils.isNotBlank(ref),
-                    () -> QuickValidator.violation("Stylesheet references must not be blank"));
+                    "Stylesheet references must not be blank");
             });
         }
     }

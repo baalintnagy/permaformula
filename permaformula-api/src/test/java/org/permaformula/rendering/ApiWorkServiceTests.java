@@ -1,6 +1,11 @@
 package org.permaformula.rendering;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -30,7 +35,9 @@ class ApiWorkServiceTests {
             try {
                 assertTrue(entered.await(2, TimeUnit.SECONDS));
                 assertEquals(503, assertThrows(ResponseStatusException.class,
-                    () -> work.prepare(() -> "unexpected")).getStatusCode().value());
+                    () -> work.prepare(() -> "unexpected"))
+                    .getStatusCode()
+                    .value());
             } finally {
                 release.countDown();
             }
@@ -56,8 +63,10 @@ class ApiWorkServiceTests {
                 assertTrue(entered.await(2, TimeUnit.SECONDS));
                 var overloaded = assertThrows(ResponseStatusException.class,
                     () -> work.generate(() -> "unexpected"));
-                assertEquals(503, overloaded.getStatusCode().value());
-                assertEquals("1", overloaded.getHeaders().getFirst("Retry-After"));
+                assertEquals(503, overloaded.getStatusCode()
+                    .value());
+                assertEquals("1", overloaded.getHeaders()
+                    .getFirst("Retry-After"));
                 assertEquals("prepare", work.prepare(() -> "prepare"));
                 assertEquals("fetch", work.fetch(() -> "fetch"));
             } finally {
@@ -82,7 +91,8 @@ class ApiWorkServiceTests {
 
     @Test
     void deadlinePropagatesThroughNestedFetchWithoutRestartingBudget() throws Exception {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        long deadline = System.nanoTime()
+            + TimeUnit.SECONDS.toNanos(2);
         try (var _ = WorkDeadline.at(deadline)) {
             assertEquals(deadline, work
                 .generate(() -> work.fetch(() -> WorkDeadline.deadline(Duration.ofSeconds(5)))));
@@ -97,11 +107,15 @@ class ApiWorkServiceTests {
                 worker.set(Thread.currentThread());
                 await(new CountDownLatch(1));
                 return "never";
-            })).getStatusCode().value());
+            }))
+                .getStatusCode()
+                .value());
         }
         assertNotNull(worker.get());
-        worker.get().join(2000);
-        assertFalse(worker.get().isAlive());
+        worker.get()
+            .join(2000);
+        assertFalse(worker.get()
+            .isAlive());
         assertEquals("recovered", work.prepare(() -> "recovered"));
     }
 
@@ -121,14 +135,19 @@ class ApiWorkServiceTests {
                             }
                         }
                         return "late";
-                    })).getStatusCode().value());
+                    }))
+                        .getStatusCode()
+                        .value());
             }
             assertEquals(503, assertThrows(ResponseStatusException.class,
-                () -> work.fetch(() -> "must not start")).getStatusCode().value());
+                () -> work.fetch(() -> "must not start"))
+                .getStatusCode()
+                .value());
         } finally {
             release.countDown();
             if (worker.get() != null) {
-                worker.get().join(2000);
+                worker.get()
+                    .join(2000);
             }
         }
         assertEquals("recovered", work.fetch(() -> "recovered"));
@@ -138,7 +157,8 @@ class ApiWorkServiceTests {
         try {
             latch.await();
         } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                .interrupt();
             throw new IOException("interrupted", interrupted);
         }
     }

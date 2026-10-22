@@ -1,5 +1,7 @@
 package org.permaformula.rendering.cache;
 
+import static org.permaformula.validation.QuickValidator.validate;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -22,7 +24,6 @@ import org.permaformula.rendering.JpegOutputPolicy;
 import org.permaformula.rendering.SvgOutputPolicy;
 import org.permaformula.rendering.UbcqIdentity;
 import org.permaformula.rendering.WorkDeadline;
-import org.permaformula.validation.QuickValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
@@ -92,24 +93,29 @@ public final class JdbcImageCache implements AutoCloseable {
         this.now = sqlite ? "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)"
             : "CAST(extract(epoch FROM statement_timestamp()) * 1000 AS bigint)";
         this.greatest = sqlite ? "max" : "greatest";
-        QuickValidator.validate(
+        validate(
             !(ttlMillis < 1
                 || maximumBytes < 1
                 || cleanupInterval.toMillis() < 1
                 || maximumEntries < 1
                 || maximumEntries > 1_000_000),
-            () -> QuickValidator.violation("Persistent cache limits must be positive"));
+            "Persistent cache limits must be positive");
         maintenance = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread thread = new Thread(r, "image-cache-cleanup");
             thread.setDaemon(true);
             return thread;
         });
         maintenance.scheduleWithFixedDelay(this::cleanUp, cleanupInterval.toMillis(),
-            cleanupInterval.toMillis(), TimeUnit.MILLISECONDS);
+            cleanupInterval.toMillis(),
+            TimeUnit.MILLISECONDS);
         maintenance.scheduleWithFixedDelay(this::flushTouches, touchIntervalMillis,
             touchIntervalMillis, TimeUnit.MILLISECONDS);
         log.info(
-            "event=persistent_cache_initialized backend={} maximumBytes={} maximumEntries={} ttlMillis={}",
+            """
+            event=persistent_cache_initialized backend={} maximumBytes={} maximumEntries={} \
+            ttlMillis={}\
+            """
+            ,
             sqlite ? "sqlite" : "postgres", maximumBytes, maximumEntries, ttlMillis);
     }
 
@@ -118,7 +124,8 @@ public final class JdbcImageCache implements AutoCloseable {
 
     public String find(String key) {
         Stored stored = findStored(key);
-        return stored == null ? null : stored.output();
+        return stored == null ? null
+            : stored.output();
     }
 
     public Stored findStored(String key) {
@@ -131,20 +138,28 @@ public final class JdbcImageCache implements AutoCloseable {
         Stored loaded;
         try {
             // Bind visit freshness after acquiring the connection, which may have waited.
-            loaded = jdbc.getJdbcOperations().query("""
-                SELECT svg, descriptor IS NOT NULL
-                FROM permaformula_image_cache
-                WHERE cache_key = ?
-                    AND (expires_at > %s OR ?)
-                    AND size_bytes <= ?
-                """.formatted(now), query -> {
-                query.setString(1, key);
-                Long touched = touches.get(key);
-                query.setBoolean(2, touched != null
-                    && TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - touched) < ttlMillis);
-                query.setLong(3, maximumBytes);
-            },
-                rows -> rows.next() ? new Stored(rows.getString(1), rows.getBoolean(2)) : null);
+            loaded = jdbc.getJdbcOperations()
+                .query(
+                    """
+                    SELECT svg, descriptor IS NOT NULL
+                    FROM permaformula_image_cache
+                    WHERE cache_key = ?
+                        AND (expires_at > %s OR ?)
+                        AND size_bytes <= ?
+                    """
+                        .formatted(now),
+                    query -> {
+                        query.setString(1, key);
+                        Long touched = touches.get(key);
+                        query.setBoolean(2, touched != null
+                            && TimeUnit.NANOSECONDS
+                                .toMillis(System.nanoTime() - touched) < ttlMillis);
+                        query.setLong(3, maximumBytes);
+                    },
+                    rows -> rows.next()
+                        ? new Stored(rows.getString(1),
+                            rows.getBoolean(2))
+                        : null);
         } catch (DataAccessException failure) {
             warn("read", failure);
             return null;
@@ -154,7 +169,8 @@ public final class JdbcImageCache implements AutoCloseable {
         }
         WorkDeadline.remainingNanos(Duration.ofSeconds(2));
         try {
-            if (loaded.output().startsWith(JpegOutputPolicy.PREFIX)) {
+            if (loaded.output()
+                .startsWith(JpegOutputPolicy.PREFIX)) {
                 JpegOutputPolicy.decode(loaded.output());
                 WorkDeadline.remainingNanos(Duration.ofSeconds(2));
                 return loaded;
@@ -204,7 +220,8 @@ public final class JdbcImageCache implements AutoCloseable {
                     status.setRollbackOnly();
                     return;
                 }
-                String conflict = onlyAbsent ? "ON CONFLICT (cache_key) DO NOTHING" : """
+                String conflict = onlyAbsent ? "ON CONFLICT (cache_key) DO NOTHING" :
+                    """
                     ON CONFLICT (cache_key) DO UPDATE
                     SET svg = EXCLUDED.svg,
                         descriptor = NULL,
@@ -220,18 +237,22 @@ public final class JdbcImageCache implements AutoCloseable {
                             permaformula_image_cache.last_access_at, EXCLUDED.last_access_at),
                         expires_at = %s(
                             permaformula_image_cache.expires_at, EXCLUDED.expires_at)
-                    """.formatted(greatest, greatest);
-                jdbc.update("""
+                    """
+                        .formatted(greatest, greatest);
+                jdbc.update(
+                    """
                     INSERT INTO permaformula_image_cache(
                         cache_key, svg, size_bytes, created_at, last_access_at, expires_at
                     )
                     VALUES (:key, :svg, :bytes, %s, %s, %s + :retentionMillis)
                     %s
-                    """.formatted(now, now, now, conflict), new MapSqlParameterSource()
-                    .addValue("key", key)
-                    .addValue("svg", svg)
-                    .addValue("bytes", bytes)
-                    .addValue("retentionMillis", retentionMillis));
+                    """
+                        .formatted(now, now, now, conflict),
+                    new MapSqlParameterSource()
+                        .addValue("key", key)
+                        .addValue("svg", svg)
+                        .addValue("bytes", bytes)
+                        .addValue("retentionMillis", retentionMillis));
             });
         } catch (DataAccessException | TransactionException failure) {
             warn("write", failure);
@@ -260,35 +281,42 @@ public final class JdbcImageCache implements AutoCloseable {
             log.warn("event=persistent_touch_capacity droppedVisits={} maximumPending=1024",
                 dropped);
         }
-        List<Entry<String, Long>> batch = touches.entrySet().stream()
-            .map(entry -> Map.entry(entry.getKey(), entry.getValue()))
+        List<Entry<String, Long>> batch = touches.entrySet()
+            .stream()
+            .map(entry -> Map.entry(entry.getKey(),
+                entry.getValue()))
             .toList();
         if (batch.isEmpty()) {
             return true;
         }
 
         try (Permit _ = admit()) {
-            jdbc.getJdbcOperations().execute("""
-                UPDATE permaformula_image_cache
-                SET last_access_at = %s(last_access_at, %s - ?),
-                    expires_at = %s(expires_at, %s - ? + ?)
-                WHERE cache_key = ?
-                """.formatted(greatest, now, greatest, now),
-                (PreparedStatementCallback<Void>) update -> {
-                    for (var visit : batch) {
-                        long age = Math.max(0,
-                            TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - visit.getValue()));
-                        update.setLong(1, age);
-                        update.setLong(2, age);
-                        update.setLong(3, retentionMillis);
-                        update.setString(4, visit.getKey());
-                        update.addBatch();
-                    }
-                    update.executeBatch();
-                    return null;
-                });
+            jdbc.getJdbcOperations()
+                .execute(
+                    """
+                    UPDATE permaformula_image_cache
+                    SET last_access_at = %s(last_access_at, %s - ?),
+                        expires_at = %s(expires_at, %s - ? + ?)
+                    WHERE cache_key = ?
+                    """
+                        .formatted(greatest, now, greatest, now),
+                    (PreparedStatementCallback<Void>) update -> {
+                        for (var visit : batch) {
+                            long age = Math.max(0,
+                                TimeUnit.NANOSECONDS.toMillis(System.nanoTime()
+                                    - visit.getValue()));
+                            update.setLong(1, age);
+                            update.setLong(2, age);
+                            update.setLong(3, retentionMillis);
+                            update.setString(4, visit.getKey());
+                            update.addBatch();
+                        }
+                        update.executeBatch();
+                        return null;
+                    });
             for (var visit : batch) {
-                if (touches.remove(visit.getKey(), visit.getValue())) {
+                if (touches.remove(visit.getKey(),
+                    visit.getValue())) {
                     touchSlots.release();
                 }
             }
@@ -310,17 +338,23 @@ public final class JdbcImageCache implements AutoCloseable {
     }
 
     private Boolean published(String key) {
-        return jdbc.query("""
+        return jdbc.query(
+            """
             SELECT descriptor IS NOT NULL
             FROM permaformula_image_cache
             WHERE cache_key = :key
-            """, Map.of("key", key), rows -> rows.next() ? rows.getBoolean(1) : null);
+            """
+            , Map.of("key", key),
+            rows -> rows.next()
+                ? rows.getBoolean(1)
+                : null);
     }
 
     /** The indexed digest was recorded with the validated output, never supplied as a client ID. */
     public String keyForToken(String tokenKey) {
         try (Permit _ = admit(metadata)) {
-            return jdbc.query("""
+            return jdbc.query(
+                """
                 SELECT cache_key
                 FROM permaformula_image_cache
                 WHERE ubcq_key = :tokenKey
@@ -328,8 +362,12 @@ public final class JdbcImageCache implements AutoCloseable {
                     AND expires_at > %s
                     AND size_bytes <= :maximumBytes
                 LIMIT 1
-                """.formatted(now), Map.of("tokenKey", tokenKey, "maximumBytes", maximumBytes),
-                rows -> rows.next() ? rows.getString(1) : null);
+                """
+                    .formatted(now),
+                Map.of("tokenKey", tokenKey, "maximumBytes", maximumBytes),
+                rows -> rows.next()
+                    ? rows.getString(1)
+                    : null);
         } catch (DataAccessException failure) {
             warn("token_lookup", failure);
             return null;
@@ -363,7 +401,8 @@ public final class JdbcImageCache implements AutoCloseable {
         long descriptorBytes = descriptor.getBytes(StandardCharsets.UTF_8).length;
         String ubcq;
         try {
-            ubcq = new StringCompressionService().compress(descriptor);
+            ubcq = new StringCompressionService()
+                .compress(descriptor);
         } catch (IOException failure) {
             warn("compress", failure);
             return false;
@@ -379,7 +418,8 @@ public final class JdbcImageCache implements AutoCloseable {
                     status.setRollbackOnly();
                     return false;
                 }
-                int updated = jdbc.update("""
+                int updated = jdbc.update(
+                    """
                     UPDATE permaformula_image_cache
                     SET descriptor = :descriptor,
                         editor_kind = :kind,
@@ -392,17 +432,18 @@ public final class JdbcImageCache implements AutoCloseable {
                     WHERE cache_key = :key
                         AND descriptor IS NULL
                         AND size_bytes + :bytes <= :maximumBytes
-                    """, new MapSqlParameterSource()
-                    .addValue("descriptor", descriptor)
-                    .addValue("kind", kind)
-                    .addValue("bytes", bytes)
-                    .addValue("excerpt", excerpt)
-                    .addValue("descriptorBytes", descriptorBytes)
-                    .addValue("ubcq", ubcq)
-                    .addValue("tokenKey", tokenKey)
-                    .addValue("ubcqBytes", ubcq.length())
-                    .addValue("key", key)
-                    .addValue("maximumBytes", maximumBytes));
+                    """
+                    , new MapSqlParameterSource()
+                        .addValue("descriptor", descriptor)
+                        .addValue("kind", kind)
+                        .addValue("bytes", bytes)
+                        .addValue("excerpt", excerpt)
+                        .addValue("descriptorBytes", descriptorBytes)
+                        .addValue("ubcq", ubcq)
+                        .addValue("tokenKey", tokenKey)
+                        .addValue("ubcqBytes", ubcq.length())
+                        .addValue("key", key)
+                        .addValue("maximumBytes", maximumBytes));
                 return updated > 0
                     || Boolean.TRUE.equals(published(key));
             }));
@@ -437,10 +478,10 @@ public final class JdbcImageCache implements AutoCloseable {
     }
 
     public List<LibrarySummary> library(LibraryCursor cursor, int limit) throws SQLException {
-        QuickValidator.validate(
+        validate(
             !(limit < 1
                 || limit > 24),
-            () -> QuickValidator.violation("Invalid library limit"));
+            "Invalid library limit");
         String cursorCondition = cursor == null ? ""
             : " AND (created_at, cache_key) < (:cursorCreatedAt, :cursorId)";
         MapSqlParameterSource parameters = new MapSqlParameterSource()
@@ -456,7 +497,8 @@ public final class JdbcImageCache implements AutoCloseable {
                 .addValue("cursorId", cursor.id());
         }
         try (Permit _ = admit(metadata)) {
-            return jdbc.query("""
+            return jdbc.query(
+                """
                 WITH page AS (
                     SELECT
                         cache_key,
@@ -518,9 +560,15 @@ public final class JdbcImageCache implements AutoCloseable {
                 JOIN permaformula_image_cache c ON c.cache_key = p.cache_key
                 WHERE p.rn <= v.n + 1
                 ORDER BY p.created_at DESC, p.cache_key DESC
-                """.formatted(now, cursorCondition), parameters,
-                (rows, _) -> new LibrarySummary(rows.getString(1), rows.getString(2),
-                    rows.getString(3), rows.getLong(4), rows.getString(5), rows.getString(6),
+                """
+                    .formatted(now, cursorCondition),
+                parameters,
+                (rows, _) -> new LibrarySummary(rows.getString(1),
+                    rows.getString(2),
+                    rows.getString(3),
+                    rows.getLong(4),
+                    rows.getString(5),
+                    rows.getString(6),
                     rows.getBoolean(7)));
         } catch (DataAccessException failure) {
             throw sqlFailure(failure);
@@ -529,16 +577,21 @@ public final class JdbcImageCache implements AutoCloseable {
 
     public LibraryItem libraryItem(String id) throws SQLException {
         try (Permit _ = admit()) {
-            return jdbc.query("""
+            return jdbc.query(
+                """
                 SELECT editor_kind, descriptor, created_at, ubcq
                 FROM permaformula_image_cache
                 WHERE cache_key = :id
                     AND descriptor IS NOT NULL
                     AND expires_at > %s
                     AND size_bytes <= :maximumBytes
-                """.formatted(now), Map.of("id", id, "maximumBytes", maximumBytes),
+                """
+                    .formatted(now),
+                Map.of("id", id, "maximumBytes", maximumBytes),
                 rows -> rows.next()
-                    ? new LibraryItem(id, rows.getString(1), rows.getString(2), rows.getLong(3),
+                    ? new LibraryItem(id, rows.getString(1),
+                        rows.getString(2),
+                        rows.getLong(3),
                         rows.getString(4))
                     : null);
         } catch (DataAccessException failure) {
@@ -583,9 +636,11 @@ public final class JdbcImageCache implements AutoCloseable {
             return;
         }
         try (Permit _ = admit()) {
-            jdbc.getJdbcOperations().update(
-                "DELETE FROM permaformula_image_cache WHERE expires_at <= " + now);
-            jdbc.update("""
+            jdbc.getJdbcOperations()
+                .update(
+                    "DELETE FROM permaformula_image_cache WHERE expires_at <= %s".formatted(now));
+            jdbc.update(
+                """
                 DELETE FROM permaformula_image_cache
                 WHERE cache_key IN (
                     SELECT cache_key
@@ -604,8 +659,9 @@ public final class JdbcImageCache implements AutoCloseable {
                     WHERE retained_bytes > :maximumBytes
                         OR position > :maximumEntries
                 )
-                """, Map.of("maximumBytes", maximumBytes - maximumBytes / 5,
-                "maximumEntries", maximumEntries - maximumEntries / 10));
+                """
+                , Map.of("maximumBytes", maximumBytes - maximumBytes / 5,
+                    "maximumEntries", maximumEntries - maximumEntries / 10));
         } catch (DataAccessException | ResponseStatusException failure) {
             warn("cleanup", failure);
         }
@@ -615,15 +671,18 @@ public final class JdbcImageCache implements AutoCloseable {
     // write acquires its single writer lock before reading the aggregate budget.
     private void lockWrites() {
         if (sqlite) {
-            jdbc.getJdbcOperations().update(
-                "UPDATE permaformula_image_cache SET size_bytes = size_bytes WHERE 0 = 1");
+            jdbc.getJdbcOperations()
+                .update(
+                    "UPDATE permaformula_image_cache SET size_bytes = size_bytes WHERE 0 = 1");
         } else {
-            jdbc.getJdbcOperations().execute("SELECT pg_advisory_xact_lock(734829105)");
+            jdbc.getJdbcOperations()
+                .execute("SELECT pg_advisory_xact_lock(734829105)");
         }
     }
 
     private boolean fits(String key, long bytes, boolean description) {
-        return Boolean.TRUE.equals(jdbc.query("""
+        return Boolean.TRUE.equals(jdbc.query(
+            """
             SELECT
                 coalesce(sum(size_bytes), 0),
                 count(*),
@@ -636,25 +695,29 @@ public final class JdbcImageCache implements AutoCloseable {
                     ELSE 0
                 END), 0)
             FROM permaformula_image_cache
-            """, Map.of("key", key), rows -> {
-            rows.next();
-            long total = rows.getLong(1), count = rows.getLong(2), previous = rows.getLong(3);
-            if (description
-                && rows.getInt(4) == 1) {
-                return true;
-            }
-            long resultingCount = count + (!description
-                && previous == 0 ? 1 : 0);
-            long resultingBytes = total + bytes - (description ? 0 : previous);
-            // Small test/development budgets still work; reserve at most 10%.
-            long overhead = Math.min(maximumBytes / 10, resultingCount * ROW_OVERHEAD);
-            boolean fits = resultingCount <= maximumEntries
-                && resultingBytes <= maximumBytes - overhead;
-            if (!fits) {
-                pressure();
-            }
-            return fits;
-        }));
+            """
+            , Map.of("key", key),
+            rows -> {
+                rows.next();
+                long total = rows.getLong(1),
+                    count = rows.getLong(2),
+                    previous = rows.getLong(3);
+                if (description
+                    && rows.getInt(4) == 1) {
+                    return true;
+                }
+                long resultingCount = count + (!description
+                    && previous == 0 ? 1 : 0);
+                long resultingBytes = total + bytes - (description ? 0 : previous);
+                // Small test/development budgets still work; reserve at most 10%.
+                long overhead = Math.min(maximumBytes / 10, resultingCount * ROW_OVERHEAD);
+                boolean fits = resultingCount <= maximumEntries
+                    && resultingBytes <= maximumBytes - overhead;
+                if (!fits) {
+                    pressure();
+                }
+                return fits;
+            }));
     }
 
     private void pressure() {
@@ -700,7 +763,8 @@ public final class JdbcImageCache implements AutoCloseable {
         if (time >= next
             && nextWarning.compareAndSet(next, time + TimeUnit.MINUTES.toNanos(1))) {
             log.warn("event=persistent_cache_unavailable operation={} errorType={}", operation,
-                failure.getClass().getSimpleName());
+                failure.getClass()
+                    .getSimpleName());
         }
     }
 
@@ -711,7 +775,8 @@ public final class JdbcImageCache implements AutoCloseable {
             try {
                 maintenance.awaitTermination(5, TimeUnit.SECONDS);
             } catch (InterruptedException failure) {
-                Thread.currentThread().interrupt();
+                Thread.currentThread()
+                    .interrupt();
                 throw new IOException("Interrupted while stopping cache maintenance", failure);
             } finally {
                 flushTouches();
@@ -726,7 +791,8 @@ public final class JdbcImageCache implements AutoCloseable {
         try {
             owner.close();
         } catch (InterruptedException failure) {
-            Thread.currentThread().interrupt();
+            Thread.currentThread()
+                .interrupt();
             throw new IOException("Interrupted while closing cache owner", failure);
         } catch (Exception failure) {
             throw new IOException("Failed to close cache owner", failure);

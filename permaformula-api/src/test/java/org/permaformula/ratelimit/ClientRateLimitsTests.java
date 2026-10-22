@@ -1,6 +1,10 @@
 package org.permaformula.ratelimit;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -38,7 +42,8 @@ class ClientRateLimitsTests {
 
     @Test
     void ignoresForgedHeadersFromUntrustedPeersAndCanonicalizesAddresses() {
-        var limits = limits(10, Duration.ofMinutes(1), List.of("172.30.86.2"));
+        var limits = limits(10, Duration.ofMinutes(1),
+            List.of("172.30.86.2"));
         var direct = request("203.0.113.1");
         direct.addHeader("X-Forwarded-For", "198.51.100.1");
         direct.addHeader("Forwarded", "for=198.51.100.2");
@@ -52,7 +57,8 @@ class ClientRateLimitsTests {
 
     @Test
     void rejectsMissingAmbiguousOrNonLiteralTrustedProxyHeadersWithoutDns() {
-        var limits = limits(10, Duration.ofMinutes(1), List.of("172.30.86.2"));
+        var limits = limits(10, Duration.ofMinutes(1),
+            List.of("172.30.86.2"));
         assertAll(List
             .of("example.com", "127.0.0.1, 203.0.113.1", "203.0.113.1:80", "[::1]", " 203.0.113.1")
             .stream()
@@ -61,7 +67,8 @@ class ClientRateLimitsTests {
                 proxy.addHeader("X-Forwarded-For", value);
                 assertEquals(400,
                     assertThrows(ResponseStatusException.class, () -> limits.open(proxy))
-                        .getStatusCode().value());
+                        .getStatusCode()
+                        .value());
             }));
         assertThrows(ResponseStatusException.class, () -> limits.open(request("172.30.86.2")));
         var duplicate = request("172.30.86.2");
@@ -72,17 +79,20 @@ class ClientRateLimitsTests {
 
     @Test
     void isolatesClientsAndRefillsUsingMonotonicTime() {
-        var limits = limits(10, Duration.ofMinutes(1), List.of());
+        var limits = limits(10, Duration.ofMinutes(1),
+            List.of());
         var first = request("203.0.113.1");
         try (var _ = limits.open(first)) {
         }
         try (var _ = limits.open(first)) {
         }
         var denied = assertThrows(ClientRateLimits.Limited.class, () -> limits.open(first));
-        assertEquals("1", denied.getHeaders().getFirst("Retry-After"));
+        assertEquals("1", denied.getHeaders()
+            .getFirst("Retry-After"));
         try (var _ = limits.open(request("203.0.113.2"))) {
         }
-        now.addAndGet(Duration.ofSeconds(1).toNanos());
+        now.addAndGet(Duration.ofSeconds(1)
+            .toNanos());
         try (var _ = limits.open(first)) {
         }
         assertThrows(ClientRateLimits.Limited.class, () -> limits.open(first));
@@ -90,7 +100,8 @@ class ClientRateLimitsTests {
 
     @Test
     void rejectsNewIdentitiesAtCapacityWithoutResettingExistingAllowances() {
-        var limits = limits(1, Duration.ofSeconds(2), List.of());
+        var limits = limits(1, Duration.ofSeconds(2),
+            List.of());
         var first = request("203.0.113.1");
         try (var _ = limits.open(first)) {
         }
@@ -98,26 +109,31 @@ class ClientRateLimitsTests {
         try (var _ = limits.open(first)) {
         }
         assertThrows(ClientRateLimits.Limited.class, () -> limits.open(first));
-        now.addAndGet(Duration.ofSeconds(3).toNanos());
+        now.addAndGet(Duration.ofSeconds(3)
+            .toNanos());
         try (var _ = limits.open(request("203.0.113.2"))) {
         }
     }
 
     @Test
     void pinsActiveRequestsBeyondIdleExpiry() {
-        var limits = limits(1, Duration.ofSeconds(2), List.of());
+        var limits = limits(1, Duration.ofSeconds(2),
+            List.of());
         try (var _ = limits.open(request("203.0.113.1"))) {
-            now.addAndGet(Duration.ofSeconds(3).toNanos());
+            now.addAndGet(Duration.ofSeconds(3)
+                .toNanos());
             assertThrows(ClientRateLimits.Limited.class, () -> limits.open(request("203.0.113.2")));
         }
-        now.addAndGet(Duration.ofSeconds(3).toNanos());
+        now.addAndGet(Duration.ofSeconds(3)
+            .toNanos());
         try (var _ = limits.open(request("203.0.113.2"))) {
         }
     }
 
     @Test
     void retainsWorkerConcurrencyAfterRequestClosesAndReleasesOnActualExit() throws Exception {
-        var limits = limits(2, Duration.ofSeconds(2), List.of());
+        var limits = limits(2, Duration.ofSeconds(2),
+            List.of());
         var entered = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         try (var executor = Executors.newSingleThreadExecutor()) {
@@ -136,55 +152,69 @@ class ClientRateLimitsTests {
                 assertTrue(entered.await(2, TimeUnit.SECONDS));
             }
             try {
-                now.addAndGet(Duration.ofSeconds(3).toNanos());
+                now.addAndGet(Duration.ofSeconds(3)
+                    .toNanos());
                 try (var _ = limits.open(request("203.0.113.1"))) {
                     var second = ClientRateLimits.generation(() -> "second");
                     assertEquals(429, assertThrows(ClientRateLimits.Limited.class, second::run)
-                        .getStatusCode().value());
+                        .getStatusCode()
+                        .value());
                 }
                 try (var _ = limits.open(request("203.0.113.2"))) {
-                    assertEquals("other", ClientRateLimits.generation(() -> "other").run());
+                    assertEquals("other", ClientRateLimits.generation(() -> "other")
+                        .run());
                 }
             } finally {
                 release.countDown();
             }
             assertEquals("done", active.get(2, TimeUnit.SECONDS));
-            now.addAndGet(Duration.ofSeconds(1).toNanos());
+            now.addAndGet(Duration.ofSeconds(1)
+                .toNanos());
             try (var _ = limits.open(request("203.0.113.1"))) {
-                assertEquals("recovered", ClientRateLimits.generation(() -> "recovered").run());
+                assertEquals("recovered", ClientRateLimits.generation(() -> "recovered")
+                    .run());
             }
         }
     }
 
     @Test
     void failedGenerationsSpendTokensAndReleaseConcurrency() throws Exception {
-        var limits = limits(10, Duration.ofMinutes(1), List.of());
+        var limits = limits(10, Duration.ofMinutes(1),
+            List.of());
         try (var _ = limits.open(request("203.0.113.1"))) {
             assertThrows(IOException.class, () -> ClientRateLimits.generation(() -> {
                 throw new IOException("failed");
-            }).run());
-            assertEquals("ok", ClientRateLimits.generation(() -> "ok").run());
+            })
+                .run());
+            assertEquals("ok", ClientRateLimits.generation(() -> "ok")
+                .run());
             assertThrows(ClientRateLimits.Limited.class,
                 () -> ClientRateLimits.generation(() -> "denied"));
         }
-        assertEquals("internal", ClientRateLimits.generation(() -> "internal").run());
+        assertEquals("internal", ClientRateLimits.generation(() -> "internal")
+            .run());
     }
 
     @Test
     void rejectsExpiryThatWouldGrantFreshTokensBeforeFullRefillAndHostnames() {
         assertThrows(IllegalArgumentException.class,
-            () -> limits(10, Duration.ofSeconds(1), List.of()));
+            () -> limits(10, Duration.ofSeconds(1),
+                List.of()));
         assertThrows(IllegalArgumentException.class,
-            () -> limits(10, Duration.ofMinutes(1), List.of("ingress")));
+            () -> limits(10, Duration.ofMinutes(1),
+                List.of("ingress")));
     }
 
     @Test
     void sharedInFlightCacheLoadDoesNotSpendAnotherClientsGenerationTokens() throws Exception {
         var limits = new ClientRateLimits(new ClientRateLimitProperties(60, 10, 32, 1, 1, 1,
-            10, Duration.ofMinutes(1), List.of()), now::get);
+            10, Duration.ofMinutes(1),
+            List.of()),
+            now::get);
         var store = new CaffeineImageStore(
             new ImageCacheProperties(
-                DataSize.ofMegabytes(1), Duration.ofHours(1)));
+                DataSize.ofMegabytes(1),
+                Duration.ofHours(1)));
         var work = new ApiWorkService(ApiWorkProperties.defaults());
         var entered = new CountDownLatch(1);
         var waiting = new CountDownLatch(1);
@@ -231,7 +261,9 @@ class ClientRateLimitsTests {
     @Test
     void boundsConcurrentRequestsIncludingSharedImageWaitersAndReleasesOnClose() {
         var limits = new ClientRateLimits(new ClientRateLimitProperties(60, 10, 1, 60, 2, 1,
-            10, Duration.ofMinutes(1), List.of()), now::get);
+            10, Duration.ofMinutes(1),
+            List.of()),
+            now::get);
         try (var _ = limits.open(request("203.0.113.1"))) {
             assertThrows(ClientRateLimits.Limited.class, () -> limits.open(request("203.0.113.1")));
             try (var _ = limits.open(request("203.0.113.2"))) {

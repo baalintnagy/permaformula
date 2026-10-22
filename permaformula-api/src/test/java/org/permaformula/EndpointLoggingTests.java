@@ -34,13 +34,21 @@ class EndpointLoggingTests {
     void aspectLogsSuccessAndValidationFailureWithoutPayloads(CapturedOutput output)
         throws Exception {
         String formula = "unique-formula-content-for-logging-test";
-        mvc.perform(get("/ubcq").param("formula", formula)).andExpect(status().isOk());
-        mvc.perform(get("/ubcq").param("formula", " ")).andExpect(status().isBadRequest());
-        assertThat(output.getOut()).contains("event=endpoint_started method=GET path=/ubcq",
-            "event=endpoint_completed method=GET path=/ubcq", "status=200 durationMs=",
-            "event=endpoint_failed method=GET path=/ubcq",
-            "errorType=ConstraintViolationException");
-        assertThat(output.getOut()).doesNotContain(formula);
+        mvc.perform(get("/ubcq")
+            .param("formula", formula))
+            .andExpect(status()
+                .isOk());
+        mvc.perform(get("/ubcq")
+            .param("formula", " "))
+            .andExpect(status()
+                .isBadRequest());
+        assertThat(output.getOut())
+            .contains("event=endpoint_started method=GET path=/ubcq",
+                "event=endpoint_completed method=GET path=/ubcq", "status=200 durationMs=",
+                "event=endpoint_failed method=GET path=/ubcq",
+                "errorType=ConstraintViolationException");
+        assertThat(output.getOut())
+            .doesNotContain(formula);
     }
 
     @Test
@@ -49,14 +57,21 @@ class EndpointLoggingTests {
         String password = "private-login-value-".repeat(8);
         mvc.perform(post("/admin/login")
             .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-            .content("""
+            .content(
+                """
                 {"username":"admin","password":"%s"}
-                """.formatted(password)))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.violations[0].property").value("password"))
-            .andExpect(jsonPath("$.violations[0].code").value("Size"))
-            .andExpect(jsonPath("$.violations[0].invalidValue").doesNotExist());
-        assertThat(output.getAll()).doesNotContain(password);
+                """
+                    .formatted(password)))
+            .andExpect(status()
+                .isBadRequest())
+            .andExpect(jsonPath("$.violations[0].property")
+                .value("password"))
+            .andExpect(jsonPath("$.violations[0].code")
+                .value("Size"))
+            .andExpect(jsonPath("$.violations[0].invalidValue")
+                .doesNotExist());
+        assertThat(output.getAll())
+            .doesNotContain(password);
     }
 
     @Test
@@ -73,11 +88,14 @@ class EndpointLoggingTests {
             () -> cache.getOrGenerate("logging-test-failure", () -> {
                 throw failure;
             })));
-        assertThat(output.getOut()).contains("event=cache_miss key=" + key,
-            "event=cache_generated key=" + key, "event=cache_hit key=" + key,
-            "event=cache_generation_failed key=logging-test-failure errorType=IOException");
-        assertThat(output.getAll()).doesNotContain("private-image-content",
-            "private-generation-failure-content",
-            "private-generation-cause-content");
+        assertThat(output.getOut())
+            .contains("event=cache_miss key=%s".formatted(key),
+                "event=cache_generated key=%s".formatted(key),
+                "event=cache_hit key=%s".formatted(key),
+                "event=cache_generation_failed key=logging-test-failure errorType=IOException");
+        assertThat(output.getAll())
+            .doesNotContain("private-image-content",
+                "private-generation-failure-content",
+                "private-generation-cause-content");
     }
 }

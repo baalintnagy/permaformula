@@ -20,19 +20,23 @@ class ImageDescriptorTests {
     @Test
     void previouslySerializedPermalinkContentStillDecodes() throws Exception {
         // This is the JSON shape emitted before the record conversion.
-        String json = """
+        String json =
+            """
             {"forumla":"x + y = 50%","imageWidth":640,
              "styleRefs":["https://example.com/a.css"],"style":"width: 50%;"}
             """;
         StringCompressionService compression = TestServices
             .validated(new StringCompressionService());
-        UrlService service = TestServices.validated(new UrlService(JsonMapper.builder().build(),
+        UrlService service = TestServices.validated(new UrlService(JsonMapper.builder()
+            .build(),
             new StringCompressionService(), new ApiWorkService(ApiWorkProperties.defaults())));
         ReflectionTestUtils.setField(service, "stringCompressionService", compression);
-        ReflectionTestUtils.setField(service, "objectMapper", JsonMapper.builder().build());
+        ReflectionTestUtils.setField(service, "objectMapper", JsonMapper.builder()
+            .build());
 
         assertEquals(new ImageDescriptor("x + y = 50%", 640,
-            List.of("https://example.com/a.css"), "width: 50%;"),
+            List.of("https://example.com/a.css"),
+            "width: 50%;"),
             service.decodeUbcq(compression.compress(json)));
     }
 
@@ -42,9 +46,11 @@ class ImageDescriptorTests {
         ImageDescriptor descriptor = new ImageDescriptor("x", null, refs, null);
         refs.clear();
 
-        assertEquals(List.of("https://example.com/a.css"), descriptor.styleRefs());
+        assertEquals(List.of("https://example.com/a.css"),
+            descriptor.styleRefs());
         assertThrows(UnsupportedOperationException.class,
-            () -> descriptor.styleRefs().add("https://example.com/b.css"));
+            () -> descriptor.styleRefs()
+                .add("https://example.com/b.css"));
     }
 
     @Test

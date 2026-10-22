@@ -1,7 +1,11 @@
 package org.permaformula.rendering;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.permaformula.contract.ComplexityPolicy.Limit.*;
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.permaformula.contract.ComplexityPolicy.Limit.HTML_ELEMENTS;
+import static org.permaformula.contract.ComplexityPolicy.Limit.RENDER_DIMENSION;
 
 import java.util.List;
 import java.util.Map;
@@ -23,17 +27,25 @@ class ComplexityPolicyTests {
         assertEquals(12000, policy.get(RENDER_DIMENSION));
         assertEquals(15000, policy.get(HTML_ELEMENTS));
         assertEquals(12000,
-            JsonMapper.builder().build().readTree(policy.json()).get("RENDER_DIMENSION").asInt());
+            JsonMapper.builder()
+                .build()
+                .readTree(policy.json())
+                .get("RENDER_DIMENSION")
+                .asInt());
         var child = ComplexityPolicy.load(new Properties(), policy.workerEnvironment());
-        assertEquals(policy.json(), child.json());
-        assertEquals(policy.fingerprint(), child.fingerprint());
-        assertNotEquals(ComplexityPolicy.load(new Properties(), Map.of()).fingerprint(),
+        assertEquals(policy.json(),
+            child.json());
+        assertEquals(policy.fingerprint(),
+            child.fingerprint());
+        assertNotEquals(ComplexityPolicy.load(new Properties(), Map.of())
+            .fingerprint(),
             child.fingerprint());
     }
 
     @Test
     void rejectsInvalidAndTransportExceedingConfiguration() {
-        assertAll(List.of("0", "-1", "NaN", "2147483648").stream()
+        assertAll(List.of("0", "-1", "NaN", "2147483648")
+            .stream()
             .<Executable>map(value -> () -> {
                 assertThrows(IllegalArgumentException.class,
                     () -> ComplexityPolicy.load(new Properties(),

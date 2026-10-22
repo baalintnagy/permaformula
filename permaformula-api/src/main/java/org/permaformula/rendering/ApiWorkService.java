@@ -15,7 +15,8 @@ public final class ApiWorkService {
             properties.timeout());
         generation = new BoundedWork("generation", properties.generationConcurrency(),
             properties.timeout());
-        fetch = new BoundedWork("fetch", properties.fetchConcurrency(), properties.timeout());
+        fetch = new BoundedWork("fetch", properties.fetchConcurrency(),
+            properties.timeout());
     }
 
     public <T> T prepare(Operation<T> work) throws IOException {

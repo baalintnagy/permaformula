@@ -1,9 +1,10 @@
 package org.permaformula;
 
+import static org.permaformula.validation.QuickValidator.validate;
+
 import java.net.URI;
 
 import jakarta.validation.constraints.NotBlank;
-import org.permaformula.validation.QuickValidator;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.ConstructorBinding;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -37,9 +38,9 @@ public record PermaFormulaProperties(
             uri = URI.create(value);
         } catch (IllegalArgumentException | NullPointerException _) {
             throw new IllegalArgumentException(
-                "permaformula." + property + " must be an HTTP(S) origin");
+                "permaformula.%s must be an HTTP(S) origin".formatted(property));
         }
-        QuickValidator.validate(
+        validate(
             !(!("http".equalsIgnoreCase(uri.getScheme())
                 || "https".equalsIgnoreCase(uri.getScheme()))
                 || uri.getHost() == null
@@ -48,22 +49,28 @@ public record PermaFormulaProperties(
                 || uri.getPort() > 65535
                 || uri.getRawQuery() != null
                 || uri.getRawFragment() != null
-                || !(uri.getRawPath().isEmpty()
+                || !(uri.getRawPath()
+                    .isEmpty()
                     || "/".equals(uri.getRawPath()))),
             () -> new IllegalArgumentException(
                 """
-                    permaformula.%s must be an HTTP(S) origin without credentials, path, query or fragment\
-                    """
+                permaformula.%s must be an HTTP(S) origin without credentials, path, query or \
+                fragment\
+                """
                     .formatted(property)));
         String result = uri.toASCIIString();
-        return result.endsWith("/") ? result.substring(0, result.length() - 1) : result;
+        return result.endsWith("/")
+            ? result.substring(0, result.length() - 1)
+            : result;
     }
 
     public boolean sameImageOrigin() {
         URI left = URI.create(host);
         URI right = URI.create(imageHost);
-        return left.getScheme().equalsIgnoreCase(right.getScheme())
-            && left.getHost().equalsIgnoreCase(right.getHost())
+        return left.getScheme()
+            .equalsIgnoreCase(right.getScheme())
+            && left.getHost()
+                .equalsIgnoreCase(right.getHost())
             && port(left) == port(right);
     }
 

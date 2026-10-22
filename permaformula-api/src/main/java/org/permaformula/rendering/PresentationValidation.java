@@ -6,7 +6,8 @@ import org.permaformula.url.ImageDescriptor;
 public final class PresentationValidation {
     public static void validate(ImageDescriptor descriptor) {
         if (descriptor.styleRefs() != null) {
-            descriptor.styleRefs().forEach(StylesheetFetcher::destination);
+            descriptor.styleRefs()
+                .forEach(StylesheetFetcher::destination);
         }
         RenderContentPolicy.validateHtml(descriptor.forumla());
         StylesheetPolicy.stylesheet(descriptor.style());

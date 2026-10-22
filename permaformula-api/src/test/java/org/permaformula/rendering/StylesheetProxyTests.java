@@ -1,6 +1,12 @@
 package org.permaformula.rendering;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeout;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -28,16 +34,20 @@ class StylesheetProxyTests {
 
     @Test
     void bindsRequiredProxyAndFailsStartupWithoutIt() {
-        var runner = new ApplicationContextRunner().withUserConfiguration(Settings.class);
+        var runner = new ApplicationContextRunner()
+            .withUserConfiguration(Settings.class);
         runner.withPropertyValues("permaformula.stylesheet-fetch.proxy-required=true")
             .run(context -> assertNotNull(context.getStartupFailure()));
         runner.withPropertyValues("permaformula.stylesheet-fetch.proxy-required=true",
-            "permaformula.stylesheet-fetch.proxy=http://stylesheet-egress:3128").run(context -> {
+            "permaformula.stylesheet-fetch.proxy=http://stylesheet-egress:3128")
+            .run(context -> {
                 assertNull(context.getStartupFailure());
-                assertTrue(context.getBean(StylesheetFetchProperties.class).proxyRequired());
+                assertTrue(context.getBean(StylesheetFetchProperties.class)
+                    .proxyRequired());
             });
         assertAll(List.of("https://proxy:3128", "http://user:pass@proxy:3128",
-            "http://proxy", "http://proxy:3128/path", "http://proxy:3128?x=1").stream()
+            "http://proxy", "http://proxy:3128/path", "http://proxy:3128?x=1")
+            .stream()
             .<Executable>map(value -> () -> {
                 assertThrows(IllegalArgumentException.class,
                     () -> new StylesheetFetchProperties(true, URI.create(value)));
@@ -53,21 +63,28 @@ class StylesheetProxyTests {
                 try (var socket = listener.accept()) {
                     socket.setSoTimeout(5000);
                     var reader = new BufferedReader(
-                        new InputStreamReader(socket.getInputStream(), StandardCharsets.US_ASCII));
+                        new InputStreamReader(socket.getInputStream(),
+                            StandardCharsets.US_ASCII));
                     String request = reader.readLine();
-                    while (!reader.readLine().isEmpty()) {
+                    while (!reader.readLine()
+                        .isEmpty()) {
                     }
-                    socket.getOutputStream().write(
-                        "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-                            .getBytes(StandardCharsets.US_ASCII));
+                    socket.getOutputStream()
+                        .write(
+                            """
+                            HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\
+                            Connection: close\r\n\r\n\
+                            """
+                                .getBytes(StandardCharsets.US_ASCII));
                     return request;
                 }
             });
             var properties = new StylesheetFetchProperties(true,
-                URI.create("http://localhost:" + listener.getLocalPort()));
-            assertTimeout(Duration.ofSeconds(7), () -> assertThrows(Exception.class,
-                () -> new StylesheetFetcher(properties)
-                    .fetch("https://stylesheet.invalid/test.css")));
+                URI.create("http://localhost:%s".formatted(listener.getLocalPort())));
+            assertTimeout(Duration.ofSeconds(7),
+                () -> assertThrows(Exception.class,
+                    () -> new StylesheetFetcher(properties)
+                        .fetch("https://stylesheet.invalid/test.css")));
             assertEquals("CONNECT stylesheet.invalid:443 HTTP/1.1",
                 connection.get(5, TimeUnit.SECONDS));
         }
@@ -80,8 +97,9 @@ class StylesheetProxyTests {
             port = listener.getLocalPort();
         }
         var properties = new StylesheetFetchProperties(true,
-            URI.create("http://localhost:" + port));
+            URI.create("http://localhost:%s".formatted(port)));
         assertThrows(IOException.class,
-            () -> new StylesheetFetcher(properties).fetch("https://8.8.8.8/test.css"));
+            () -> new StylesheetFetcher(properties)
+                .fetch("https://8.8.8.8/test.css"));
     }
 }

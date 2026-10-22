@@ -1,5 +1,7 @@
 package org.permaformula.validation;
 
+import static org.permaformula.validation.QuickValidator.validate;
+
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 import org.apache.commons.lang3.StringUtils;
@@ -21,10 +23,10 @@ public class EncodedValidator implements ConstraintValidator<ValidEncoded, Strin
     @Override
     public boolean isValid(String value, ConstraintValidatorContext context) {
         return ConstraintChecks.check(work, context, () -> {
-            QuickValidator.validate(StringUtils.isNotBlank(value),
-                () -> QuickValidator.violation("Missing encoded payload"));
-            QuickValidator.validate(value.length() <= InputLimits.MAX_ENCODED_CHARS,
-                () -> QuickValidator.violation("Encoded payload is too large"));
+            validate(StringUtils.isNotBlank(value),
+                "Missing encoded payload");
+            validate(value.length() <= InputLimits.MAX_ENCODED_CHARS,
+                "Encoded payload is too large");
         });
     }
 }

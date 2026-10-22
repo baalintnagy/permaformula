@@ -1,6 +1,15 @@
 package org.permaformula.rendering;
 
-import static org.permaformula.contract.ComplexityPolicy.Limit.*;
+import static org.permaformula.contract.ComplexityPolicy.Limit.ATTRIBUTES;
+import static org.permaformula.contract.ComplexityPolicy.Limit.EM_PIXELS;
+import static org.permaformula.contract.ComplexityPolicy.Limit.EX_PIXELS;
+import static org.permaformula.contract.ComplexityPolicy.Limit.INLINE_STYLE_CHARS;
+import static org.permaformula.contract.ComplexityPolicy.Limit.NAMESPACE_DECLARATIONS;
+import static org.permaformula.contract.ComplexityPolicy.Limit.RENDER_AREA;
+import static org.permaformula.contract.ComplexityPolicy.Limit.RENDER_DEPTH;
+import static org.permaformula.contract.ComplexityPolicy.Limit.RENDER_DIMENSION;
+import static org.permaformula.contract.ComplexityPolicy.Limit.RENDER_NODES;
+import static org.permaformula.contract.ComplexityPolicy.Limit.SVG_BYTES;
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -9,10 +18,16 @@ import java.net.URI;
 import java.util.ArrayDeque;
 import java.util.Set;
 import javax.xml.XMLConstants;
-import javax.xml.stream.*;
+import javax.xml.stream.XMLInputFactory;
+import javax.xml.stream.XMLOutputFactory;
+import javax.xml.stream.XMLStreamConstants;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamReader;
+import javax.xml.stream.XMLStreamWriter;
 
 import jakarta.validation.ConstraintViolationException;
 import org.apache.commons.lang3.StringUtils;
+import org.owasp.html.AttributePolicy;
 import org.owasp.html.FilterUrlByProtocolAttributePolicy;
 import org.permaformula.contract.ComplexityPolicy;
 import org.permaformula.validation.ValidationText;
@@ -20,7 +35,8 @@ import org.permaformula.validation.ValidationText;
 /** API-side output boundary. XML and CSS are parsed by StAX and ph-css, URLs by OWASP. */
 public final class SvgOutputPolicy {
     static final String VERSION = "svg-output-policy-3";
-    public static final String CSP = """
+    public static final String CSP =
+        """
         sandbox; default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'none'; \
         font-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; \
         form-action 'none'\
@@ -33,31 +49,36 @@ public final class SvgOutputPolicy {
         XMLConstants.XML_NS_URI);
     private static final Set<String> SVG_ELEMENTS = Set.of("svg", "g", "defs", "path", "use",
         "rect", "line",
-        "circle", "ellipse", "polygon", "polyline", "text", "tspan", "title", "desc", "clipPath",
+        "circle", "ellipse", "polygon", "polyline", "text", "tspan", "title", "desc",
+        "clipPath",
         "a",
         "foreignObject");
     private static final Set<String> HTML_ELEMENTS = Set.of("body", "div", "span", "p", "br", "hr",
         "h1", "h2",
         "h3", "h4", "h5", "h6", "b", "strong", "i", "em", "u", "s", "sub", "sup", "pre", "code",
-        "blockquote", "ul", "ol", "li", "table", "thead", "tbody", "tfoot", "tr", "th", "td", "a",
+        "blockquote", "ul", "ol", "li", "table", "thead", "tbody", "tfoot", "tr", "th", "td",
+        "a",
         "mjx-container", "mjx-assistive-mml");
     private static final Set<String> MATH_ELEMENTS = Set.of("math", "mrow", "mi", "mn", "mo",
         "mtext", "mspace",
         "ms", "mfrac", "msqrt", "mroot", "mstyle", "merror", "mpadded", "mphantom", "mfenced",
         "menclose",
-        "msub", "msup", "msubsup", "munder", "mover", "munderover", "mmultiscripts", "mprescripts",
+        "msub", "msup", "msubsup", "munder", "mover", "munderover", "mmultiscripts",
+        "mprescripts",
         "none",
         "mtable", "mtr", "mlabeledtr", "mtd", "semantics", "annotation");
     private static final Set<String> COMMON_ATTRIBUTES = Set.of("id", "class", "title", "style",
         "role", "dir");
     private static final Set<String> SVG_ATTRIBUTES = Set.of("width", "height", "viewBox",
         "preserveAspectRatio",
-        "version", "focusable", "d", "x", "y", "x1", "x2", "y1", "y2", "cx", "cy", "r", "rx", "ry",
+        "version", "focusable", "d", "x", "y", "x1", "x2", "y1", "y2", "cx", "cy", "r", "rx",
+        "ry",
         "dx", "dy", "points", "transform", "fill", "fill-rule", "fill-opacity", "stroke",
         "stroke-width",
         "stroke-opacity", "stroke-linecap", "stroke-linejoin", "stroke-miterlimit",
         "stroke-dasharray",
-        "stroke-dashoffset", "clip-path", "clip-rule", "clipPathUnits", "text-anchor", "font-size",
+        "stroke-dashoffset", "clip-path", "clip-rule", "clipPathUnits", "text-anchor",
+        "font-size",
         "font-family", "font-style", "font-weight", "color", "opacity", "display", "visibility",
         "pointer-events");
     private static final Set<String> HTML_ATTRIBUTES = Set.of("colspan", "rowspan", "jax",
@@ -69,16 +90,18 @@ public final class SvgOutputPolicy {
         "stretchy",
         "symmetric", "fence", "separator", "form", "lspace", "rspace", "minsize", "maxsize",
         "largeop",
-        "movablelimits", "accent", "accentunder", "align", "rowalign", "columnalign", "rowspacing",
+        "movablelimits", "accent", "accentunder", "align", "rowalign", "columnalign",
+        "rowspacing",
         "columnspacing", "columnwidth", "rowlines", "columnlines", "frame", "framespacing",
         "equalrows",
-        "equalcolumns", "side", "minlabelspacing", "linethickness", "bevelled", "width", "height",
+        "equalcolumns", "side", "minlabelspacing", "linethickness", "bevelled", "width",
+        "height",
         "depth",
         "voffset", "notation", "open", "close", "separators", "encoding");
     private static final Set<String> PAINT_ATTRIBUTES = Set.of("fill", "stroke", "clip-path",
         "color",
         "mathcolor", "mathbackground");
-    private static final FilterUrlByProtocolAttributePolicy HTTPS = new FilterUrlByProtocolAttributePolicy(
+    private static final AttributePolicy HTTPS = new FilterUrlByProtocolAttributePolicy(
         Set.of("https"));
     private static final ComplexityPolicy LIMITS = ComplexityPolicy.CURRENT;
 
@@ -140,7 +163,8 @@ public final class SvgOutputPolicy {
         try {
             reader = factory.createXMLStreamReader(new StringReader(svg));
             StringWriter result = new StringWriter();
-            writer = XMLOutputFactory.newDefaultFactory().createXMLStreamWriter(result);
+            writer = XMLOutputFactory.newDefaultFactory()
+                .createXMLStreamWriter(result);
             ArrayDeque<String> stack = new ArrayDeque<String>();
             int count = 0;
             int foreignDepth = 0;
@@ -221,7 +245,8 @@ public final class SvgOutputPolicy {
                     // Comments and the XML declaration are omitted.
                 }
                 }
-                if (result.getBuffer().length() > LIMITS.get(SVG_BYTES)) {
+                if (result.getBuffer()
+                    .length() > LIMITS.get(SVG_BYTES)) {
                     throw rejected();
                 }
             }
@@ -264,7 +289,8 @@ public final class SvgOutputPolicy {
             attrNS = "";
         }
         if (XMLConstants.XML_NS_URI.equals(attrNS)) {
-            if (!Set.of("space", "lang").contains(name)) {
+            if (!Set.of("space", "lang")
+                .contains(name)) {
                 throw rejected();
             }
         } else if (XLINK.equals(attrNS)) {
@@ -295,7 +321,8 @@ public final class SvgOutputPolicy {
 
         if ("href".equals(name)) {
             value = link("a".equals(element)
-                || MATH.equals(ns), value);
+                || MATH.equals(ns),
+                value);
         } else if ("style".equals(name)) {
             if (value.length() > LIMITS.get(INLINE_STYLE_CHARS)) {
                 throw rejected();
@@ -308,11 +335,14 @@ public final class SvgOutputPolicy {
             case "mathbackground" -> "background-color";
             default -> name;
             };
-            String declaration = StylesheetPolicy.outputDeclarations(property + ":" + value);
+            String declaration = StylesheetPolicy.outputDeclarations("%s:%s".formatted(
+                property,
+                value));
             if (declaration.isEmpty()) {
                 throw rejected();
             }
-            value = declaration.substring(declaration.indexOf(':') + 1).replaceFirst(";$", "");
+            value = declaration.substring(declaration.indexOf(':') + 1)
+                .replaceFirst(";$", "");
         }
         if (attrNS.isEmpty()) {
             writer.writeAttribute(name, value);

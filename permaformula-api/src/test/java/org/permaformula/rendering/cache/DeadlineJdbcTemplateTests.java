@@ -1,8 +1,13 @@
 package org.permaformula.rendering.cache;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -20,18 +25,25 @@ class DeadlineJdbcTemplateTests {
         var connection = mock(Connection.class);
         var shortQuery = mock(PreparedStatement.class);
         var defaultQuery = mock(PreparedStatement.class);
-        when(source.getConnection()).thenReturn(connection);
-        when(connection.prepareStatement(anyString())).thenReturn(shortQuery, defaultQuery);
+        when(source.getConnection())
+            .thenReturn(connection);
+        when(connection.prepareStatement(anyString()))
+            .thenReturn(shortQuery, defaultQuery);
         var jdbc = new DeadlineJdbcTemplate(source);
         try (var _ = WorkDeadline.open(Duration.ofMillis(500))) {
             jdbc.update("DELETE FROM permaformula_image_cache WHERE cache_key = ?", "short");
         }
         jdbc.update("DELETE FROM permaformula_image_cache WHERE cache_key = ?", "default");
-        verify(shortQuery).setQueryTimeout(1);
-        verify(defaultQuery).setQueryTimeout(2);
-        verify(shortQuery).close();
-        verify(defaultQuery).close();
-        verify(connection, times(2)).close();
+        verify(shortQuery)
+            .setQueryTimeout(1);
+        verify(defaultQuery)
+            .setQueryTimeout(2);
+        verify(shortQuery)
+            .close();
+        verify(defaultQuery)
+            .close();
+        verify(connection, times(2))
+            .close();
     }
 
     @Test
@@ -40,20 +52,26 @@ class DeadlineJdbcTemplateTests {
         var source = mock(DataSource.class);
         var connection = mock(Connection.class);
         var query = mock(PreparedStatement.class);
-        when(source.getConnection()).thenAnswer(_ -> {
-            Thread.sleep(50);
-            return connection;
-        });
-        when(connection.prepareStatement(anyString())).thenReturn(query);
+        when(source.getConnection())
+            .thenAnswer(_ -> {
+                Thread.sleep(50);
+                return connection;
+            });
+        when(connection.prepareStatement(anyString()))
+            .thenReturn(query);
         var jdbc = new DeadlineJdbcTemplate(source);
         try (var _ = WorkDeadline.open(Duration.ofMillis(10))) {
             var failure = assertThrows(ResponseStatusException.class,
                 () -> jdbc.update("DELETE FROM permaformula_image_cache WHERE cache_key = ?",
                     "late"));
-            assertEquals(504, failure.getStatusCode().value());
+            assertEquals(504, failure.getStatusCode()
+                .value());
         }
-        verify(query, never()).executeUpdate();
-        verify(query).close();
-        verify(connection).close();
+        verify(query, never())
+            .executeUpdate();
+        verify(query)
+            .close();
+        verify(connection)
+            .close();
     }
 }

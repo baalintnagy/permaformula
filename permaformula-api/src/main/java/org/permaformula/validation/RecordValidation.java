@@ -1,5 +1,7 @@
 package org.permaformula.validation;
 
+import static org.permaformula.validation.QuickValidator.validate;
+
 import java.lang.reflect.Constructor;
 import java.lang.reflect.RecordComponent;
 import java.util.Arrays;
@@ -14,7 +16,7 @@ public final class RecordValidation {
     private static final ClassValue<Constructor<?>> CONSTRUCTORS = new ClassValue<>() {
         @Override
         protected Constructor<?> computeValue(Class<?> type) {
-            QuickValidator.validate(
+            validate(
                 type.isRecord(),
                 () -> new IllegalArgumentException("Constructor validation requires a record"));
             Class<?>[] parameters = Arrays.stream(type.getRecordComponents())
@@ -35,8 +37,9 @@ public final class RecordValidation {
         private static final Validator VALIDATOR = FACTORY.getValidator();
 
         static {
-            Runtime.getRuntime().addShutdownHook(
-                new Thread(FACTORY::close, "record-validation-shutdown"));
+            Runtime.getRuntime()
+                .addShutdownHook(
+                    new Thread(FACTORY::close, "record-validation-shutdown"));
         }
     }
 
@@ -47,7 +50,9 @@ public final class RecordValidation {
         String errors = Provider.VALIDATOR.forExecutables()
             .validateConstructorParameters(CONSTRUCTORS.get(recordType), arguments)
             .stream()
-            .map(violation -> violation.getPropertyPath() + ": " + violation.getMessage())
+            .map(violation -> "%s: %s".formatted(
+                violation.getPropertyPath(),
+                violation.getMessage()))
             .sorted()
             .collect(Collectors.joining("; "));
         if (!errors.isEmpty()) {

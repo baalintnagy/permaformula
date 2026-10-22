@@ -1,5 +1,8 @@
 package org.permaformula.url;
 
+import static org.permaformula.validation.QuickValidator.validate;
+import static org.permaformula.validation.QuickValidator.violation;
+
 import java.io.IOException;
 import java.util.List;
 
@@ -10,7 +13,6 @@ import org.jspecify.annotations.Nullable;
 import org.permaformula.compression.StringCompressionService;
 import org.permaformula.rendering.ApiWorkService;
 import org.permaformula.validation.InputLimits;
-import org.permaformula.validation.QuickValidator;
 import org.permaformula.validation.ValidCompose;
 import org.permaformula.validation.ValidDescriptor;
 import org.permaformula.validation.ValidEncoded;
@@ -30,14 +32,15 @@ import tools.jackson.databind.json.JsonMapper;
 public class UrlService {
 
     private static final ObjectMapper DESCRIPTOR_MAPPER = JsonMapper.builder(
-        JsonFactory.builder().streamReadConstraints(
-            StreamReadConstraints.builder()
-                .maxNestingDepth(8)
-                .maxTokenCount(128)
-                .maxNameLength(64)
-                .maxStringLength(InputLimits.MAX_CONTENT_BYTES)
-                .maxNumberLength(10)
-                .build())
+        JsonFactory.builder()
+            .streamReadConstraints(
+                StreamReadConstraints.builder()
+                    .maxNestingDepth(8)
+                    .maxTokenCount(128)
+                    .maxNameLength(64)
+                    .maxStringLength(InputLimits.MAX_CONTENT_BYTES)
+                    .maxNumberLength(10)
+                    .build())
             .build())
         .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
         .build();
@@ -80,15 +83,15 @@ public class UrlService {
         try {
             String json = stringCompressionService.decompress(ubcq);
             ImageDescriptor descriptor = DESCRIPTOR_MAPPER.readValue(json, ImageDescriptor.class);
-            QuickValidator.validate(
+            validate(
                 !(descriptor == null),
-                () -> QuickValidator.violation("Descriptor must not be null"));
+                "Descriptor must not be null");
             return descriptor;
         } catch (JacksonException _) {
             // Parser diagnostics may contain submitted content; do not expose/log them.
-            throw QuickValidator.violation("Invalid image descriptor");
+            throw violation("Invalid image descriptor");
         } catch (IOException _) {
-            throw QuickValidator.violation("Invalid compressed payload");
+            throw violation("Invalid compressed payload");
         }
     }
 

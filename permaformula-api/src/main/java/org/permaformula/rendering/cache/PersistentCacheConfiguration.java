@@ -27,9 +27,11 @@ public class PersistentCacheConfiguration {
         boolean sqlite = properties.backend() == PersistentCacheProperties.Backend.SQLITE;
         HikariConfig config = new HikariConfig();
         if (sqlite) {
-            Path path = properties.sqlitePath().toAbsolutePath().normalize();
+            Path path = properties.sqlitePath()
+                .toAbsolutePath()
+                .normalize();
             Files.createDirectories(path.getParent());
-            config.setJdbcUrl("jdbc:sqlite:" + path);
+            config.setJdbcUrl("jdbc:sqlite:%s".formatted(path));
             // SQLite has one writer; serialize DB work without busy retry storms.
             config.setMaximumPoolSize(1);
             config.addDataSourceProperty("busy_timeout", "1000");
@@ -53,9 +55,13 @@ public class PersistentCacheConfiguration {
         try {
             CacheSchema.migrate(source);
             return new JdbcImageCache(source, sqlite, cache.expireAfterAccess(),
-                properties.maximumSize().toBytes(),
-                properties.cleanupInterval(), source, new CacheDiskPressure(pressureFile,
-                    sqlite ? properties.sqlitePath().toAbsolutePath().getParent() : null),
+                properties.maximumSize()
+                    .toBytes(),
+                properties.cleanupInterval(),
+                source, new CacheDiskPressure(pressureFile,
+                    sqlite ? properties.sqlitePath()
+                        .toAbsolutePath()
+                        .getParent() : null),
                 properties.maximumEntries());
         } catch (SQLException | LiquibaseException | RuntimeException failure) {
             source.close();

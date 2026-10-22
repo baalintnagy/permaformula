@@ -1,5 +1,7 @@
 package org.permaformula.validation;
 
+import static org.permaformula.validation.QuickValidator.validate;
+
 import java.nio.charset.StandardCharsets;
 
 import com.google.common.base.Utf8;
@@ -11,11 +13,11 @@ public final class ValidationText {
 
     public static void text(String value, int maximumBytes, String name) {
         // Reject excessive character counts before measuring encoded bytes.
-        QuickValidator.validate(
+        validate(
             value == null
                 || value.length() <= maximumBytes
                     && utf8Length(value) <= maximumBytes,
-            () -> QuickValidator.violation(name + " exceeds " + maximumBytes + " UTF-8 bytes"));
+            "%s exceeds %s UTF-8 bytes".formatted(name, maximumBytes));
     }
 
     /** Count bytes without allocating an encoded array for well-formed UTF-16. */

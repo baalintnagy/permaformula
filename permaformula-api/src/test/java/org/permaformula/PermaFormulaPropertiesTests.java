@@ -18,19 +18,21 @@ class PermaFormulaPropertiesTests {
     @Test
     void omittedRenderingSettingsUseOriginalDefaults() {
         runner.run(context -> {
-            assertThat(context).hasNotFailed();
+            assertThat(context)
+                .hasNotFailed();
             assertThat(context.getBean(PermaFormulaProperties.class))
-                .isEqualTo(new PermaFormulaProperties("https://math.example.com", 500, 2000.0f));
+                .isEqualTo(
+                    new PermaFormulaProperties("https://math.example.com", 500, 2000.0f));
         });
     }
 
     @Test
     void renderingSettingsCanBeOverridden() {
-        runner
-            .withPropertyValues("permaformula.default-image-width=1200",
-                "permaformula.default-dpi=300")
+        runner.withPropertyValues("permaformula.default-image-width=1200",
+            "permaformula.default-dpi=300")
             .run(context -> {
-                assertThat(context).hasNotFailed();
+                assertThat(context)
+                    .hasNotFailed();
                 assertThat(context.getBean(PermaFormulaProperties.class))
                     .isEqualTo(
                         new PermaFormulaProperties("https://math.example.com", 1200, 300.0f));
@@ -41,10 +43,13 @@ class PermaFormulaPropertiesTests {
     void imageOriginIsIndependentAndTrailingSlashIsNormalized() {
         runner.withPropertyValues("permaformula.image-host=https://math-images.example.net/")
             .run(context -> {
-                assertThat(context).hasNotFailed();
+                assertThat(context)
+                    .hasNotFailed();
                 var properties = context.getBean(PermaFormulaProperties.class);
-                assertThat(properties.host()).isEqualTo("https://math.example.com");
-                assertThat(properties.imageHost()).isEqualTo("https://math-images.example.net");
+                assertThat(properties.host())
+                    .isEqualTo("https://math.example.com");
+                assertThat(properties.imageHost())
+                    .isEqualTo("https://math-images.example.net");
             });
     }
 
@@ -55,17 +60,22 @@ class PermaFormulaPropertiesTests {
             "http://images.example.net:0",
             "https://images.example.net:65536" })
     void rejectsInvalidImageOriginAtStartup(String origin) {
-        runner.withPropertyValues("permaformula.image-host=" + origin)
-            .run(context -> assertThat(context).hasFailed());
+        runner.withPropertyValues("permaformula.image-host=%s".formatted(origin))
+            .run(context -> assertThat(context)
+                .hasFailed());
     }
 
     @ParameterizedTest
     @ValueSource(strings = { "https://math.example.com", "https://MATH.example.com:443/" })
     void acceptsEquivalentImageOriginsForSingleHostDeployment(String origin) {
-        runner.withPropertyValues("permaformula.image-host=" + origin).run(context -> {
-            assertThat(context).hasNotFailed();
-            assertThat(context.getBean(PermaFormulaProperties.class).sameImageOrigin()).isTrue();
-        });
+        runner.withPropertyValues("permaformula.image-host=%s".formatted(origin))
+            .run(context -> {
+                assertThat(context)
+                    .hasNotFailed();
+                assertThat(context.getBean(PermaFormulaProperties.class)
+                    .sameImageOrigin())
+                    .isTrue();
+            });
     }
 
     @Configuration(proxyBeanMethods = false)
