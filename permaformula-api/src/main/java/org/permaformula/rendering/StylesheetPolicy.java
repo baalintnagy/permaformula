@@ -163,9 +163,13 @@ final class StylesheetPolicy {
 
     static String declarations(String source) {
         PreparationComplexity.css(source);
-        CSSDeclarationList declarations = notNull(CSSReaderDeclarationList.readFromString(source,
-            readerSettings(true)),
+        EmptyCssValues prepared = EmptyCssValues.prepare(source);
+        CSSDeclarationList declarations = notNull(
+            CSSReaderDeclarationList.readFromString(prepared.source(),
+                readerSettings(true)),
             "Invalid CSS declarations");
+        declarations.getAllDeclarations()
+            .forEach(prepared::restore);
         cleanDeclarations(declarations);
         return escapeBoundary(declarations.getAsCSSString(WRITER, 0));
     }
@@ -176,9 +180,17 @@ final class StylesheetPolicy {
 
     private static CascadingStyleSheet parse(String source, boolean strict) {
         PreparationComplexity.css(source);
-        CascadingStyleSheet sheet = CSSReader.readFromStringReader(source, readerSettings(strict));
+        EmptyCssValues prepared = EmptyCssValues.prepare(source);
+        CascadingStyleSheet sheet = CSSReader.readFromStringReader(prepared.source(),
+            readerSettings(strict));
         validate(
             !(sheet == null), "Invalid CSS stylesheet");
+        CSSVisitor.visitCSS(sheet, new DefaultCSSVisitor() {
+            @Override
+            public void onDeclaration(CSSDeclaration declaration) {
+                prepared.restore(declaration);
+            }
+        });
         return sheet;
     }
 

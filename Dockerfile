@@ -10,6 +10,8 @@ RUN npm run build
 FROM maven:3-eclipse-temurin-25@sha256:0396dcd8cd0d46a0d2026449b714b2a5bbe53cce030975b5a41f8ffa3f5f0525 AS build
 WORKDIR /build
 COPY pom.xml ./
+COPY eclipse/java-style.properties ./eclipse/java-style.properties
+COPY checkstyle ./checkstyle
 COPY render-contract ./render-contract
 COPY renderer-core ./renderer-core
 COPY renderer-service ./renderer-service

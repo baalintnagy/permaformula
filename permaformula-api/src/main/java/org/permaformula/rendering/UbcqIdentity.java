@@ -10,7 +10,7 @@ public final class UbcqIdentity {
     public static final String HTML =
         """
         html-svg-v13:input-validation-1:complexity-policy-2:mathjax-4.1.3:html-to-image-1.11.13:\
-        presentation-policy-4:%s\
+        presentation-policy-5:%s\
         """
         .formatted(
             SvgOutputPolicy.VERSION);

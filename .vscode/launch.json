@@ -12,8 +12,8 @@
             "vmArgs": "--enable-native-access=ALL-UNNAMED",
             "env": {
                 "PERMAFORMULA_RENDERING_PLAINTEXT": "true",
-                "PERMAFORMULA_HOST": "https://potentially-employee-exceptional-henry.trycloudflare.com",
-                "PERMAFORMULA_IMAGE_HOST": "https://potentially-employee-exceptional-henry.trycloudflare.com"
+                "PERMAFORMULA_HOST": "https://public-accomplish-door-mhz.trycloudflare.com",
+                "PERMAFORMULA_IMAGE_HOST": "https://public-accomplish-door-mhz.trycloudflare.com"
             }
         },
         {

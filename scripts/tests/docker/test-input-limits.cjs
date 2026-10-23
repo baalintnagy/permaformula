@@ -70,5 +70,5 @@ async function main(args) {
 cli(
     main,
     { 'base-url': 'http://localhost:5017' },
-    'test-input-limits.sh [--base-url URL] (disposable localhost single-host deployment with production API limits)',
+    'test-input-limits.sh [--base-url URL] (disposable localhost single-host deployment with docker/input-limits/smoke.override.yaml)',
 );

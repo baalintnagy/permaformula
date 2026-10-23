@@ -32,6 +32,12 @@ images and API responses.
 - API rendering rejects unsupported submitted HTML/inline CSS instead of silently removing content. Parsing,
   serialization, controlled import expansion and text-boundary escaping remain document
   preparation operations.
+- Accepted HTML comments remain in prepared documents. The optional library measurement
+  bounds preparation overhead relative to source size rather than expecting comments to disappear.
+- Transport limits are independent of application byte limits. The large-input smoke profile
+  explicitly pairs a 20 MiB Tomcat request-line/header budget with bounded connections,
+  threads and processor caching; application defaults retain Spring Boot's transport settings.
+  Raising a header limit alone allocates large buffers without bounding their concurrency.
 - Compiled-math and measured-layout checks remain in JavaScript because MathJax/Chrome already
   produce those structures. Recreating them in Java would duplicate parsing/typesetting/layout.
 
@@ -112,11 +118,15 @@ no implicit input validation.
 
 ## External stylesheet compatibility
 
-Downloaded CSS libraries use `StylesheetPolicy.externalStylesheet`, rather than the inline
-property allowlist. Bootstrap 4.4.1 is covered by a pinned fixture and Chromium render test.
+Downloaded CSS uses `StylesheetPolicy.externalStylesheet`, rather than the inline
+property allowlist. Compatibility is defined by CSS syntax and resource limits, not a
+framework allowlist. The pinned library fixture and live egress smoke check exercise examples.
+Empty custom properties are bridged through ph-css's lexer and restored as whitespace values
+after strict parsing, preserving `var()` fallback semantics without skipping malformed rules.
 The server validates fetch destinations, expands imports within the existing limits and
 escapes style-element boundaries. It retains vendor properties, data URLs and animation rules, while preserving selector-length,
 function-depth and grid-expansion limits.
 Chrome's CSP and network isolation continue to deny dependent resource requests, including
 remote fonts and images; accepting their declarations does not fetch those resources.
-Submitted inline CSS retains its stricter presentation policy. HTML cache identity is v12.
+Submitted inline CSS retains its stricter presentation policy. HTML cache identity is v13
+with presentation policy version 5.

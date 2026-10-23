@@ -40,6 +40,28 @@ import org.xml.sax.InputSource;
 @EnabledIfSystemProperty(named = "rendering.tests", matches = "true")
 class BrowserRenderingTests {
     @Test
+    void emptyCustomPropertiesPreserveBrowserFallbackSemantics() {
+        String source = ".x{--empty: ;padding:var(--empty,23px);color:rgb(220,53,69)}";
+        String css = StylesheetPolicy.externalStylesheet(source);
+        try (var playwright = Playwright.create(new Playwright.CreateOptions()
+            .setEnv(Map.of("PLAYWRIGHT_BROWSERS_PATH", Path.of("../.runtime/browsers")
+                .toAbsolutePath()
+                .toString(), "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1")));
+            var browser = playwright.chromium()
+                .launch(new BrowserType.LaunchOptions()
+                    .setExecutablePath(Path.of(playwright.chromium()
+                        .executablePath()))
+                    .setHeadless(true))) {
+            var page = browser.newPage();
+            page.setContent("<style>%s</style><p class='x'>empty variable</p>".formatted(css));
+            assertEquals("0px", page.locator(".x")
+                .evaluate("element => getComputedStyle(element).paddingTop"));
+            assertEquals("rgb(220, 53, 69)", page.locator(".x")
+                .evaluate("element => getComputedStyle(element).color"));
+        }
+    }
+
+    @Test
     void rendersSumOfCubesCardWithBootstrapExternalCss() throws Exception {
         String bootstrap;
         try (var input = getClass()

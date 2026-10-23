@@ -1,0 +1,10 @@
+# Disposable large-input fixture only. Bound Tomcat's full-size header buffers.
+services:
+  permaformula:
+    environment:
+      SERVER_MAX_HTTP_REQUEST_HEADER_SIZE: 20MB
+      SERVER_TOMCAT_THREADS_MAX: '8'
+      SERVER_TOMCAT_THREADS_MIN_SPARE: '2'
+      SERVER_TOMCAT_MAX_CONNECTIONS: '8'
+      SERVER_TOMCAT_ACCEPT_COUNT: '16'
+      SERVER_TOMCAT_PROCESSOR_CACHE: '2'

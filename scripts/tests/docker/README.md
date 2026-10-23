@@ -33,6 +33,19 @@ other smoke checks use normal quotas. The caller stops/removes the smoke Compose
 project. Egress uses public HTTPS CDN resources and a test-only DNS fixture; rate and
 queue tests send synthetic renders. Use `--help` for each command's options.
 
+The large-input fixture requires a single-host smoke project with explicit transport
+settings, including bounded Tomcat header-buffer concurrency:
+
+```bash
+docker compose -f compose.yaml -f docker/input-limits/smoke.override.yaml --env-file docker/egress/smoke.env -p permaformula-input-smoke up --build -d
+bash scripts/tests/docker/test-input-limits.sh
+docker compose -f compose.yaml -f docker/input-limits/smoke.override.yaml --env-file docker/egress/smoke.env -p permaformula-input-smoke down --volumes
+```
+
+Application byte limits do not override the HTTP server's independent request-line
+limit. Use the fixture's override rather than increasing header buffers without
+bounding connections and processors.
+
 Dependency-free HTTP/argument helper tests (no Docker):
 
 ```bash
