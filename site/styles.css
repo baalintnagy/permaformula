@@ -9,6 +9,8 @@
     --border: #b8bdc8;
     --accent: #1c385b;
     --accent-soft: #e9f0fa;
+    --hover-bg: #d7e3f2;
+    --hover-glow: rgb(73 111 159 / 25%);
     --spotlight: 73 111 159;
     --spotlight-strength: 14%;
     color-scheme: light;
@@ -27,6 +29,8 @@
         --border: #2a3448;
         --accent: #9bbfea;
         --accent-soft: #25374f;
+        --hover-bg: #293e59;
+        --hover-glow: rgb(155 191 234 / 35%);
         --spotlight: 155 191 234;
         --spotlight-strength: 10%;
     }
@@ -336,5 +340,54 @@ footer span {
     }
     .brand-sub {
         margin-left: auto;
+    }
+}
+
+/* Match the application's accent feedback in light and dark themes. */
+a:hover {
+    color: var(--accent);
+    text-underline-offset: 3px;
+}
+.button:hover {
+    color: white;
+    text-decoration: none;
+    box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / 25%),
+        0 0 0 1px var(--accent),
+        0 3px 16px var(--hover-glow);
+}
+nav a {
+    position: relative;
+    isolation: isolate;
+}
+nav a::before {
+    content: '';
+    position: absolute;
+    inset: -8px -10px;
+    z-index: -1;
+    border-radius: 7px;
+    background: var(--hover-bg);
+    opacity: 0;
+}
+nav a:hover,
+nav a:focus-visible {
+    color: var(--accent);
+    text-decoration: none;
+}
+nav a:hover::before,
+nav a:focus-visible::before {
+    opacity: 1;
+    box-shadow:
+        0 0 0 1px var(--accent),
+        0 3px 16px var(--hover-glow);
+}
+@media (prefers-reduced-motion: no-preference) {
+    a,
+    nav a::before {
+        transition:
+            background-color 150ms ease,
+            color 150ms ease,
+            box-shadow 150ms ease,
+            opacity 150ms ease;
     }
 }
