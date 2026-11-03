@@ -9,7 +9,6 @@
     --border: #b8bdc8;
     --accent: #1c385b;
     --accent-soft: #e9f0fa;
-    --hover-bg: #d7e3f2;
     --hover-glow: rgb(73 111 159 / 25%);
     --spotlight: 73 111 159;
     --spotlight-strength: 14%;
@@ -29,7 +28,6 @@
         --border: #2a3448;
         --accent: #9bbfea;
         --accent-soft: #25374f;
-        --hover-bg: #293e59;
         --hover-glow: rgb(155 191 234 / 35%);
         --spotlight: 155 191 234;
         --spotlight-strength: 10%;
@@ -178,19 +176,17 @@ p {
     font-weight: 600;
 }
 .button {
-    background: linear-gradient(180deg, #496f9f, #3c608d);
-    box-shadow:
-        inset 0 1px 0 rgb(255 255 255 / 16%),
-        0 8px 28px rgb(var(--spotlight) / 15%);
-    color: #fff;
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
     padding: 14px 20px;
     border-radius: 8px;
 }
 .button:hover {
-    background: linear-gradient(180deg, #496f9f, #304f76);
+    background: transparent;
     box-shadow:
-        inset 0 1px 0 rgb(255 255 255 / 20%),
-        0 10px 32px rgb(var(--spotlight) / 22%);
+        0 0 0 1px var(--accent),
+        0 3px 16px var(--hover-glow);
 }
 .deployment {
     font-size: 12px;
@@ -349,10 +345,9 @@ a:hover {
     text-underline-offset: 3px;
 }
 .button:hover {
-    color: white;
+    color: var(--accent);
     text-decoration: none;
     box-shadow:
-        inset 0 1px 0 rgb(255 255 255 / 25%),
         0 0 0 1px var(--accent),
         0 3px 16px var(--hover-glow);
 }
@@ -366,7 +361,7 @@ nav a::before {
     inset: -8px -10px;
     z-index: -1;
     border-radius: 7px;
-    background: var(--hover-bg);
+    background: transparent;
     opacity: 0;
 }
 nav a:hover,
