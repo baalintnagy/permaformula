@@ -9,7 +9,15 @@
     --border: #b8bdc8;
     --accent: #1c385b;
     --accent-soft: #e9f0fa;
+    --brand-text: #294b74;
+    --brand-hover-text: #102e50;
+    --brand-text-glow: rgb(73 111 159 / 35%);
+    --brand-symbol-glow: rgb(73 111 159 / 55%);
+    --brand-circle-glow: rgb(73 111 159 / 30%);
+    --brand-circle-halo: rgb(73 111 159 / 16%);
     --hover-glow: rgb(73 111 159 / 25%);
+    --bordered-hover-text: var(--accent);
+    --bordered-hover-shadow: 0 0 0 1px var(--accent), 0 3px 16px var(--hover-glow);
     --spotlight: 73 111 159;
     --spotlight-strength: 14%;
     color-scheme: light;
@@ -28,6 +36,13 @@
         --border: #2a3448;
         --accent: #9bbfea;
         --accent-soft: #25374f;
+        --bordered-hover-text: #cfe3ff;
+        --brand-text: #cfe3ff;
+        --brand-hover-text: #fff;
+        --brand-text-glow: rgb(255 255 255 / 65%);
+        --brand-symbol-glow: rgb(255 255 255 / 80%);
+        --brand-circle-glow: rgb(255 255 255 / 35%);
+        --brand-circle-halo: rgb(255 255 255 / 18%);
         --hover-glow: rgb(155 191 234 / 35%);
         --spotlight: 155 191 234;
         --spotlight-strength: 10%;
@@ -49,18 +64,22 @@ body::before {
     pointer-events: none;
     background:
         radial-gradient(
-            ellipse 780px 560px at 28% 2%,
+            ellipse 780px 560px at max(28px, calc((100vw - 1280px) / 2 + 28px)) 22%,
             rgb(var(--spotlight) / var(--spotlight-strength)),
             transparent 68%
         ),
         radial-gradient(
-            ellipse 680px 480px at 100% 32%,
+            ellipse 680px 480px at calc(100% - max(28px, (100vw - 1280px) / 2 + 28px)) 22%,
             rgb(var(--spotlight) / 9%),
             transparent 68%
         ),
-        radial-gradient(ellipse 760px 540px at 4% 82%, rgb(var(--spotlight) / 8%), transparent 68%),
         radial-gradient(
-            ellipse 720px 480px at 72% 100%,
+            ellipse 760px 540px at max(28px, calc((100vw - 1280px) / 2 + 28px)) 82%,
+            rgb(var(--spotlight) / 8%),
+            transparent 68%
+        ),
+        radial-gradient(
+            ellipse 720px 480px at calc(100% - max(28px, (100vw - 1280px) / 2 + 28px)) 82%,
             rgb(var(--spotlight) / 7%),
             transparent 68%
         );
@@ -184,9 +203,7 @@ p {
 }
 .button:hover {
     background: transparent;
-    box-shadow:
-        0 0 0 1px var(--accent),
-        0 3px 16px var(--hover-glow);
+    box-shadow: var(--bordered-hover-shadow);
 }
 .deployment {
     font-size: 12px;
@@ -347,13 +364,72 @@ a:hover {
 .button:hover {
     color: var(--accent);
     text-decoration: none;
-    box-shadow:
-        0 0 0 1px var(--accent),
-        0 3px 16px var(--hover-glow);
+    box-shadow: var(--bordered-hover-shadow);
 }
-nav a {
+nav a,
+.brand {
     position: relative;
     isolation: isolate;
+}
+nav a:hover,
+nav a:focus-visible,
+.brand:hover,
+.brand:focus-visible {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.brand,
+.brand .brand-sub {
+    color: var(--brand-text);
+}
+/* Highlight the lettering and logo artwork directly. */
+.brand:hover,
+.brand:focus-visible {
+    color: var(--brand-hover-text);
+    text-decoration: none;
+    text-shadow:
+        0 0 12px var(--brand-text-glow),
+        0 0 3px var(--brand-text-glow);
+}
+.brand:hover .brand-sub,
+.brand:focus-visible .brand-sub {
+    color: var(--brand-hover-text);
+}
+.brand:hover .brand-mark svg,
+.brand:focus-visible .brand-mark svg {
+    color: var(--brand-hover-text);
+    filter: drop-shadow(0 0 4px var(--brand-symbol-glow));
+}
+@media (prefers-reduced-motion: no-preference) {
+    nav a,
+    .brand,
+    .brand-sub {
+        transition:
+            color 150ms ease,
+            text-shadow 150ms ease;
+    }
+    .brand-mark svg {
+        transition: filter 150ms ease;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    a {
+        transition:
+            background-color 150ms ease,
+            color 150ms ease,
+            border-color 150ms ease,
+            box-shadow 150ms ease,
+            text-shadow 150ms ease;
+    }
+}
+
+nav a:hover,
+nav a:focus-visible {
+    color: var(--bordered-hover-text);
+    text-decoration: none;
+    text-shadow: none;
 }
 nav a::before {
     content: '';
@@ -364,25 +440,39 @@ nav a::before {
     background: transparent;
     opacity: 0;
 }
-nav a:hover,
-nav a:focus-visible {
-    color: var(--accent);
-    text-decoration: none;
-}
 nav a:hover::before,
 nav a:focus-visible::before {
     opacity: 1;
-    box-shadow:
-        0 0 0 1px var(--accent),
-        0 3px 16px var(--hover-glow);
+    box-shadow: var(--bordered-hover-shadow);
 }
 @media (prefers-reduced-motion: no-preference) {
-    a,
     nav a::before {
-        transition:
-            background-color 150ms ease,
-            color 150ms ease,
-            box-shadow 150ms ease,
-            opacity 150ms ease;
+        transition: opacity 150ms ease;
+    }
+}
+
+.brand:hover .brand-mark,
+.brand:focus-visible .brand-mark {
+    box-shadow:
+        0 0 6px var(--brand-circle-glow),
+        0 0 14px var(--brand-circle-halo);
+}
+@media (prefers-reduced-motion: no-preference) {
+    .brand-mark {
+        transition: box-shadow 150ms ease;
+    }
+}
+
+.button:is(:hover, :focus-visible) {
+    background: transparent;
+    border-color: var(--accent);
+    color: var(--bordered-hover-text);
+    box-shadow: var(--bordered-hover-shadow);
+    text-decoration: none;
+}
+
+@media (prefers-color-scheme: light) {
+    nav a {
+        --bordered-hover-text: var(--text);
     }
 }

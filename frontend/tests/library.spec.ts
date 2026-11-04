@@ -124,6 +124,21 @@ test('small pages show all complete sources and CSS without additional source re
                 '26px',
             );
             await expect(card.getByRole('slider', { name: 'Library SVG zoom' })).toHaveValue('100');
+            if (width > 700) {
+                const preview = card.locator('.library-canvas');
+                const previewHeight = await preview.evaluate((element) => element.clientHeight);
+                const sourceBottom = await source.evaluate(
+                    (element) => element.getBoundingClientRect().bottom,
+                );
+                const previewBottom = await preview.evaluate(
+                    (element) => element.getBoundingClientRect().bottom,
+                );
+                expect(Math.abs(previewBottom - sourceBottom)).toBeLessThan(1);
+                await card.getByRole('slider', { name: 'Library SVG zoom' }).fill('1000');
+                await expect
+                    .poll(() => preview.evaluate((element) => element.clientHeight))
+                    .toBe(previewHeight);
+            }
             await zoom.fill('100');
         }
     }

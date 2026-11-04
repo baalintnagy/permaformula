@@ -146,7 +146,7 @@ function ImageUrls({
                             href={url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className={`text-button${highlight ? ' result-highlight' : ''}`}
+                            className={`text-button render-link${highlight ? ' result-highlight' : ''}`}
                         >
                             Open {format}
                             <Icon name="external" />

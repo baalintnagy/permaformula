@@ -5,6 +5,7 @@
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
+    --content-width: 1600px;
     --bg: #e2e3e8;
     --surface: #f0f0f3;
     --surface-alt: #e7e7ec;
@@ -13,7 +14,15 @@
     --border: #b8bdc8;
     --accent: #1c385b;
     --accent-soft: #e9f0fa;
+    --brand-text: #294b74;
+    --brand-hover-text: #102e50;
+    --brand-text-glow: rgb(73 111 159 / 35%);
+    --brand-symbol-glow: rgb(73 111 159 / 55%);
+    --brand-circle-glow: rgb(73 111 159 / 30%);
+    --brand-circle-halo: rgb(73 111 159 / 16%);
     --hover-glow: rgb(73 111 159 / 25%);
+    --bordered-hover-text: var(--accent);
+    --bordered-hover-shadow: 0 0 0 1px var(--accent), 0 3px 16px var(--hover-glow);
     --delete-color: #b4444b;
     --header: #f0f0f3dc;
     --shadow: 0 3px 10px #24304903;
@@ -33,6 +42,13 @@
     --border: #2a3448;
     --accent: #9bbfea;
     --accent-soft: #25374f;
+    --bordered-hover-text: #cfe3ff;
+    --brand-text: #cfe3ff;
+    --brand-hover-text: #fff;
+    --brand-text-glow: rgb(255 255 255 / 65%);
+    --brand-symbol-glow: rgb(255 255 255 / 80%);
+    --brand-circle-glow: rgb(255 255 255 / 35%);
+    --brand-circle-halo: rgb(255 255 255 / 18%);
     --hover-glow: rgb(155 191 234 / 35%);
     --delete-color: #ee969d;
     --header: #121318eb;
@@ -74,18 +90,24 @@ body::before {
     pointer-events: none;
     background:
         radial-gradient(
-            ellipse 760px 540px at 88% 6%,
+            ellipse 760px 540px at max(28px, calc((100vw - var(--content-width)) / 2 + 28px)) 22%,
             rgb(var(--spotlight) / var(--spotlight-strength)),
             transparent 68%
         ),
-        radial-gradient(ellipse 680px 480px at 6% 36%, rgb(var(--spotlight) / 8%), transparent 68%),
         radial-gradient(
-            ellipse 780px 560px at 94% 78%,
+            ellipse 680px 480px at calc(100% - max(28px, (100vw - var(--content-width)) / 2 + 28px))
+                22%,
+            rgb(var(--spotlight) / 8%),
+            transparent 68%
+        ),
+        radial-gradient(
+            ellipse 780px 560px at max(28px, calc((100vw - var(--content-width)) / 2 + 28px)) 82%,
             rgb(var(--spotlight) / 9%),
             transparent 68%
         ),
         radial-gradient(
-            ellipse 720px 480px at 32% 100%,
+            ellipse 720px 480px at calc(100% - max(28px, (100vw - var(--content-width)) / 2 + 28px))
+                82%,
             rgb(var(--spotlight) / 7%),
             transparent 68%
         );
@@ -152,7 +174,7 @@ button {
 
 .site-header {
     height: 76px;
-    padding: 0 max(28px, calc((100vw - 1280px) / 2));
+    padding: 0 max(28px, calc((100% - var(--content-width)) / 2 + 28px));
     display: flex;
     align-items: center;
     gap: 40px;
@@ -199,34 +221,6 @@ button {
     font-size: 13px;
     color: var(--muted);
 }
-.site-header nav a:hover {
-    color: var(--accent);
-}
-:root:not([data-theme='dark']) .site-header nav a {
-    color: #687184;
-    position: relative;
-    isolation: isolate;
-}
-:root:not([data-theme='dark']) .site-header nav a::before {
-    content: '';
-    position: absolute;
-    inset: -8px -10px;
-    z-index: -1;
-    border-radius: 7px;
-    background: transparent;
-    opacity: 0;
-}
-:root:not([data-theme='dark']) .site-header nav a:hover,
-:root:not([data-theme='dark']) .site-header nav a:focus-visible {
-    color: var(--text);
-}
-:root:not([data-theme='dark']) .site-header nav a:hover::before,
-:root:not([data-theme='dark']) .site-header nav a:focus-visible::before {
-    opacity: 1;
-}
-:root[data-theme='dark'] .site-header nav a:hover {
-    color: #fff;
-}
 .theme-toggle {
     display: grid;
     place-items: center;
@@ -259,7 +253,7 @@ button {
     display: contents;
 }
 main {
-    max-width: 1280px;
+    max-width: var(--content-width);
     margin: auto;
     padding: 0 28px;
 }
@@ -655,10 +649,7 @@ code {
 }
 .primary-button:hover:not(:disabled) {
     background: transparent;
-    box-shadow:
-        0 0 0 1px var(--accent),
-        0 3px 16px var(--hover-glow);
-    transform: translateY(-1px);
+    box-shadow: var(--bordered-hover-shadow);
 }
 .action-panel > .primary-button {
     margin-bottom: 12px;
@@ -1026,9 +1017,6 @@ footer svg {
     .site-header.menu-open .header-account {
         display: flex;
     }
-    :root:not([data-theme='dark']) .site-header nav a::before {
-        inset: 0 -5px;
-    }
     main {
         padding: 0 17px;
     }
@@ -1294,6 +1282,19 @@ footer svg {
 .library-empty {
     padding: 32px;
 }
+/* Let the source column set HTML card height; keep oversized previews scrollable. */
+@media (min-width: 701px) {
+    .library-item-html .library-viewer {
+        position: relative;
+        min-height: 0;
+    }
+    .library-item-html .library-canvas {
+        position: absolute;
+        inset: 34px 0 0;
+        height: auto;
+        min-height: 0;
+    }
+}
 @media (max-width: 700px) {
     .library-item {
         grid-template-columns: 1fr;
@@ -1381,17 +1382,19 @@ button:not(:disabled):hover {
     background: transparent;
     border-color: var(--accent);
     color: var(--accent);
-    box-shadow:
-        0 0 0 1px var(--accent),
-        0 3px 16px var(--hover-glow);
+    box-shadow: var(--bordered-hover-shadow);
 }
 .primary-button:not(:disabled):hover {
     background: transparent;
     color: var(--accent);
 }
+.text-button:not(:disabled):hover {
+    box-shadow: none;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
 .text-button.delete-button:not(:disabled):hover {
     color: var(--delete-color);
-    box-shadow: 0 0 0 1px var(--delete-color);
 }
 input:not(:disabled):not([type='hidden']):not([type='range']):hover,
 textarea:not(:disabled):hover,
@@ -1404,9 +1407,109 @@ a:hover {
     text-decoration: underline;
     text-underline-offset: 3px;
 }
-:root .site-header nav a {
+:root .site-header nav a,
+:root .brand {
     position: relative;
     isolation: isolate;
+}
+:root .site-header nav a:hover,
+:root .site-header nav a:focus-visible,
+:root .theme-toggle:not(:disabled):hover,
+:root .header-account .text-button:not(:disabled):hover {
+    color: var(--accent);
+    border-color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+:root .site-header nav a:hover,
+:root .site-header nav a:focus-visible,
+:root .brand:hover,
+:root .brand:focus-visible {
+    color: var(--accent);
+    text-decoration: none;
+}
+.render-link {
+    padding: 9px 13px;
+    border-radius: 9px;
+}
+.render-link.result-highlight {
+    animation: render-link-reveal 3s ease-out;
+}
+.render-link.result-highlight:not(:focus-visible) {
+    outline: none;
+}
+@keyframes render-link-reveal {
+    from {
+        box-shadow:
+            0 0 0 2px var(--accent),
+            0 3px 16px var(--hover-glow);
+    }
+    to {
+        box-shadow: none;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .render-link.result-highlight {
+        animation-timing-function: steps(1, end);
+    }
+}
+
+:root .brand,
+:root .brand .brand-sub {
+    color: var(--brand-text);
+}
+/* Highlight the lettering and logo artwork directly. */
+:root .brand:hover,
+:root .brand:focus-visible {
+    color: var(--brand-hover-text);
+    text-decoration: none;
+    text-shadow:
+        0 0 12px var(--brand-text-glow),
+        0 0 3px var(--brand-text-glow);
+}
+:root .brand:hover .brand-sub,
+:root .brand:focus-visible .brand-sub {
+    color: var(--brand-hover-text);
+}
+:root .brand:hover .brand-mark svg,
+:root .brand:focus-visible .brand-mark svg {
+    color: var(--brand-hover-text);
+    filter: drop-shadow(0 0 4px var(--brand-symbol-glow));
+}
+@media (prefers-reduced-motion: no-preference) {
+    :root .site-header nav a,
+    :root .brand,
+    .brand-sub {
+        transition:
+            color 150ms ease,
+            text-shadow 150ms ease;
+    }
+    .brand-mark svg {
+        transition: filter 150ms ease;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    button,
+    a,
+    input,
+    textarea,
+    .code-editor {
+        transition:
+            background-color 150ms ease,
+            color 150ms ease,
+            border-color 150ms ease,
+            box-shadow 150ms ease,
+            text-shadow 150ms ease;
+    }
+}
+
+:root .site-header nav a:hover,
+:root .site-header nav a:focus-visible {
+    color: var(--bordered-hover-text);
+    text-decoration: none;
+    text-shadow: none;
 }
 :root .site-header nav a::before {
     content: '';
@@ -1417,38 +1520,50 @@ a:hover {
     background: transparent;
     opacity: 0;
 }
-:root .site-header nav a:hover,
-:root .site-header nav a:focus-visible,
-:root .theme-toggle:not(:disabled):hover,
-:root .header-account .text-button:not(:disabled):hover {
-    color: var(--accent);
-    border-color: var(--accent);
-    text-decoration: none;
-}
 :root .site-header nav a:hover::before,
 :root .site-header nav a:focus-visible::before {
     opacity: 1;
-    box-shadow:
-        0 0 0 1px var(--accent),
-        0 3px 16px var(--hover-glow);
+    box-shadow: var(--bordered-hover-shadow);
+}
+@media (prefers-reduced-motion: no-preference) {
+    :root .site-header nav a::before {
+        transition: opacity 150ms ease;
+    }
 }
 @media (max-width: 600px) {
     :root .site-header nav a::before {
         inset: 0 -5px;
     }
 }
+
+:root .brand:hover .brand-mark,
+:root .brand:focus-visible .brand-mark {
+    box-shadow:
+        0 0 6px var(--brand-circle-glow),
+        0 0 14px var(--brand-circle-halo);
+}
 @media (prefers-reduced-motion: no-preference) {
-    button,
-    a,
-    input,
-    textarea,
-    .code-editor,
-    .site-header nav a::before {
-        transition:
-            background-color 150ms ease,
-            color 150ms ease,
-            border-color 150ms ease,
-            box-shadow 150ms ease,
-            opacity 150ms ease;
+    .brand-mark {
+        transition: box-shadow 150ms ease;
     }
+}
+
+/* Keep every outlined action consistent, including the theme and menu switches. */
+:root button:not(.text-button):not(:disabled):is(:hover, :focus-visible) {
+    background: transparent;
+    border-color: var(--accent);
+    color: var(--bordered-hover-text);
+    box-shadow: var(--bordered-hover-shadow);
+    text-decoration: none;
+}
+
+/* In light mode, keep each outlined control's resting text color on hover. */
+:root:not([data-theme='dark']) :is(.theme-toggle, .small-button) {
+    --bordered-hover-text: var(--text);
+}
+:root:not([data-theme='dark']) :is(.copy-button, .editor-tabs button, .site-header nav a) {
+    --bordered-hover-text: var(--muted);
+}
+:root:not([data-theme='dark']) .editor-tabs button[aria-selected='true'] {
+    --bordered-hover-text: var(--accent);
 }

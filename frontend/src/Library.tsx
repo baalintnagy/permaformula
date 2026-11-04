@@ -385,7 +385,10 @@ export function Library({
                     )}
                     <div className="library-list">
                         {items.map((item) => (
-                            <article className="panel library-item" key={item.id}>
+                            <article
+                                className={`panel library-item${item.kind === 'html' ? ' library-item-html' : ''}`}
+                                key={item.id}
+                            >
                                 <LibraryViewer item={item} />
                                 <LibrarySource
                                     item={item}
