@@ -76,7 +76,11 @@ Both classes still share the bounded JDBC pool and database; this is admission
 isolation, not a guarantee against database contention. SQLite retains its single
 connection. Full source detail remains on the payload budget. Preview image reads
 still require payload capacity; the UI serializes previews and retries temporary
-429/503 responses. Busy work returns 503 with Retry-After: 1 and no-store.
+429/502/503/504 responses and interrupted network transfers (including response
+bodies), with at most three retries per preview. Retry waits honor Retry-After,
+bounded to 250 ms–10 seconds, or use increasing one-second steps when absent.
+Leaving the page cancels pending retries. Busy work returns 503 with Retry-After: 1
+and no-store.
 Background maintenance catches failures instead of terminating its schedule.
 Each JDBC statement requests the smaller of two seconds or the remaining HTTP
 deadline, rounded up to whole seconds; enforcement depends on the driver. Existing

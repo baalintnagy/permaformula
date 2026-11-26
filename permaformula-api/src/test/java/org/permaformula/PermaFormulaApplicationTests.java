@@ -324,7 +324,7 @@ class PermaFormulaApplicationTests {
     }
 
     @Test
-    void invalidCompressedInputReturnsBusinessRuleProblem() throws Exception {
+    void invalidCompressedInputReturnsInvalidRequestProblem() throws Exception {
         mvc.perform(get("/html-svg")
             .param("ubcq", "%%%"))
             .andExpect(status()
@@ -334,7 +334,9 @@ class PermaFormulaApplicationTests {
             .andExpect(jsonPath("$.status")
                 .value(400))
             .andExpect(jsonPath("$.errorType")
-                .value("BUSINESS_RULE_VIOLATION"))
+                .value("INVALID_REQUEST"))
+            .andExpect(jsonPath("$.title")
+                .value("Invalid request"))
             .andExpect(jsonPath("$.instance")
                 .value("/html-svg"))
             .andExpect(jsonPath("$.id")

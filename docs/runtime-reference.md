@@ -113,7 +113,7 @@ The project is a Maven reactor with four modules:
 
 Run `mvn verify` with JDK 25 to build and test all modules. Docker is the recommended way to run both services: `docker compose up --build -d`.
 
-The API depends on `io.github.baalintnagy:local-exception-handler:0.9.4`.
+The API depends on `io.github.baalintnagy:local-exception-handler:0.10.0`.
 If the artifact is unavailable from your configured Maven repositories, install
 that version from its source project before building this reactor.
 

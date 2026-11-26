@@ -3,6 +3,62 @@ import { expect, test } from '@playwright/test';
 
 import { libraryPage } from './library-fixtures';
 
+for (const path of ['/#library', '/admin.html']) {
+    test(`previews recover from interrupted connections and gateway failures in ${path}`, async ({
+        page,
+    }) => {
+        await page.route('**/library-items?**', (route) =>
+            route.fulfill({
+                json: libraryPage(
+                    ['formula', 'html'].map((kind, index) => ({
+                        id: String(index).repeat(64),
+                        kind,
+                        descriptor: { forumla: kind === 'formula' ? 'x^2' : '<p>test</p>' },
+                        createdAt: 1,
+                    })),
+                ),
+            }),
+        );
+        await page.route('**/admin/login', (route) =>
+            route.fulfill({ json: { accessToken: 'test-token', expiresIn: 900 } }),
+        );
+        const attempts = new Map<string, number>();
+        await page.route('**/*-svg?**', async (route) => {
+            expect(route.request().headers().authorization).toBeUndefined();
+            const endpoint = new URL(route.request().url()).pathname;
+            const count = (attempts.get(endpoint) ?? 0) + 1;
+            attempts.set(endpoint, count);
+            if (count === 1) {
+                await route.abort('connectionreset');
+            } else if (count < 4) {
+                await route.fulfill({
+                    status: count === 2 ? 502 : 504,
+                    headers: { 'Retry-After': '0' },
+                });
+            } else {
+                await route.fulfill({
+                    contentType: 'image/svg+xml',
+                    body: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="40"/>',
+                });
+            }
+        });
+        await page.goto(path);
+        if (path === '/admin.html') {
+            await page.getByLabel('Password').fill('secret');
+            await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+        }
+        await expect(page.locator('.library-item')).toHaveCount(2);
+        for (const card of await page.locator('.library-item').all()) {
+            await card.scrollIntoViewIfNeeded();
+            await expect(card.locator('img')).toBeVisible();
+            await expect(card.locator('img')).toHaveJSProperty('naturalWidth', 100);
+            await expect(card.getByRole('button', { name: 'Retry preview' })).toHaveCount(0);
+        }
+        expect(attempts.get('/exp-svg')).toBe(4);
+        expect(attempts.get('/html-svg')).toBe(4);
+    });
+}
+
 test('previews serialize requests, retry busy responses and offer recovery', async ({ page }) => {
     await page.route('**/library-items?**', (route) =>
         route.fulfill({

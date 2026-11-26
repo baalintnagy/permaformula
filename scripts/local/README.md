@@ -16,6 +16,18 @@ bash scripts/local/start-local.sh --admin-password 'your-admin-password' --no-tu
 bash scripts/local/stop-local.sh
 ```
 
+Clean older Docker images on your PC using the current Docker context:
+
+```bash
+bash scripts/local/cleanup-images.sh --dry-run
+bash scripts/local/cleanup-images.sh
+```
+
+This keeps the newest image in each `permaformula/*` repository and images used
+by running or stopped containers. It removes older tags without forcing removal.
+Dangling images, build cache, containers and volumes are left untouched. Select
+your local Docker engine first if your current context or `DOCKER_HOST` is remote.
+
 Omit `--no-tunnels` to launch the API and UI Cloudflare tunnels alongside the
 Java services and Vite. Add `--skip-build` to reuse existing artifacts, or
 `--ui-port 5174` to change the UI port. Named tunnel options include,

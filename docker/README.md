@@ -399,3 +399,23 @@ The socket healthcheck verifies listener-file presence for startup ordering; it 
 ## Future asynchronous work
 
 `render-contract` holds versioned messages and request IDs. `renderer-core` exposes transport-independent `RenderJobExecutor`; a future RabbitMQ consumer can call it without changing the rendering machinery. No broker, job database or asynchronous endpoint is implemented. Future async endpoints need durable job/result state, bounded admission, acknowledgement/retry/idempotency policies and a polling or notification contract. A rendering-indicator image should represent pending state, never replace a completed artifact in the SVG cache.
+
+## Java4Shell runtime mitigation
+
+The API and renderer entrypoints disable Base64 intrinsics with
+`-XX:-UseBASE64Intrinsics` to mitigate CVE-2026-114938 on newer x86-64 hardware.
+The local launcher applies the same flag. This disables the affected optimized
+decoder; it can reduce Base64 throughput.
+
+As checked on 19 November 2026, Adoptium identifies Temurin **25.0.5.1+2** as
+fixed, but its release tracker lists Java 25 container images as unpublished.
+The Dockerfile image digests remain unchanged pending verified patched images.
+When those images are available, update both the Maven builder and Temurin JRE
+pins, verify their `java -version` output, and rebuild both application images.
+Retain the mitigation until the runtime image is verified patched. Existing
+containers need a rebuild and recreation to receive these entrypoint changes.
+For direct IDE or manual Java launches, install a patched vendor JDK or add
+`-XX:-UseBASE64Intrinsics` to the JVM arguments yourself.
+
+References: [Adoptium advisory](https://adoptium.net/news/2026/11/temurin-november-2026-cspu-java4shell/)
+and [release status](https://github.com/adoptium/temurin/issues/326).

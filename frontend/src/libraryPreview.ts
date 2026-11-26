@@ -47,25 +47,35 @@ export function loadLibraryPreview(url: string, signal: AbortSignal): Promise<Bl
         .then(async () => {
             for (let attempt = 0; ; attempt++) {
                 signal.throwIfAborted();
-                const response = await fetch(imageRequestUrl(url), { signal, credentials: 'omit' });
-                if (response.ok) {
-                    return response.blob();
+                let response: Response | undefined;
+                try {
+                    response = await fetch(imageRequestUrl(url), { signal, credentials: 'omit' });
+                    if (response.ok) {
+                        // Reading the body can also fail if the connection is interrupted.
+                        return await response.blob();
+                    }
+                } catch (_) {
+                    signal.throwIfAborted();
+                    response = undefined;
                 }
-                if (![429, 503].includes(response.status) || attempt === 3) {
+                if (
+                    (response && ![429, 502, 503, 504].includes(response.status)) ||
+                    attempt === 3
+                ) {
                     throw new Error(
-                        response.status === 404
+                        response?.status === 404
                             ? 'This image has expired or is unavailable.'
                             : 'Could not load preview. Please retry.',
                     );
                 }
-                const header = response.headers.get('Retry-After');
+                const header = response?.headers.get('Retry-After') ?? null;
                 const seconds = header === null ? NaN : Number(header);
                 const delay = Number.isFinite(seconds)
                     ? seconds * 1000
                     : header
                       ? Date.parse(header) - Date.now()
                       : 1000 * (attempt + 1);
-                await response.body?.cancel();
+                await response?.body?.cancel();
                 await new Promise<void>((resolve, reject) => {
                     const abort = () => {
                         clearTimeout(timer);

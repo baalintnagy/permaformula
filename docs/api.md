@@ -137,13 +137,14 @@ Node.js installation at runtime. Build instructions are in
 
 Exception handling is provided by
 [`local-exception-handler`](https://github.com/baalintnagy/local-exception-handler)
-(`io.github.baalintnagy:local-exception-handler:0.9.4`).
+(`io.github.baalintnagy:local-exception-handler:0.10.0`).
 Handled errors return `application/problem+json` with standard Problem Detail
 fields (`type`, `title`, `status`, `detail`, `instance`), plus an `id` and
 `timestamp`. Jakarta, request-body and MVC method validation errors include
 `violations` with `property`, `code`, and `message`. Submitted values are omitted.
-Illegal arguments include `errorType: BUSINESS_RULE_VIOLATION`. Spring's original
-error details, statuses, headers and extensions are retained. The handler logs
+Illegal arguments use `title: Invalid request` and `errorType: INVALID_REQUEST`.
+Problem titles, details and types can be customized through Spring's `MessageSource`.
+Spring's original error details, statuses, headers and extensions are retained. The handler logs
 exception type and correlation metadata without exception messages or stack traces.
 Otherwise unhandled MVC exceptions return a generic 500 Problem Detail without
 exposing exception messages.

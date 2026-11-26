@@ -126,12 +126,13 @@ if [[ -n ${JAVA_HOME:-} ]]; then
     java_command="$java_home/bin/java"
 fi
 progress "[4/6] Starting renderer. Log: $run/renderer.log"
-spawn "$run/renderer.log" env RENDERER_CHROMIUM_SANDBOX=false "$java_command" --enable-native-access=ALL-UNNAMED \
+# CVE-2026-114938: protect local sessions even when JAVA_HOME selects an unpatched JDK.
+spawn "$run/renderer.log" env RENDERER_CHROMIUM_SANDBOX=false "$java_command" -XX:-UseBASE64Intrinsics --enable-native-access=ALL-UNNAMED \
     -cp "renderer-service/target/local/renderer-service-1.0.jar${separator}renderer-service/target/local/runtime-deps/*" org.permaformula.renderer.RendererServiceMain
 wait_ready Renderer bash -c 'grep -q "event=renderer_ready" "$1"' _ "$run/renderer.log"
 progress "[5/6] Starting API. Log: $run/api.log"
 spawn "$run/api.log" env PERMAFORMULA_RENDERING_PLAINTEXT=true PERMAFORMULA_HOST="$api_origin" PERMAFORMULA_IMAGE_HOST="$api_origin" \
-    "$java_command" --enable-native-access=ALL-UNNAMED -jar permaformula-api/target/local/permaformula-api-1.0.jar
+    "$java_command" -XX:-UseBASE64Intrinsics --enable-native-access=ALL-UNNAMED -jar permaformula-api/target/local/permaformula-api-1.0.jar
 wait_ready API curl --silent --fail --max-time 2 http://127.0.0.1:8086/v3/api-docs -o /dev/null
 progress "[6/6] Starting UI development server. Log: $run/ui.log"
 spawn "$run/ui.log" env PERMAFORMULA_DEV_UI_ORIGIN="$ui_origin" bash "$local_scripts/start-ui.sh" --port "$ui_port" --api-origin "$api_origin"
